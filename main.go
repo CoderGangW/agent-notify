@@ -3,11 +3,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 func main() {
 	cmd := "daemon"
@@ -36,6 +37,11 @@ func main() {
 			vs, bundle := vscodeTitle(os.Args[3])
 			fmt.Printf("vscode:  %q (%s)\nnamed:   %q\n", vs, bundle, sessionName(os.Args[3]))
 		}
+	case "stats": // debug: dump usage + limits JSON
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(usage.report())
+		_ = enc.Encode(limits.report())
 	case "version", "--version", "-v":
 		fmt.Println("claude-notify " + version)
 	default:

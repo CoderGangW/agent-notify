@@ -59,6 +59,45 @@ func hookEntries(hooks map[string]any, event string) []any {
 	return arr
 }
 
+// installBinary copies the running executable into a stable location.
+// launchd refuses to run binaries out of TCC-protected folders (Desktop/
+// Documents/Downloads) — the process hangs in dyld before main — and a dev
+// build path would break the install when the working copy moves anyway.
+func installBinary(exe string) string {
+	var dir string
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return exe
+	}
+	if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" && filepath.Separator == '\\' {
+		dir = filepath.Join(localAppData, "claude-notify")
+	} else {
+		dir = filepath.Join(home, ".local", "bin")
+	}
+	dest := filepath.Join(dir, filepath.Base(exe))
+	if exe == dest {
+		return exe
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return exe
+	}
+	data, err := os.ReadFile(exe)
+	if err != nil {
+		return exe
+	}
+	tmp := dest + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o755); err != nil {
+		return exe
+	}
+	// Atomic swap: safe even while the old binary at dest is running.
+	if err := os.Rename(tmp, dest); err != nil {
+		os.Remove(tmp)
+		return exe
+	}
+	fmt.Println("바이너리 설치:", dest)
+	return dest
+}
+
 func runInstall() {
 	exe, err := os.Executable()
 	if err != nil {
@@ -66,6 +105,7 @@ func runInstall() {
 		os.Exit(1)
 	}
 	exe, _ = filepath.EvalSymlinks(exe)
+	exe = installBinary(exe)
 	command := fmt.Sprintf("%q hook", exe)
 
 	path := settingsPath()

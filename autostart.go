@@ -25,6 +25,8 @@ func installAutostart(exe string) error {
 			return err
 		}
 		plist := filepath.Join(dir, launchdLabel+".plist")
+		logPath := filepath.Join(home, ".claude-notify", "daemon.log")
+		_ = os.MkdirAll(filepath.Dir(logPath), 0o755)
 		// KeepAlive on crash only: quitting from the tray (exit 0) stays quit.
 		content := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -39,9 +41,11 @@ func installAutostart(exe string) error {
 	<key>RunAtLoad</key><true/>
 	<key>KeepAlive</key>
 	<dict><key>SuccessfulExit</key><false/></dict>
+	<key>StandardOutPath</key><string>%s</string>
+	<key>StandardErrorPath</key><string>%s</string>
 </dict>
 </plist>
-`, launchdLabel, exe)
+`, launchdLabel, exe, logPath, logPath)
 		if err := os.WriteFile(plist, []byte(content), 0o644); err != nil {
 			return err
 		}

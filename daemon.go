@@ -1,103 +1,91 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
-	"fyne.io/systray"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
-const maxMenuEvents = 10
+//go:embed all:frontend
+var frontendFS embed.FS
+
+const maxEvents = 50
 
 type daemonState struct {
 	mu     sync.Mutex
 	events []Event // newest first
-	items  []*systray.MenuItem
-	done   int  // completed-task count since last clear
-	muted  bool // suppress native notifications; events still listed
+	done   int     // completed-task count since last clear
+	muted  bool    // suppress native notifications; events still listed
+	app    *application.App
+	tray   *application.SystemTray
 }
 
 func runDaemon() {
-	s := &daemonState{}
-	systray.Run(s.onReady, nil)
-}
+	s := &daemonState{muted: loadConfig().Muted}
 
-func (s *daemonState) onReady() {
-	s.muted = loadConfig().Muted
-	systray.SetIcon(trayIcon())
-	systray.SetTooltip("claude-notify")
+	app := application.New(application.Options{
+		Name:        "claude-notify",
+		Description: "Claude Code session notifications",
+		Mac: application.MacOptions{
+			ActivationPolicy: application.ActivationPolicyAccessory,
+		},
+		Assets: application.AssetOptions{Handler: s.assetHandler()},
+	})
+	s.app = app
+
+	tray := app.SystemTray.New()
+	s.tray = tray
 	if runtime.GOOS == "darwin" {
-		systray.SetTemplateIcon(trayIcon(), trayIcon())
+		tray.SetTemplateIcon(trayIcon())
+	} else {
+		tray.SetIcon(trayIcon())
 	}
+	tray.SetTooltip("claude-notify")
 
-	header := systray.AddMenuItem("Claude 세션 알림", "")
-	header.Disable()
-	systray.AddSeparator()
-
-	// Fixed slots for recent events; hidden until filled.
-	s.items = make([]*systray.MenuItem, maxMenuEvents)
-	for i := range s.items {
-		s.items[i] = systray.AddMenuItem("", "클릭하면 프로젝트 폴더 열기")
-		s.items[i].Hide()
-		go s.watchClick(i)
-	}
-
-	systray.AddSeparator()
-	mute := systray.AddMenuItemCheckbox("알림 켜기", "끄면 배너 알림 없이 목록에만 기록", !s.muted)
-	clear := systray.AddMenuItem("목록 비우기", "")
-	quit := systray.AddMenuItem("종료", "")
-
-	go func() {
-		for {
-			select {
-			case <-mute.ClickedCh:
-				s.mu.Lock()
-				s.muted = !s.muted
-				muted := s.muted
-				s.mu.Unlock()
-				if muted {
-					mute.Uncheck()
-				} else {
-					mute.Check()
-				}
-				saveConfig(config{Muted: muted})
-			case <-clear.ClickedCh:
-				s.mu.Lock()
-				s.events = nil
-				s.done = 0
-				s.refreshLocked()
-				s.mu.Unlock()
-			case <-quit.ClickedCh:
-				systray.Quit()
-				return
-			}
-		}
-	}()
+	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:            "claude-notify",
+		Title:           "claude-notify",
+		Width:           400,
+		Height:          600,
+		Frameless:       true,
+		AlwaysOnTop:     true,
+		Hidden:          true,
+		DisableResize:   true,
+		HideOnEscape:    true,
+		HideOnFocusLost: true,
+		Windows: application.WindowsWindow{
+			HiddenOnTaskbar: true,
+		},
+		BackgroundColour: application.NewRGB(20, 18, 16),
+		URL:              "/",
+	})
+	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		window.Hide()
+		e.Cancel()
+	})
+	tray.AttachWindow(window).WindowOffset(8)
 
 	go s.serve()
-}
 
-func (s *daemonState) watchClick(i int) {
-	for range s.items[i].ClickedCh {
-		s.mu.Lock()
-		var cwd string
-		if i < len(s.events) {
-			cwd = s.events[i].CWD
-		}
-		s.mu.Unlock()
-		if cwd != "" {
-			openFolder(cwd)
-		}
+	if err := app.Run(); err != nil {
+		log.Fatal(err)
 	}
 }
 
+// serve accepts events from hook processes on the fixed localhost port.
 func (s *daemonState) serve() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
@@ -120,12 +108,20 @@ func (s *daemonState) serve() {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", daemonPort))
+	// Retry briefly: on reinstall/restart the previous instance may still
+	// hold the port for a moment. Persistent failure = real second instance.
+	var ln net.Listener
+	var err error
+	for i := 0; i < 10; i++ {
+		ln, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", daemonPort))
+		if err == nil {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 	if err != nil {
-		// Another daemon instance is already running.
 		log.Printf("listen failed (already running?): %v", err)
-		systray.Quit()
-		return
+		os.Exit(1)
 	}
 	log.Fatal(http.Serve(ln, mux))
 }
@@ -133,43 +129,101 @@ func (s *daemonState) serve() {
 func (s *daemonState) add(ev Event) {
 	s.mu.Lock()
 	muted := s.muted
-	s.mu.Unlock()
-	if !muted {
-		deliverNotification(ev)
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.events = append([]Event{ev}, s.events...)
-	if len(s.events) > maxMenuEvents {
-		s.events = s.events[:maxMenuEvents]
+	if len(s.events) > maxEvents {
+		s.events = s.events[:maxEvents]
 	}
 	if ev.Kind == "done" {
 		s.done++
 	}
-	s.refreshLocked()
+	s.mu.Unlock()
+
+	if !muted {
+		deliverNotification(ev)
+	}
+	s.refreshBadge()
 }
 
-// refreshLocked syncs the tray menu with s.events; caller holds s.mu.
-func (s *daemonState) refreshLocked() {
-	for i, item := range s.items {
-		if i < len(s.events) {
-			ev := s.events[i]
-			icon := "✅"
-			if ev.Kind == "attention" {
-				icon = "🔔"
-			}
-			item.SetTitle(fmt.Sprintf("%s %s · %s", icon, projectName(ev.CWD), ev.Time.Format("15:04")))
-			item.Show()
-		} else {
-			item.Hide()
+// refreshBadge mirrors the completed count next to the macOS tray icon.
+func (s *daemonState) refreshBadge() {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	s.mu.Lock()
+	done := s.done
+	s.mu.Unlock()
+	label := ""
+	if done > 0 {
+		label = strconv.Itoa(done)
+	}
+	s.tray.SetLabel(label)
+}
+
+// assetHandler serves the embedded window UI plus its local JSON API.
+func (s *daemonState) assetHandler() http.Handler {
+	sub, err := fs.Sub(frontendFS, "frontend")
+	if err != nil {
+		panic(err)
+	}
+	static := http.FileServer(http.FS(sub))
+
+	mux := http.NewServeMux()
+	mux.Handle("/", static)
+	mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		resp := struct {
+			Events []Event      `json:"events"`
+			Done   int          `json:"done"`
+			Muted  bool         `json:"muted"`
+			Usage  usageReport  `json:"usage"`
+			Limits limitsReport `json:"limits"`
+		}{Events: s.events, Done: s.done, Muted: s.muted}
+		s.mu.Unlock()
+		resp.Usage = usage.report()
+		resp.Limits = limits.report()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+	mux.HandleFunc("/api/mute", func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		s.muted = !s.muted
+		muted := s.muted
+		s.mu.Unlock()
+		saveConfig(config{Muted: muted})
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/clear", func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		s.events = nil
+		s.done = 0
+		s.mu.Unlock()
+		s.refreshBadge()
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/open", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Index int `json:"index"`
 		}
-	}
-	if runtime.GOOS == "darwin" && s.done > 0 {
-		systray.SetTitle(fmt.Sprintf("%d", s.done))
-	} else if runtime.GOOS == "darwin" {
-		systray.SetTitle("")
-	}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		s.mu.Lock()
+		var cwd string
+		if req.Index >= 0 && req.Index < len(s.events) {
+			cwd = s.events[req.Index].CWD
+		}
+		s.mu.Unlock()
+		if cwd != "" {
+			openFolder(cwd)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		go s.app.Quit()
+	})
+	return mux
 }
 
 func openFolder(path string) {
