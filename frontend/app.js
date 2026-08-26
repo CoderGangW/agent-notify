@@ -217,7 +217,7 @@ function rollTo(el, txt, rawVal) {
     }
     slots.push(slot);
   }
-  slots.reverse();
+  // The loop walks i = n-1 → 0, i.e. leftmost slot first: append in order.
   for (const s of slots) el.appendChild(s);
 }
 
