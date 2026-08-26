@@ -1,6 +1,23 @@
-# claude-notify
+<div align="center">
 
-[English](../README.md) | [한국어](README.ko.md) | **简体中文**
+<img src="../assets/logo.png" width="96" alt="claude-notify 铃铛 logo"/>
+
+<h1>claude-notify</h1>
+
+<p><b>不错过任何一个完成的 Claude Code 会话。</b></p>
+
+<p>
+  <a href="https://github.com/CoderGangW/claude-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/claude-notify?color=d97757" alt="latest release"/></a>
+  <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="platforms"/>
+  <img src="https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white" alt="Go"/>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"/></a>
+</p>
+
+<p>
+  🇺🇸 <a href="../README.md">English</a>&nbsp;&nbsp;·&nbsp;&nbsp;🇰🇷 <a href="README.ko.md">한국어</a>&nbsp;&nbsp;·&nbsp;&nbsp;🇨🇳 <b>简体中文</b>
+</p>
+
+</div>
 
 跨平台（macOS / Windows / Linux）托盘守护程序：同时运行多个 Claude Code 会话时，**立刻告诉你哪个任务完成了**。
 

@@ -1,6 +1,23 @@
-# claude-notify
+<div align="center">
 
-[English](../README.md) | **한국어** | [简体中文](README.zh-CN.md)
+<img src="../assets/logo.png" width="96" alt="claude-notify 종 로고"/>
+
+<h1>claude-notify</h1>
+
+<p><b>끝난 Claude Code 세션, 놓치지 않기.</b></p>
+
+<p>
+  <a href="https://github.com/CoderGangW/claude-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/claude-notify?color=d97757" alt="latest release"/></a>
+  <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="platforms"/>
+  <img src="https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white" alt="Go"/>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"/></a>
+</p>
+
+<p>
+  🇺🇸 <a href="../README.md">English</a>&nbsp;&nbsp;·&nbsp;&nbsp;🇰🇷 <b>한국어</b>&nbsp;&nbsp;·&nbsp;&nbsp;🇨🇳 <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+</div>
 
 Claude Code 세션 여러 개를 돌릴 때 **어느 작업이 끝났는지** 바로 알려주는 크로스플랫폼(macOS / Windows / Linux) 트레이 데몬.
 

@@ -1,6 +1,23 @@
-# claude-notify
+<div align="center">
 
-**English** | [한국어](docs/README.ko.md) | [简体中文](docs/README.zh-CN.md)
+<img src="assets/logo.png" width="96" alt="claude-notify bell logo"/>
+
+<h1>claude-notify</h1>
+
+<p><b>Never miss a finished Claude Code session.</b></p>
+
+<p>
+  <a href="https://github.com/CoderGangW/claude-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/claude-notify?color=d97757" alt="latest release"/></a>
+  <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="platforms"/>
+  <img src="https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white" alt="Go"/>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"/></a>
+</p>
+
+<p>
+  🇺🇸 <b>English</b>&nbsp;&nbsp;·&nbsp;&nbsp;🇰🇷 <a href="docs/README.ko.md">한국어</a>&nbsp;&nbsp;·&nbsp;&nbsp;🇨🇳 <a href="docs/README.zh-CN.md">简体中文</a>
+</p>
+
+</div>
 
 A cross-platform (macOS / Windows / Linux) tray daemon that tells you **which Claude Code session just finished** when you're running several at once.
 
