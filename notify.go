@@ -12,10 +12,11 @@ import (
 
 // deliverNotification shows one native notification for an event.
 //
-// On macOS it prefers terminal-notifier when installed: -sender makes the
-// notification carry the IDE's icon and clicking it focuses that IDE —
-// osascript notifications belong to Script Editor, so a click opens
-// Script Editor instead. Everything else (and the fallback) is beeep.
+// On macOS it prefers terminal-notifier when installed: -activate makes a
+// click focus the session's IDE — osascript notifications belong to
+// Script Editor, so a click opens Script Editor instead. (-sender icon
+// faking died in terminal-notifier 3.0 / the UserNotifications framework.)
+// Everything else (and the fallback) is beeep.
 func deliverNotification(ev Event) {
 	title, body := notificationText(ev)
 	subtitle := shortPath(ev.CWD)
@@ -30,7 +31,7 @@ func deliverNotification(ev Event) {
 				args = append(args, "-group", "claude-notify-"+ev.SessionID)
 			}
 			if ev.Activate != "" {
-				args = append(args, "-sender", ev.Activate)
+				args = append(args, "-activate", ev.Activate)
 			}
 			if exec.Command(tn, args...).Run() == nil {
 				return
