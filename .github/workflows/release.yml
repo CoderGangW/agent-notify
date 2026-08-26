@@ -1,0 +1,50 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-latest
+            goos: darwin
+            goarch: arm64
+            cgo: "1"
+          - runner: macos-latest
+            goos: darwin
+            goarch: amd64
+            cgo: "1"
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            cgo: "0"
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            cgo: "0"
+          - runner: windows-latest
+            goos: windows
+            goarch: amd64
+            cgo: "0"
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - name: Build
+        shell: bash
+        run: |
+          ext=""
+          [ "${{ matrix.goos }}" = "windows" ] && ext=".exe"
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=${{ matrix.cgo }} \
+            go build -trimpath -ldflags="-s -w" -o "claude-notify-${{ matrix.goos }}-${{ matrix.goarch }}$ext" .
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: claude-notify-${{ matrix.goos }}-${{ matrix.goarch }}*

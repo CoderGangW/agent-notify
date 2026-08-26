@@ -106,16 +106,25 @@ func runInstall() {
 	}
 
 	if added == 0 {
-		fmt.Println("이미 설치되어 있음:", path)
-		return
+		fmt.Println("hook 이미 설치되어 있음:", path)
+	} else {
+		saveSettings(path, settings)
+		fmt.Printf("hook %d개 등록 완료: %s\n", added, path)
+		fmt.Println("등록된 명령:", command)
 	}
-	saveSettings(path, settings)
-	fmt.Printf("hook %d개 등록 완료: %s\n", added, path)
-	fmt.Println("등록된 명령:", command)
-	fmt.Println("트레이 데몬 실행: claude-notify  (데몬이 없으면 알림은 OS 직접 전송으로 폴백)")
+
+	if err := installAutostart(exe); err != nil {
+		fmt.Println("자동 시작 등록 실패 (수동 실행 필요):", err)
+	} else {
+		fmt.Println("로그인 시 자동 시작 등록 완료 (데몬 지금 시작됨)")
+	}
 }
 
 func runUninstall() {
+	if err := uninstallAutostart(); err == nil {
+		fmt.Println("자동 시작 등록 제거 완료")
+	}
+
 	path := settingsPath()
 	settings := loadSettings(path)
 	hooks, _ := settings["hooks"].(map[string]any)
