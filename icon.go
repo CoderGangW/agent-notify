@@ -2,37 +2,30 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/binary"
-	"image"
-	"image/color"
-	"image/png"
 	"runtime"
 )
 
-// trayIcon renders a simple filled-circle icon at runtime, so no asset
-// files need shipping. Windows wants ICO; everything else takes PNG.
+// Tray icons are embedded at build time — swap the files in assets/ and
+// rebuild to change them. icon_mac.png should stay monochrome: macOS
+// treats it as a template image and tints it to match the menu bar.
+var (
+	//go:embed assets/icon.png
+	iconColor []byte
+	//go:embed assets/icon_mac.png
+	iconMac []byte
+)
+
 func trayIcon() []byte {
-	const size = 32
-	img := image.NewRGBA(image.Rect(0, 0, size, size))
-	c := color.RGBA{0, 0, 0, 255} // template-style; macOS tints it for the menu bar
-	if runtime.GOOS != "darwin" {
-		c = color.RGBA{217, 119, 87, 255} // Claude orange elsewhere
+	switch runtime.GOOS {
+	case "darwin":
+		return iconMac
+	case "windows":
+		return pngToICO(iconColor, 32)
+	default:
+		return iconColor
 	}
-	cx, cy, r := float64(size)/2, float64(size)/2, float64(size)/2-3
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
-			dx, dy := float64(x)+0.5-cx, float64(y)+0.5-cy
-			if dx*dx+dy*dy <= r*r {
-				img.Set(x, y, c)
-			}
-		}
-	}
-	var buf bytes.Buffer
-	_ = png.Encode(&buf, img)
-	if runtime.GOOS == "windows" {
-		return pngToICO(buf.Bytes(), size)
-	}
-	return buf.Bytes()
 }
 
 // pngToICO wraps PNG data in a single-image ICO container (PNG-in-ICO is

@@ -18,6 +18,7 @@ type hookInput struct {
 	CWD            string `json:"cwd"`
 	HookEventName  string `json:"hook_event_name"`
 	Message        string `json:"message"`
+	TranscriptPath string `json:"transcript_path"`
 	StopHookActive bool   `json:"stop_hook_active"`
 }
 
@@ -44,11 +45,19 @@ func runHook() {
 	if in.HookEventName == "Notification" {
 		kind = "attention"
 	}
+
+	title, summary := transcriptInfo(in.TranscriptPath)
+	message := in.Message // Notification events carry their own message
+	if message == "" {
+		message = summary // Stop events: Claude's last reply = work summary
+	}
+
 	ev := Event{
 		SessionID: in.SessionID,
 		CWD:       in.CWD,
 		Kind:      kind,
-		Message:   in.Message,
+		Title:     title,
+		Message:   message,
 		Time:      time.Now(),
 	}
 

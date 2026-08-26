@@ -11,7 +11,8 @@ const daemonPort = 49517
 type Event struct {
 	SessionID string    `json:"session_id"`
 	CWD       string    `json:"cwd"`
-	Kind      string    `json:"kind"` // "done" | "attention"
+	Kind      string    `json:"kind"`  // "done" | "attention"
+	Title     string    `json:"title"` // session title from the transcript, if found
 	Message   string    `json:"message"`
 	Time      time.Time `json:"time"`
 }

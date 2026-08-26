@@ -160,16 +160,23 @@ func (s *daemonState) refreshLocked() {
 }
 
 func notificationText(ev Event) (title, body string) {
-	proj := projectName(ev.CWD)
+	name := ev.Title
+	if name == "" {
+		name = projectName(ev.CWD)
+	}
 	switch ev.Kind {
 	case "attention":
-		title = "🔔 " + proj + " — 입력 필요"
+		title = "🔔 " + name
 	default:
-		title = "✅ " + proj + " — 작업 완료"
+		title = "✅ " + name
 	}
 	body = ev.Message
 	if body == "" {
-		body = ev.CWD
+		if ev.Kind == "attention" {
+			body = "입력 필요"
+		} else {
+			body = "작업 완료 · " + projectName(ev.CWD)
+		}
 	}
 	return title, body
 }

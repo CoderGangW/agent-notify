@@ -5,7 +5,7 @@ Claude Code 세션 여러 개를 돌릴 때 **어느 작업이 끝났는지** �
 터미널을 일일이 돌아다니며 확인할 필요 없이:
 
 - ✅ 작업 완료(Stop) / 🔔 입력 필요(Notification) 시 **OS 네이티브 알림**
-- 알림에 **프로젝트 이름** 표시 — 어느 세션인지 즉시 식별
+- 알림 제목 = **세션 제목**, 내용 = **Claude의 작업 요약** (transcript에서 마지막 응답 추출) — 어느 세션에서 뭘 했는지 즉시 식별
 - 트레이 메뉴에 최근 이벤트 목록, 클릭하면 해당 프로젝트 폴더 열기
 - macOS 메뉴바에 완료된 작업 수 뱃지
 
@@ -49,9 +49,13 @@ go build -o claude-notify .
 | `claude-notify uninstall` | 등록한 hook 제거 |
 | `claude-notify hook` | Claude Code가 호출하는 hook 엔드포인트 (직접 실행할 일 없음) |
 
+## 아이콘 교체
+
+트레이 아이콘은 빌드 시 임베드됨. `assets/icon.png`(Windows/Linux, 컬러), `assets/icon_mac.png`(macOS 메뉴바, 단색 템플릿)를 원하는 32×32 PNG로 교체 후 `go build`.
+
 ## 플랫폼 참고
 
-- **macOS**: 알림은 `osascript` 경유. 최초 알림 시 알림 허용 필요할 수 있음. 로그인 시 자동 실행하려면 시스템 설정 → 로그인 항목에 바이너리 추가.
+- **macOS**: 알림은 `osascript` 경유라 발신 앱이 "Script Editor"로 표시되고 알림 아이콘 커스텀 불가 (UNUserNotificationCenter 기반 .app 번들은 로드맵). 최초 알림 시 알림 허용 필요할 수 있음. 로그인 시 자동 실행하려면 시스템 설정 → 로그인 항목에 바이너리 추가.
 - **Linux**: 트레이에 `libayatana-appindicator`, 알림에 `notify-send`(libnotify) 필요.
 - **Windows**: 토스트 알림 사용. 별도 의존성 없음.
 
