@@ -5,25 +5,53 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"unicode"
 )
 
-// transcriptEntry covers the JSONL line shapes we care about: "summary"
-// lines carry the auto-generated session title; "assistant" lines carry
-// Claude's messages, whose last text block is its own report of the work.
-type transcriptEntry struct {
+// rawEntry covers the JSONL line shapes we care about. "summary" lines
+// carry a session title (only present after compaction/resume);
+// "assistant" lines carry Claude's messages; "user" lines let us fall
+// back to the first prompt as a title, the same thing the resume picker
+// shows. Content is either a plain string or an array of typed blocks.
+type rawEntry struct {
 	Type    string `json:"type"`
+	IsMeta  bool   `json:"isMeta"`
 	Summary string `json:"summary"`
 	Message struct {
-		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		} `json:"content"`
+		Content json.RawMessage `json:"content"`
 	} `json:"message"`
 }
 
-// transcriptInfo extracts the session title and the last assistant text
+func contentText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var blocks []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(raw, &blocks) != nil {
+		return ""
+	}
+	var parts []string
+	for _, b := range blocks {
+		t := strings.TrimSpace(b.Text)
+		// Drop injected non-prompt text (system reminders, command XML).
+		if b.Type != "text" || t == "" || strings.HasPrefix(t, "<") {
+			continue
+		}
+		parts = append(parts, t)
+	}
+	return strings.Join(parts, " ")
+}
+
+// transcriptInfo extracts a session title and the last assistant text
 // (used as the work summary) from a Claude Code transcript.
 func transcriptInfo(path string) (title, summary string) {
 	if path == "" {
@@ -57,11 +85,13 @@ func transcriptInfo(path string) (title, summary string) {
 	if offset > 0 && len(lines) > 0 {
 		lines = lines[1:] // first line is partial after seeking
 	}
-	title, summary = scanLines(lines)
+	tail := scanLines(lines)
+	title, summary = tail.title, tail.lastAssistant
 
-	// Summary (title) lines often sit at the head of the file; if the tail
-	// didn't have one, check the head too.
-	if title == "" && offset > 0 {
+	firstUser := tail.firstUser
+	if offset > 0 {
+		// Titles and the first prompt live at the head of the file.
+		firstUser = ""
 		if _, err := f.Seek(0, io.SeekStart); err == nil {
 			head := make([]byte, 64*1024)
 			n, _ := io.ReadFull(f, head)
@@ -69,40 +99,89 @@ func transcriptInfo(path string) (title, summary string) {
 			if len(headLines) > 1 {
 				headLines = headLines[:len(headLines)-1] // last line may be partial
 			}
-			t, _ := scanLines(headLines)
-			title = t
+			hs := scanLines(headLines)
+			if title == "" {
+				title = hs.title
+			}
+			firstUser = hs.firstUser
 		}
+	}
+	if title == "" {
+		title = condense(firstUser, 60)
 	}
 	return title, summary
 }
 
-func scanLines(lines [][]byte) (title, lastAssistantText string) {
+type scanResult struct {
+	title         string
+	firstUser     string
+	lastAssistant string
+}
+
+func scanLines(lines [][]byte) scanResult {
+	var r scanResult
 	for _, line := range lines {
 		if len(line) == 0 {
 			continue
 		}
-		var e transcriptEntry
-		if json.Unmarshal(line, &e) != nil {
+		var e rawEntry
+		if json.Unmarshal(line, &e) != nil || e.IsMeta {
 			continue
 		}
 		switch e.Type {
 		case "summary":
 			if e.Summary != "" {
-				title = e.Summary
+				r.title = e.Summary
+			}
+		case "user":
+			if r.firstUser == "" {
+				r.firstUser = contentText(e.Message.Content)
 			}
 		case "assistant":
-			var parts []string
-			for _, c := range e.Message.Content {
-				if c.Type == "text" && strings.TrimSpace(c.Text) != "" {
-					parts = append(parts, c.Text)
-				}
-			}
-			if len(parts) > 0 {
-				lastAssistantText = condense(strings.Join(parts, " "), 180)
+			if t := contentText(e.Message.Content); t != "" {
+				r.lastAssistant = condense(t, 180)
 			}
 		}
 	}
-	return title, lastAssistantText
+	return r
+}
+
+// sessionName returns the session's name from ~/.claude/sessions when the
+// user set it explicitly (nameSource != "derived"; derived names are just
+// directory-based like "personal-53").
+func sessionName(sessionID string) string {
+	if sessionID == "" {
+		return ""
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	entries, err := os.ReadDir(filepath.Join(home, ".claude", "sessions"))
+	if err != nil {
+		return ""
+	}
+	for _, ent := range entries {
+		if !strings.HasSuffix(ent.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(home, ".claude", "sessions", ent.Name()))
+		if err != nil || len(data) > 64*1024 {
+			continue
+		}
+		var s struct {
+			SessionID  string `json:"sessionId"`
+			Name       string `json:"name"`
+			NameSource string `json:"nameSource"`
+		}
+		if json.Unmarshal(data, &s) != nil {
+			continue
+		}
+		if s.SessionID == sessionID && s.Name != "" && s.NameSource != "derived" {
+			return s.Name
+		}
+	}
+	return ""
 }
 
 // condense collapses whitespace/markdown noise into a single notification-

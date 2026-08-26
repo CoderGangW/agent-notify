@@ -47,6 +47,10 @@ func runHook() {
 	}
 
 	title, summary := transcriptInfo(in.TranscriptPath)
+	// An explicitly user-set session name beats anything derived.
+	if n := sessionName(in.SessionID); n != "" {
+		title = n
+	}
 	message := in.Message // Notification events carry their own message
 	if message == "" {
 		message = summary // Stop events: Claude's last reply = work summary

@@ -23,6 +23,13 @@ func main() {
 		runInstall()
 	case "uninstall":
 		runUninstall()
+	case "peek": // debug: show what a transcript resolves to
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: claude-notify peek <transcript.jsonl>")
+			os.Exit(2)
+		}
+		title, summary := transcriptInfo(os.Args[2])
+		fmt.Printf("title:   %q\nsummary: %q\n", title, summary)
 	case "version", "--version", "-v":
 		fmt.Println("claude-notify " + version)
 	default:
