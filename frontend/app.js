@@ -183,15 +183,38 @@ function renderUsage(u) {
   setStat("u-week", u.week.input + u.week.output);
   setStat("u-out", u.today.output);
   setStat("u-cache", u.today.cacheRead);
+  // Diff the model chips in place: rebuilding them every poll replays
+  // the enter animation and reads as flicker.
   const models = $("models");
-  models.innerHTML = "";
-  for (const m of (u.todayByModel || []).slice(0, 4)) {
-    const chip = document.createElement("span");
-    chip.className = "chip";
-    chip.innerHTML =
-      "<b></b> " + fmtTokens(m.input + m.output);
-    chip.querySelector("b").textContent = shortModel(m.model);
-    models.appendChild(chip);
+  const want = (u.todayByModel || []).slice(0, 4);
+  const seen = new Set();
+  for (const m of want) {
+    seen.add(m.model);
+    let chip = models.querySelector(
+      '.chip[data-model="' + CSS.escape(m.model) + '"]'
+    );
+    if (chip && chip.classList.contains("leave")) {
+      chip.classList.remove("leave"); // came back mid-exit
+      chip.classList.add("enter");
+    }
+    if (!chip) {
+      chip = document.createElement("span");
+      chip.className = "chip enter";
+      chip.dataset.model = m.model;
+      chip.innerHTML = "<b></b> <span class=\"val\"></span>";
+      chip.querySelector("b").textContent = shortModel(m.model);
+      models.appendChild(chip);
+    }
+    const val = chip.querySelector(".val");
+    const txt = fmtTokens(m.input + m.output);
+    if (val.textContent !== txt) val.textContent = txt;
+  }
+  for (const chip of [...models.querySelectorAll(".chip")]) {
+    if (!seen.has(chip.dataset.model) && !chip.classList.contains("leave")) {
+      chip.classList.remove("enter");
+      chip.classList.add("leave");
+      chip.addEventListener("animationend", () => chip.remove(), { once: true });
+    }
   }
 }
 
