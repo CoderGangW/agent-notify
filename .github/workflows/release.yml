@@ -7,6 +7,10 @@ on:
 permissions:
   contents: write
 
+# Wails v3 needs cgo on macOS (AppKit/WebKit) and Linux (gtk3 + webkit2gtk);
+# Windows drives WebView2 through syscalls and stays pure Go. Linux arm64
+# builds on GitHub's native arm runner — cgo cross-compiling gtk is not
+# worth the pain.
 jobs:
   build:
     strategy:
@@ -23,21 +27,28 @@ jobs:
           - runner: ubuntu-latest
             goos: linux
             goarch: amd64
-            cgo: "0"
-          - runner: ubuntu-latest
+            cgo: "1"
+          - runner: ubuntu-24.04-arm
             goos: linux
             goarch: arm64
-            cgo: "0"
+            cgo: "1"
           - runner: windows-latest
             goos: windows
             goarch: amd64
             cgo: "0"
     runs-on: ${{ matrix.runner }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "13.0"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: 'stable'
+      - name: Install Linux webview deps
+        if: matrix.goos == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
       - name: Build
         shell: bash
         run: |
