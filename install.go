@@ -27,7 +27,7 @@ func loadSettings(path string) map[string]any {
 		}
 		backup := path + ".bak-claude-notify"
 		if err := os.WriteFile(backup, data, 0o644); err == nil {
-			fmt.Println("백업 저장:", backup)
+			fmt.Printf(T("install.backup")+"\n", backup)
 		}
 	}
 	return settings
@@ -94,7 +94,7 @@ func installBinary(exe string) string {
 		os.Remove(tmp)
 		return exe
 	}
-	fmt.Println("바이너리 설치:", dest)
+	fmt.Printf(T("install.binary")+"\n", dest)
 	return dest
 }
 
@@ -147,30 +147,30 @@ func runInstall() {
 	}
 
 	if added == 0 && updated == 0 {
-		fmt.Println("hook 이미 설치되어 있음:", path)
+		fmt.Printf(T("install.already")+"\n", path)
 	} else {
 		saveSettings(path, settings)
-		fmt.Printf("hook 등록 완료 (신규 %d, 경로 갱신 %d): %s\n", added, updated, path)
-		fmt.Println("등록된 명령:", command)
+		fmt.Printf(T("install.hooks")+"\n", added, updated, path)
+		fmt.Printf(T("install.command")+"\n", command)
 	}
 
 	if err := installAutostart(exe); err != nil {
-		fmt.Println("자동 시작 등록 실패 (수동 실행 필요):", err)
+		fmt.Printf(T("install.autostartFail")+"\n", err)
 	} else {
-		fmt.Println("로그인 시 자동 시작 등록 완료 (데몬 지금 시작됨)")
+		fmt.Println(T("install.autostartOK"))
 	}
 }
 
 func runUninstall() {
 	if err := uninstallAutostart(); err == nil {
-		fmt.Println("자동 시작 등록 제거 완료")
+		fmt.Println(T("uninstall.autostart"))
 	}
 
 	path := settingsPath()
 	settings := loadSettings(path)
 	hooks, _ := settings["hooks"].(map[string]any)
 	if hooks == nil {
-		fmt.Println("등록된 hook 없음")
+		fmt.Println(T("uninstall.none"))
 		return
 	}
 
@@ -204,9 +204,9 @@ func runUninstall() {
 	}
 
 	if removed == 0 {
-		fmt.Println("등록된 hook 없음")
+		fmt.Println(T("uninstall.none"))
 		return
 	}
 	saveSettings(path, settings)
-	fmt.Printf("hook %d개 제거 완료: %s\n", removed, path)
+	fmt.Printf(T("uninstall.removed")+"\n", removed, path)
 }

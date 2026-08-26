@@ -77,6 +77,9 @@ func runDaemon() {
 		e.Cancel()
 	})
 	tray.AttachWindow(window).WindowOffset(8)
+	// Left click and right click both toggle the window; there is no menu.
+	tray.OnClick(tray.ToggleWindow)
+	tray.OnRightClick(tray.ToggleWindow)
 
 	go s.serve()
 
@@ -170,14 +173,18 @@ func (s *daemonState) assetHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/", static)
 	mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) {
+		cfg := loadConfig()
 		s.mu.Lock()
 		resp := struct {
-			Events []Event      `json:"events"`
-			Done   int          `json:"done"`
-			Muted  bool         `json:"muted"`
-			Usage  usageReport  `json:"usage"`
-			Limits limitsReport `json:"limits"`
-		}{Events: s.events, Done: s.done, Muted: s.muted}
+			Events      []Event      `json:"events"`
+			Done        int          `json:"done"`
+			Muted       bool         `json:"muted"`
+			Lang        string       `json:"lang"`        // resolved UI language
+			LangSetting string       `json:"langSetting"` // raw config value
+			Usage       usageReport  `json:"usage"`
+			Limits      limitsReport `json:"limits"`
+		}{Events: s.events, Done: s.done, Muted: s.muted,
+			Lang: resolveLang(cfg.Lang), LangSetting: cfg.Lang}
 		s.mu.Unlock()
 		resp.Usage = usage.report()
 		resp.Limits = limits.report()
@@ -189,7 +196,29 @@ func (s *daemonState) assetHandler() http.Handler {
 		s.muted = !s.muted
 		muted := s.muted
 		s.mu.Unlock()
-		saveConfig(config{Muted: muted})
+		c := loadConfig()
+		c.Muted = muted
+		saveConfig(c)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/lang", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Lang string `json:"lang"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		switch req.Lang {
+		case "", "auto", "en", "ko", "zh":
+		default:
+			http.Error(w, "unsupported", http.StatusBadRequest)
+			return
+		}
+		c := loadConfig()
+		c.Lang = req.Lang
+		saveConfig(c)
+		setLang(resolveLang(req.Lang)) // notifications switch immediately
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/clear", func(w http.ResponseWriter, r *http.Request) {

@@ -37,10 +37,10 @@ func pngToICO(pngData []byte, size int) []byte {
 	binary.Write(&buf, binary.LittleEndian, uint16(1)) // type: icon
 	binary.Write(&buf, binary.LittleEndian, uint16(1)) // count
 	// ICONDIRENTRY
-	buf.WriteByte(byte(size % 256)) // width
-	buf.WriteByte(byte(size % 256)) // height
-	buf.WriteByte(0)                // palette
-	buf.WriteByte(0)                // reserved
+	buf.WriteByte(byte(size % 256))                     // width
+	buf.WriteByte(byte(size % 256))                     // height
+	buf.WriteByte(0)                                    // palette
+	buf.WriteByte(0)                                    // reserved
 	binary.Write(&buf, binary.LittleEndian, uint16(1))  // color planes
 	binary.Write(&buf, binary.LittleEndian, uint16(32)) // bits per pixel
 	binary.Write(&buf, binary.LittleEndian, uint32(len(pngData)))

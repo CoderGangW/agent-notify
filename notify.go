@@ -74,9 +74,9 @@ func notificationText(ev Event) (title, body string) {
 	body = ev.Message
 	if body == "" {
 		if ev.Kind == "attention" {
-			body = "입력 필요"
+			body = T("notif.attention")
 		} else {
-			body = "작업 완료"
+			body = T("notif.done")
 		}
 	}
 	return title, body

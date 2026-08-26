@@ -157,8 +157,8 @@ func aiSummarize(request, report string) string {
 		return ""
 	}
 
-	prompt := "다음은 코딩 에이전트 세션의 마지막 요청과 그 결과 보고다. 데스크톱 알림 본문으로 쓸 요약을 한 문장, 80자 이내로 출력해라. 무엇을 완료/변경했는지가 중심. 요약 문장 외에는 아무것도 출력하지 마라. 보고가 다른 언어면 그 언어를 따라라.\n\n[요청]\n" +
-		request + "\n\n[결과 보고]\n" + report
+	prompt := "Below are the last request and final report of a coding-agent session. Output a one-sentence summary (max 80 chars) for a desktop notification body, focused on what was completed or changed. Output nothing but the summary sentence. Write it in the same language as the report.\n\n[request]\n" +
+		request + "\n\n[report]\n" + report
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()

@@ -8,7 +8,8 @@ import (
 
 // config holds daemon preferences persisted across restarts.
 type config struct {
-	Muted bool `json:"muted"`
+	Muted bool   `json:"muted"`
+	Lang  string `json:"lang,omitempty"` // "", "auto", "en", "ko", "zh"
 }
 
 func configPath() string {

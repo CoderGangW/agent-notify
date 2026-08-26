@@ -20,6 +20,12 @@
       <span class="dot" id="live-dot" title="데몬 연결됨"></span>
     </div>
     <div class="actions" style="--wails-draggable:no-drag">
+      <select id="lang-sel" title="Language">
+        <option value="auto">Auto</option>
+        <option value="en">EN</option>
+        <option value="ko">한국어</option>
+        <option value="zh">中文</option>
+      </select>
       <button id="mute-btn" class="icon-btn" title="알림 끄기/켜기">🔔</button>
       <button id="quit-btn" class="icon-btn" title="종료">✕</button>
     </div>
@@ -27,7 +33,7 @@
 
   <section class="card" id="limits-card">
     <div class="card-head">
-      <h2>플랜 한도</h2>
+      <h2 data-i18n="limits.title">플랜 한도</h2>
       <span class="sub" id="limits-note"></span>
     </div>
     <div id="limits-body" class="gauges"></div>
@@ -35,25 +41,25 @@
 
   <section class="card" id="usage-card">
     <div class="card-head">
-      <h2>토큰 사용량</h2>
-      <span class="sub">로컬 트랜스크립트 합산</span>
+      <h2 data-i18n="usage.title">토큰 사용량</h2>
+      <span class="sub" data-i18n="usage.local">로컬 트랜스크립트 합산</span>
     </div>
     <div class="usage-grid">
-      <div class="stat"><span class="num" id="u-today">–</span><span class="lbl">오늘</span></div>
-      <div class="stat"><span class="num" id="u-week">–</span><span class="lbl">최근 7일</span></div>
-      <div class="stat"><span class="num" id="u-out">–</span><span class="lbl">오늘 출력</span></div>
-      <div class="stat"><span class="num" id="u-cache">–</span><span class="lbl">오늘 캐시 읽기</span></div>
+      <div class="stat"><span class="num" id="u-today">–</span><span class="lbl" data-i18n="usage.today">오늘</span></div>
+      <div class="stat"><span class="num" id="u-week">–</span><span class="lbl" data-i18n="usage.week">최근 7일</span></div>
+      <div class="stat"><span class="num" id="u-out">–</span><span class="lbl" data-i18n="usage.out">오늘 출력</span></div>
+      <div class="stat"><span class="num" id="u-cache">–</span><span class="lbl" data-i18n="usage.cache">오늘 캐시 읽기</span></div>
     </div>
     <div id="models" class="models"></div>
   </section>
 
   <section class="card grow" id="events-card">
     <div class="card-head">
-      <h2>세션 이벤트 <span class="badge" id="done-badge"></span></h2>
-      <button id="clear-btn" class="text-btn">비우기</button>
+      <h2><span data-i18n="events.title">세션 이벤트</span> <span class="badge" id="done-badge"></span></h2>
+      <button id="clear-btn" class="text-btn" data-i18n="events.clear">비우기</button>
     </div>
     <ul id="events"></ul>
-    <div id="empty" class="empty">아직 이벤트 없음<br/><span>Claude Code 세션이 끝나면 여기 뜸</span></div>
+    <div id="empty" class="empty"><span data-i18n="events.empty">아직 이벤트 없음</span><span data-i18n="events.hint">Claude Code 세션이 끝나면 여기 뜸</span></div>
   </section>
 </div>
 <script src="/app.js"></script>

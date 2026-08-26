@@ -58,7 +58,7 @@ func fetchLimits() limitsReport {
 	r := limitsReport{FetchedAt: time.Now()}
 	token := oauthAccessToken()
 	if token == "" {
-		r.Error = "Claude 인증 정보를 찾을 수 없음"
+		r.Error = T("limits.nocreds")
 		return r
 	}
 
@@ -74,13 +74,13 @@ func fetchLimits() limitsReport {
 	client := http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		r.Error = "네트워크 오류"
+		r.Error = T("limits.network")
 		return r
 	}
 	defer resp.Body.Close()
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized:
-		r.Error = "토큰 만료 — Claude Code 실행하면 갱신됨"
+		r.Error = T("limits.expired")
 		return r
 	case resp.StatusCode >= 300:
 		r.Error = resp.Status

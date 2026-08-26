@@ -2,6 +2,99 @@
 
 const $ = (id) => document.getElementById(id);
 
+// ---- i18n ----
+const I18N = {
+  en: {
+    "limits.title": "Plan limits",
+    "limits.none": "No limit data",
+    "usage.title": "Token usage",
+    "usage.local": "from local transcripts",
+    "usage.today": "Today",
+    "usage.week": "Last 7 days",
+    "usage.out": "Output today",
+    "usage.cache": "Cache read today",
+    "events.title": "Session events",
+    "events.clear": "Clear",
+    "events.empty": "No events yet",
+    "events.hint": "Finished Claude Code sessions show up here",
+    "bucket.five_hour": "5-hour session",
+    "bucket.seven_day": "Weekly (all)",
+    "bucket.seven_day_sonnet": "Weekly Sonnet",
+    "bucket.seven_day_opus": "Weekly Opus",
+    "reset.now": "resets now",
+    "tip.connected": "daemon connected",
+    "tip.mute": "mute/unmute notifications",
+    "tip.quit": "quit",
+    "tip.open": "open",
+    reset: (d, h, m) =>
+      d > 0 ? `resets in ${d}d ${h}h` : h > 0 ? `resets in ${h}h ${m}m` : `resets in ${m}m`,
+  },
+  ko: {
+    "limits.title": "플랜 한도",
+    "limits.none": "한도 정보 없음",
+    "usage.title": "토큰 사용량",
+    "usage.local": "로컬 트랜스크립트 합산",
+    "usage.today": "오늘",
+    "usage.week": "최근 7일",
+    "usage.out": "오늘 출력",
+    "usage.cache": "오늘 캐시 읽기",
+    "events.title": "세션 이벤트",
+    "events.clear": "비우기",
+    "events.empty": "아직 이벤트 없음",
+    "events.hint": "Claude Code 세션이 끝나면 여기 뜸",
+    "bucket.five_hour": "5시간 세션",
+    "bucket.seven_day": "주간 전체",
+    "bucket.seven_day_sonnet": "주간 Sonnet",
+    "bucket.seven_day_opus": "주간 Opus",
+    "reset.now": "리셋됨",
+    "tip.connected": "데몬 연결됨",
+    "tip.mute": "알림 끄기/켜기",
+    "tip.quit": "종료",
+    "tip.open": "열기",
+    reset: (d, h, m) =>
+      d > 0 ? `${d}일 ${h}h 후 리셋` : h > 0 ? `${h}h ${m}m 후 리셋` : `${m}m 후 리셋`,
+  },
+  zh: {
+    "limits.title": "套餐限额",
+    "limits.none": "无限额数据",
+    "usage.title": "令牌用量",
+    "usage.local": "本地转录汇总",
+    "usage.today": "今日",
+    "usage.week": "近7天",
+    "usage.out": "今日输出",
+    "usage.cache": "今日缓存读取",
+    "events.title": "会话事件",
+    "events.clear": "清空",
+    "events.empty": "暂无事件",
+    "events.hint": "Claude Code 会话结束后显示在这里",
+    "bucket.five_hour": "5小时会话",
+    "bucket.seven_day": "每周（全部）",
+    "bucket.seven_day_sonnet": "每周 Sonnet",
+    "bucket.seven_day_opus": "每周 Opus",
+    "reset.now": "已重置",
+    "tip.connected": "守护进程已连接",
+    "tip.mute": "开/关通知",
+    "tip.quit": "退出",
+    "tip.open": "打开",
+    reset: (d, h, m) =>
+      d > 0 ? `${d}天${h}h后重置` : h > 0 ? `${h}h ${m}m后重置` : `${m}m后重置`,
+  },
+};
+
+let lang = "ko";
+const t = (key) => I18N[lang][key] || I18N.en[key] || key;
+
+function applyI18n() {
+  document.documentElement.lang = lang;
+  for (const el of document.querySelectorAll("[data-i18n]")) {
+    el.textContent = t(el.dataset.i18n);
+  }
+  $("live-dot").title = t("tip.connected");
+  $("mute-btn").title = t("tip.mute");
+  $("quit-btn").title = t("tip.quit");
+}
+
+
 // 8-ray Claude spark: long cardinals, short diagonals, tapered via inner
 // valley points. Same geometry the app icon uses.
 function sparkPath(cx, cy, rLong, rShort, rValley) {
@@ -28,20 +121,11 @@ function fmtTokens(n) {
 
 function fmtReset(iso) {
   const ms = new Date(iso) - Date.now();
-  if (isNaN(ms) || ms <= 0) return "리셋됨";
+  if (isNaN(ms) || ms <= 0) return t("reset.now");
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
-  if (h >= 24) return Math.floor(h / 24) + "일 " + (h % 24) + "h 후 리셋";
-  if (h > 0) return h + "h " + m + "m 후 리셋";
-  return m + "m 후 리셋";
+  return I18N[lang].reset(Math.floor(h / 24), h >= 24 ? h % 24 : h, m);
 }
-
-const BUCKET_NAMES = {
-  five_hour: "5시간 세션",
-  seven_day: "주간 전체",
-  seven_day_sonnet: "주간 Sonnet",
-  seven_day_opus: "주간 Opus",
-};
 
 function renderLimits(lim) {
   const body = $("limits-body");
@@ -50,7 +134,7 @@ function renderLimits(lim) {
   if (!lim.buckets || lim.buckets.length === 0) {
     body.innerHTML =
       '<div class="limits-err">' +
-      (lim.error || "한도 정보 없음") +
+      (lim.error || t("limits.none")) +
       "</div>";
     return;
   }
@@ -67,7 +151,7 @@ function renderLimits(lim) {
       body.appendChild(el);
     }
     const pct = Math.min(100, Math.max(0, b.utilization));
-    el.querySelector(".name").textContent = BUCKET_NAMES[b.key] || b.key;
+    el.querySelector(".name").textContent = t("bucket." + b.key) || b.key;
     el.querySelector(".meta").textContent =
       pct.toFixed(0) + "% · " + fmtReset(b.resetsAt);
     const bar = el.querySelector(".bar > i");
@@ -124,7 +208,7 @@ function renderEvents(events, done) {
   events.forEach((ev, i) => {
     const li = document.createElement("li");
     li.className = "ev" + (knownNewest && ev.time > knownNewest ? " new" : "");
-    li.title = ev.cwd + " 열기";
+    li.title = t("tip.open") + " " + ev.cwd;
     const when = new Date(ev.time);
     li.innerHTML =
       '<span class="ic"></span>' +
@@ -166,6 +250,13 @@ async function refresh() {
     const res = await fetch("/api/state");
     const st = await res.json();
     $("live-dot").classList.remove("off");
+    if (st.lang && st.lang !== lang) {
+      lang = st.lang;
+      applyI18n();
+    }
+    const sel = $("lang-sel");
+    const want = st.langSetting || "auto";
+    if (document.activeElement !== sel && sel.value !== want) sel.value = want;
     renderLimits(st.limits || {});
     renderUsage(st.usage || { today: {}, week: {} });
     renderEvents(st.events || [], st.done || 0);
@@ -177,9 +268,11 @@ async function refresh() {
   }
 }
 
+$("lang-sel").addEventListener("change", (e) => post("/api/lang", { lang: e.target.value }));
 $("mute-btn").addEventListener("click", () => post("/api/mute"));
 $("clear-btn").addEventListener("click", () => post("/api/clear"));
 $("quit-btn").addEventListener("click", () => post("/api/quit"));
 
+applyI18n();
 refresh();
 setInterval(refresh, 2500);
