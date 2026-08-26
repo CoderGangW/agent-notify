@@ -153,11 +153,37 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
 .stat .num {
   font-size: 15px; font-weight: 700; color: var(--accent);
   font-variant-numeric: tabular-nums;
-  transition: transform 0.2s;
 }
-.stat .num.tick { animation: tick 0.4s ease; }
-@keyframes tick {
-  30% { transform: scale(1.18); }
+
+/* ---------- odometer digits ---------- */
+.roll { display: inline-flex; }
+.roll .slot {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  line-height: 1.25;
+}
+.roll .ch { display: inline-block; }
+.roll .ch.out { position: absolute; left: 0; top: 0; }
+.roll .in-up   { animation: roll-in-up   0.45s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+.roll .out-up  { animation: roll-out-up  0.45s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+.roll .in-down { animation: roll-in-down 0.45s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+.roll .out-down{ animation: roll-out-down 0.45s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+@keyframes roll-in-up {
+  from { transform: translateY(105%); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes roll-out-up {
+  from { transform: none; opacity: 1; }
+  to { transform: translateY(-105%); opacity: 0; }
+}
+@keyframes roll-in-down {
+  from { transform: translateY(-105%); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes roll-out-down {
+  from { transform: none; opacity: 1; }
+  to { transform: translateY(105%); opacity: 0; }
 }
 .stat .lbl { font-size: 10px; color: var(--dim); }
 .models { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
@@ -203,7 +229,11 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
   from { transform: translateX(-14px); opacity: 0; }
   to { transform: none; opacity: 1; }
 }
-.ev .ic { font-size: 14px; line-height: 1.5; }
+.ev .ic { line-height: 1; padding-top: 2px; }
+.ev .ic svg { width: 15px; height: 15px; display: block; }
+.ev .ic.done { color: var(--good); }
+.ev .ic.attn { color: var(--accent); }
+.icon-btn svg { width: 15px; height: 15px; display: block; }
 .ev .body { flex: 1; min-width: 0; }
 .ev .head {
   display: flex; justify-content: space-between; gap: 8px;

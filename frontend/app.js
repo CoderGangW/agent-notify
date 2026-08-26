@@ -2,6 +2,19 @@
 
 const $ = (id) => document.getElementById(id);
 
+
+// ---- Lucide-style stroke icons (24x24, MIT) ----
+const svgWrap = (inner) =>
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + "</svg>";
+const ICONS = {
+  bell: svgWrap('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>'),
+  bellOff: svgWrap('<path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5.4"/><path d="M17.3 17.3H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><line x1="2" x2="22" y1="2" y2="22"/>'),
+  bellRing: svgWrap('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/><path d="M22 8c0-2.3-.8-4.3-2-6"/>'),
+  check: svgWrap('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'),
+  x: svgWrap('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+};
+
 // ---- i18n ----
 const I18N = {
   en: {
@@ -160,15 +173,56 @@ function renderLimits(lim) {
   }
 }
 
-function setStat(id, value) {
-  const el = $(id);
-  const txt = fmtTokens(value);
-  if (el.textContent !== txt) {
-    el.textContent = txt;
-    el.classList.remove("tick");
-    void el.offsetWidth; // restart animation
-    el.classList.add("tick");
+// rollTo renders txt into el as per-character slots. A changed digit rolls
+// like an odometer: increased digits exit up / enter from below, decreased
+// digits exit down / enter from above. Non-digit chars (units, dots)
+// follow the overall direction of the value.
+function rollTo(el, txt, rawVal) {
+  const old = el.dataset.txt !== undefined ? el.dataset.txt : el.textContent;
+  if (old === txt) return;
+  const prevVal = Number(el.dataset.val);
+  const up = isNaN(prevVal) || rawVal >= prevVal; // overall direction
+  el.dataset.txt = txt;
+  el.dataset.val = String(rawVal);
+  el.innerHTML = "";
+  el.classList.add("roll");
+
+  // Align by place value: compare characters from the right.
+  const n = Math.max(old.length, txt.length);
+  const slots = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const oldCh = old[old.length - 1 - i];
+    const newCh = txt[txt.length - 1 - i];
+    const slot = document.createElement("span");
+    slot.className = "slot";
+    if (newCh === undefined) continue; // value got shorter; char just drops
+    if (oldCh === newCh) {
+      slot.textContent = newCh;
+    } else {
+      let dirUp = up;
+      if (oldCh >= "0" && oldCh <= "9" && newCh >= "0" && newCh <= "9") {
+        dirUp = newCh > oldCh;
+      }
+      const enter = document.createElement("span");
+      enter.className = "ch " + (dirUp ? "in-up" : "in-down");
+      enter.textContent = newCh;
+      slot.appendChild(enter);
+      if (oldCh !== undefined) {
+        const exit = document.createElement("span");
+        exit.className = "ch out " + (dirUp ? "out-up" : "out-down");
+        exit.textContent = oldCh;
+        exit.addEventListener("animationend", () => exit.remove(), { once: true });
+        slot.appendChild(exit);
+      }
+    }
+    slots.push(slot);
   }
+  slots.reverse();
+  for (const s of slots) el.appendChild(s);
+}
+
+function setStat(id, value) {
+  rollTo($(id), fmtTokens(value), value);
 }
 
 function shortModel(m) {
@@ -205,9 +259,7 @@ function renderUsage(u) {
       chip.querySelector("b").textContent = shortModel(m.model);
       models.appendChild(chip);
     }
-    const val = chip.querySelector(".val");
-    const txt = fmtTokens(m.input + m.output);
-    if (val.textContent !== txt) val.textContent = txt;
+    rollTo(chip.querySelector(".val"), fmtTokens(m.input + m.output), m.input + m.output);
   }
   for (const chip of [...models.querySelectorAll(".chip")]) {
     if (!seen.has(chip.dataset.model) && !chip.classList.contains("leave")) {
@@ -240,7 +292,9 @@ function renderEvents(events, done) {
       '<div class="proj"></div>' +
       '<div class="msg"></div>' +
       "</div>";
-    li.querySelector(".ic").textContent = ev.kind === "attention" ? "🔔" : "✅";
+    const ic = li.querySelector(".ic");
+    ic.className = "ic " + (ev.kind === "attention" ? "attn" : "done");
+    ic.innerHTML = ev.kind === "attention" ? ICONS.bellRing : ICONS.check;
     li.querySelector(".name").textContent =
       ev.title || (ev.cwd || "").split("/").pop() || "claude";
     li.querySelector(".time").textContent =
@@ -284,8 +338,12 @@ async function refresh() {
     renderUsage(st.usage || { today: {}, week: {} });
     renderEvents(st.events || [], st.done || 0);
     const mute = $("mute-btn");
-    mute.textContent = st.muted ? "🔕" : "🔔";
-    mute.classList.toggle("muted", st.muted);
+    const mstate = st.muted ? "off" : "on";
+    if (mute.dataset.state !== mstate) {
+      mute.dataset.state = mstate;
+      mute.innerHTML = st.muted ? ICONS.bellOff : ICONS.bell;
+      mute.classList.toggle("muted", st.muted);
+    }
   } catch (_) {
     $("live-dot").classList.add("off");
   }
@@ -296,6 +354,8 @@ $("mute-btn").addEventListener("click", () => post("/api/mute"));
 $("clear-btn").addEventListener("click", () => post("/api/clear"));
 $("quit-btn").addEventListener("click", () => post("/api/quit"));
 
+$("quit-btn").innerHTML = ICONS.x;
+$("mute-btn").innerHTML = ICONS.bell;
 applyI18n();
 refresh();
 setInterval(refresh, 2500);
