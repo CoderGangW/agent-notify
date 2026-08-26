@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"time"
 )
 
 const launchdLabel = "com.codergangw.claude-notify"
@@ -45,8 +46,23 @@ func installAutostart(exe string) error {
 			return err
 		}
 		target := fmt.Sprintf("gui/%d", os.Getuid())
-		_ = exec.Command("launchctl", "bootout", target+"/"+launchdLabel).Run() // reload if present
-		return exec.Command("launchctl", "bootstrap", target, plist).Run()
+		service := target + "/" + launchdLabel
+		if exec.Command("launchctl", "print", service).Run() == nil {
+			_ = exec.Command("launchctl", "bootout", service).Run()
+			// bootout is asynchronous; wait until the label is gone
+			for i := 0; i < 20; i++ {
+				if exec.Command("launchctl", "print", service).Run() != nil {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+		err = exec.Command("launchctl", "bootstrap", target, plist).Run()
+		if err != nil { // transient EIO right after bootout — one retry
+			time.Sleep(time.Second)
+			err = exec.Command("launchctl", "bootstrap", target, plist).Run()
+		}
+		return err
 
 	case "windows":
 		return exec.Command("reg", "add",

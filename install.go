@@ -59,21 +59,6 @@ func hookEntries(hooks map[string]any, event string) []any {
 	return arr
 }
 
-func hasOurHook(entries []any) bool {
-	for _, e := range entries {
-		m, _ := e.(map[string]any)
-		inner, _ := m["hooks"].([]any)
-		for _, h := range inner {
-			hm, _ := h.(map[string]any)
-			cmd, _ := hm["command"].(string)
-			if isOurCommand(cmd) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func runInstall() {
 	exe, err := os.Executable()
 	if err != nil {
@@ -92,24 +77,40 @@ func runInstall() {
 		settings["hooks"] = hooks
 	}
 
-	added := 0
+	added, updated := 0, 0
 	for _, event := range []string{"Stop", "Notification"} {
 		entries := hookEntries(hooks, event)
-		if hasOurHook(entries) {
-			continue
+		found := false
+		for _, e := range entries {
+			m, _ := e.(map[string]any)
+			inner, _ := m["hooks"].([]any)
+			for _, h := range inner {
+				hm, _ := h.(map[string]any)
+				cmd, _ := hm["command"].(string)
+				if !isOurCommand(cmd) {
+					continue
+				}
+				found = true
+				if cmd != command { // repoint an old binary path at this one
+					hm["command"] = command
+					updated++
+				}
+			}
 		}
-		entries = append(entries, map[string]any{
-			"hooks": []any{map[string]any{"type": "command", "command": command}},
-		})
-		hooks[event] = entries
-		added++
+		if !found {
+			entries = append(entries, map[string]any{
+				"hooks": []any{map[string]any{"type": "command", "command": command}},
+			})
+			hooks[event] = entries
+			added++
+		}
 	}
 
-	if added == 0 {
+	if added == 0 && updated == 0 {
 		fmt.Println("hook 이미 설치되어 있음:", path)
 	} else {
 		saveSettings(path, settings)
-		fmt.Printf("hook %d개 등록 완료: %s\n", added, path)
+		fmt.Printf("hook 등록 완료 (신규 %d, 경로 갱신 %d): %s\n", added, updated, path)
 		fmt.Println("등록된 명령:", command)
 	}
 
