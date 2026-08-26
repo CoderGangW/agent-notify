@@ -47,6 +47,10 @@ func runHook() {
 	}
 
 	title, summary := transcriptInfo(in.TranscriptPath)
+	// The VSCode extension's generated session title, when we can find it.
+	if n := vscodeTitle(in.SessionID); n != "" {
+		title = n
+	}
 	// An explicitly user-set session name beats anything derived.
 	if n := sessionName(in.SessionID); n != "" {
 		title = n

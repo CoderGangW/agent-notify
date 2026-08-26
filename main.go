@@ -30,6 +30,9 @@ func main() {
 		}
 		title, summary := transcriptInfo(os.Args[2])
 		fmt.Printf("title:   %q\nsummary: %q\n", title, summary)
+		if len(os.Args) > 3 {
+			fmt.Printf("vscode:  %q\nnamed:   %q\n", vscodeTitle(os.Args[3]), sessionName(os.Args[3]))
+		}
 	case "version", "--version", "-v":
 		fmt.Println("claude-notify " + version)
 	default:
