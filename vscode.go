@@ -17,69 +17,78 @@ import (
 // memory, but every rename_session / update_session_state message is
 // echoed into the extension host log, so the freshest matching log line
 // is the current title.
-func vscodeTitle(sessionID string) string {
+// ideBundleID maps a VSCode-family product name to its macOS bundle id,
+// used to focus the right IDE when the notification is clicked.
+var ideBundleID = map[string]string{
+	"Code":            "com.microsoft.VSCode",
+	"Code - Insiders": "com.microsoft.VSCodeInsiders",
+	"VSCodium":        "com.vscodium",
+	"Cursor":          "com.todesktop.230313mzl4w4u92",
+	"Windsurf":        "com.exafunction.windsurf",
+}
+
+func vscodeTitle(sessionID string) (title, bundleID string) {
 	if sessionID == "" {
-		return ""
+		return "", ""
 	}
 	files := claudeExtensionLogs()
 	needle := []byte(`"sessionId":"` + sessionID + `"`)
-	for _, path := range files { // newest log first
-		if t := lastTitleInLog(path, needle); t != "" {
-			return t
+	for _, lf := range files { // newest log first
+		if t := lastTitleInLog(lf.path, needle); t != "" {
+			return t, ideBundleID[lf.product]
 		}
 	}
-	return ""
+	return "", ""
 }
 
-func claudeExtensionLogs() []string {
+type extensionLog struct {
+	path    string
+	product string
+	mtime   time.Time
+}
+
+func claudeExtensionLogs() []extensionLog {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil
 	}
-	var bases []string
+	type base struct{ dir, product string }
+	var bases []base
 	products := []string{"Code", "Code - Insiders", "VSCodium", "Cursor", "Windsurf"}
 	switch runtime.GOOS {
 	case "darwin":
 		for _, p := range products {
-			bases = append(bases, filepath.Join(home, "Library", "Application Support", p, "logs"))
+			bases = append(bases, base{filepath.Join(home, "Library", "Application Support", p, "logs"), p})
 		}
 	case "windows":
 		if appdata := os.Getenv("APPDATA"); appdata != "" {
 			for _, p := range products {
-				bases = append(bases, filepath.Join(appdata, p, "logs"))
+				bases = append(bases, base{filepath.Join(appdata, p, "logs"), p})
 			}
 		}
 	default:
 		for _, p := range products {
-			bases = append(bases, filepath.Join(home, ".config", p, "logs"))
+			bases = append(bases, base{filepath.Join(home, ".config", p, "logs"), p})
 		}
 	}
 
-	type logFile struct {
-		path  string
-		mtime time.Time
-	}
-	var found []logFile
+	var found []extensionLog
 	cutoff := time.Now().Add(-48 * time.Hour)
-	for _, base := range bases {
-		matches, _ := filepath.Glob(filepath.Join(base, "*", "window*", "exthost", "Anthropic.claude-code", "*.log"))
+	for _, b := range bases {
+		matches, _ := filepath.Glob(filepath.Join(b.dir, "*", "window*", "exthost", "Anthropic.claude-code", "*.log"))
 		for _, m := range matches {
 			st, err := os.Stat(m)
 			if err != nil || st.ModTime().Before(cutoff) {
 				continue
 			}
-			found = append(found, logFile{m, st.ModTime()})
+			found = append(found, extensionLog{m, b.product, st.ModTime()})
 		}
 	}
 	sort.Slice(found, func(i, j int) bool { return found[i].mtime.After(found[j].mtime) })
 	if len(found) > 5 {
 		found = found[:5]
 	}
-	paths := make([]string, len(found))
-	for i, f := range found {
-		paths[i] = f.path
-	}
-	return paths
+	return found
 }
 
 // lastTitleInLog returns the title from the last webview message line in

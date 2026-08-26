@@ -11,8 +11,9 @@ const daemonPort = 49517
 type Event struct {
 	SessionID string    `json:"session_id"`
 	CWD       string    `json:"cwd"`
-	Kind      string    `json:"kind"`  // "done" | "attention"
-	Title     string    `json:"title"` // session title from the transcript, if found
+	Kind      string    `json:"kind"`     // "done" | "attention"
+	Title     string    `json:"title"`    // session title, if found
+	Activate  string    `json:"activate"` // macOS bundle id to focus on click
 	Message   string    `json:"message"`
 	Time      time.Time `json:"time"`
 }

@@ -7,13 +7,11 @@ import (
 	"net"
 	"net/http"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
 
 	"fyne.io/systray"
-	"github.com/gen2brain/beeep"
 )
 
 const maxMenuEvents = 10
@@ -26,7 +24,6 @@ type daemonState struct {
 }
 
 func runDaemon() {
-	beeep.AppName = "claude-notify"
 	s := &daemonState{}
 	systray.Run(s.onReady, nil)
 }
@@ -120,10 +117,7 @@ func (s *daemonState) serve() {
 }
 
 func (s *daemonState) add(ev Event) {
-	title, body := notificationText(ev)
-	if err := beeep.Notify(title, body, ""); err != nil {
-		log.Printf("notify: %v", err)
-	}
+	deliverNotification(ev)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -157,35 +151,6 @@ func (s *daemonState) refreshLocked() {
 	} else if runtime.GOOS == "darwin" {
 		systray.SetTitle("")
 	}
-}
-
-func notificationText(ev Event) (title, body string) {
-	name := ev.Title
-	if name == "" {
-		name = projectName(ev.CWD)
-	}
-	switch ev.Kind {
-	case "attention":
-		title = "🔔 " + name
-	default:
-		title = "✅ " + name
-	}
-	body = ev.Message
-	if body == "" {
-		if ev.Kind == "attention" {
-			body = "입력 필요"
-		} else {
-			body = "작업 완료 · " + projectName(ev.CWD)
-		}
-	}
-	return title, body
-}
-
-func projectName(cwd string) string {
-	if cwd == "" {
-		return "claude"
-	}
-	return filepath.Base(cwd)
 }
 
 func openFolder(path string) {

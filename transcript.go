@@ -12,9 +12,10 @@ import (
 
 // rawEntry covers the JSONL line shapes we care about. "summary" lines
 // carry a session title (only present after compaction/resume);
-// "assistant" lines carry Claude's messages; "user" lines let us fall
-// back to the first prompt as a title, the same thing the resume picker
-// shows. Content is either a plain string or an array of typed blocks.
+// "assistant" lines carry Claude's messages; "user" lines give us the
+// first prompt (title fallback, same thing the resume picker shows) and
+// the last request (context for the AI summary). Content is either a
+// plain string or an array of typed blocks.
 type rawEntry struct {
 	Type    string `json:"type"`
 	IsMeta  bool   `json:"isMeta"`
@@ -51,34 +52,40 @@ func contentText(raw json.RawMessage) string {
 	return strings.Join(parts, " ")
 }
 
-// transcriptInfo extracts a session title and the last assistant text
-// (used as the work summary) from a Claude Code transcript.
-func transcriptInfo(path string) (title, summary string) {
+// transcriptDetail is what a transcript gives us for one notification.
+type transcriptDetail struct {
+	Title         string // session title (summary entry, else first prompt)
+	LastUser      string // most recent user request, for summary context
+	LastAssistant string // Claude's final message = its report of the work
+}
+
+func transcriptInfo(path string) transcriptDetail {
+	var d transcriptDetail
 	if path == "" {
-		return "", ""
+		return d
 	}
 	const tailSize = 512 * 1024
 
 	f, err := os.Open(path)
 	if err != nil {
-		return "", ""
+		return d
 	}
 	defer f.Close()
 
 	st, err := f.Stat()
 	if err != nil {
-		return "", ""
+		return d
 	}
 	offset := int64(0)
 	if st.Size() > tailSize {
 		offset = st.Size() - tailSize
 	}
 	if _, err := f.Seek(offset, io.SeekStart); err != nil {
-		return "", ""
+		return d
 	}
 	data, err := io.ReadAll(f)
 	if err != nil {
-		return "", ""
+		return d
 	}
 
 	lines := bytes.Split(data, []byte("\n"))
@@ -86,7 +93,9 @@ func transcriptInfo(path string) (title, summary string) {
 		lines = lines[1:] // first line is partial after seeking
 	}
 	tail := scanLines(lines)
-	title, summary = tail.title, tail.lastAssistant
+	d.Title = tail.title
+	d.LastUser = tail.lastUser
+	d.LastAssistant = tail.lastAssistant
 
 	firstUser := tail.firstUser
 	if offset > 0 {
@@ -100,21 +109,22 @@ func transcriptInfo(path string) (title, summary string) {
 				headLines = headLines[:len(headLines)-1] // last line may be partial
 			}
 			hs := scanLines(headLines)
-			if title == "" {
-				title = hs.title
+			if d.Title == "" {
+				d.Title = hs.title
 			}
 			firstUser = hs.firstUser
 		}
 	}
-	if title == "" {
-		title = condense(firstUser, 60)
+	if d.Title == "" {
+		d.Title = condense(firstUser, 60)
 	}
-	return title, summary
+	return d
 }
 
 type scanResult struct {
 	title         string
 	firstUser     string
+	lastUser      string
 	lastAssistant string
 }
 
@@ -134,12 +144,15 @@ func scanLines(lines [][]byte) scanResult {
 				r.title = e.Summary
 			}
 		case "user":
-			if r.firstUser == "" {
-				r.firstUser = contentText(e.Message.Content)
+			if t := contentText(e.Message.Content); t != "" {
+				if r.firstUser == "" {
+					r.firstUser = t
+				}
+				r.lastUser = clip(t, 1000)
 			}
 		case "assistant":
 			if t := contentText(e.Message.Content); t != "" {
-				r.lastAssistant = condense(t, 180)
+				r.lastAssistant = clip(t, 4000)
 			}
 		}
 	}
@@ -182,6 +195,14 @@ func sessionName(sessionID string) string {
 		}
 	}
 	return ""
+}
+
+func clip(s string, max int) string {
+	r := []rune(s)
+	if len(r) > max {
+		return string(r[:max])
+	}
+	return s
 }
 
 // condense collapses whitespace/markdown noise into a single notification-

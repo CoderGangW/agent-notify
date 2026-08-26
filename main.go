@@ -19,6 +19,8 @@ func main() {
 		runDaemon()
 	case "hook":
 		runHook()
+	case "summarize-notify": // detached child spawned by `hook`
+		runSummarizeNotify()
 	case "install":
 		runInstall()
 	case "uninstall":
@@ -28,10 +30,11 @@ func main() {
 			fmt.Fprintln(os.Stderr, "usage: claude-notify peek <transcript.jsonl>")
 			os.Exit(2)
 		}
-		title, summary := transcriptInfo(os.Args[2])
-		fmt.Printf("title:   %q\nsummary: %q\n", title, summary)
+		info := transcriptInfo(os.Args[2])
+		fmt.Printf("title:   %q\nrequest: %q\nreport:  %q\n", info.Title, condense(info.LastUser, 120), condense(info.LastAssistant, 180))
 		if len(os.Args) > 3 {
-			fmt.Printf("vscode:  %q\nnamed:   %q\n", vscodeTitle(os.Args[3]), sessionName(os.Args[3]))
+			vs, bundle := vscodeTitle(os.Args[3])
+			fmt.Printf("vscode:  %q (%s)\nnamed:   %q\n", vs, bundle, sessionName(os.Args[3]))
 		}
 	case "version", "--version", "-v":
 		fmt.Println("claude-notify " + version)

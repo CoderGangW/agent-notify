@@ -2,14 +2,15 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
+	"strings"
 	"time"
-
-	"github.com/gen2brain/beeep"
 )
 
 // hookInput is the JSON Claude Code writes to a hook's stdin.
@@ -22,10 +23,25 @@ type hookInput struct {
 	StopHookActive bool   `json:"stop_hook_active"`
 }
 
+// asyncPayload travels from the fast hook process to the detached
+// summarizer child via a temp file.
+type asyncPayload struct {
+	Event   Event  `json:"event"`
+	Request string `json:"request"`
+	Report  string `json:"report"`
+}
+
 // runHook is invoked by Claude Code as `claude-notify hook`. It must be
 // fast and must always exit 0 so it never blocks or fails the session.
+// AI summarization is handed to a detached child process.
 func runHook() {
 	defer os.Exit(0)
+
+	// Set when we invoke `claude -p` ourselves: that run's own Stop hook
+	// must not notify (or recurse).
+	if os.Getenv("CLAUDE_NOTIFY_SUPPRESS") == "1" {
+		return
+	}
 
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil {
@@ -46,18 +62,15 @@ func runHook() {
 		kind = "attention"
 	}
 
-	title, summary := transcriptInfo(in.TranscriptPath)
-	// The VSCode extension's generated session title, when we can find it.
-	if n := vscodeTitle(in.SessionID); n != "" {
-		title = n
+	info := transcriptInfo(in.TranscriptPath)
+	title := info.Title
+	vsTitle, activate := vscodeTitle(in.SessionID)
+	if vsTitle != "" {
+		title = vsTitle
 	}
 	// An explicitly user-set session name beats anything derived.
 	if n := sessionName(in.SessionID); n != "" {
 		title = n
-	}
-	message := in.Message // Notification events carry their own message
-	if message == "" {
-		message = summary // Stop events: Claude's last reply = work summary
 	}
 
 	ev := Event{
@@ -65,17 +78,107 @@ func runHook() {
 		CWD:       in.CWD,
 		Kind:      kind,
 		Title:     title,
-		Message:   message,
+		Activate:  activate,
+		Message:   in.Message, // Notification events carry their own message
 		Time:      time.Now(),
 	}
 
+	if kind == "done" && ev.Message == "" {
+		if spawnSummarizer(asyncPayload{Event: ev, Request: info.LastUser, Report: info.LastAssistant}) {
+			return
+		}
+		ev.Message = condense(info.LastAssistant, 180)
+	}
+	deliver(ev)
+}
+
+func spawnSummarizer(p asyncPayload) bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	buf, err := json.Marshal(p)
+	if err != nil {
+		return false
+	}
+	tmp, err := os.CreateTemp("", "claude-notify-*.json")
+	if err != nil {
+		return false
+	}
+	if _, err := tmp.Write(buf); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return false
+	}
+	tmp.Close()
+
+	cmd := exec.Command(exe, "summarize-notify", tmp.Name())
+	if err := cmd.Start(); err != nil {
+		os.Remove(tmp.Name())
+		return false
+	}
+	_ = cmd.Process.Release() // orphan it; the hook exits immediately
+	return true
+}
+
+// runSummarizeNotify is the detached child: summarize with `claude -p`,
+// fall back to a raw excerpt, then deliver.
+func runSummarizeNotify() {
+	if len(os.Args) < 3 {
+		return
+	}
+	path := os.Args[2]
+	defer os.Remove(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var p asyncPayload
+	if json.Unmarshal(data, &p) != nil {
+		return
+	}
+	ev := p.Event
+	if s := aiSummarize(p.Request, p.Report); s != "" {
+		ev.Message = s
+	} else {
+		ev.Message = condense(p.Report, 180)
+	}
+	deliver(ev)
+}
+
+// aiSummarize asks the claude CLI (haiku, the user's existing auth) for a
+// one-line notification body. Empty string on any failure.
+func aiSummarize(request, report string) string {
+	if os.Getenv("CLAUDE_NOTIFY_NO_AI") == "1" || strings.TrimSpace(report) == "" {
+		return ""
+	}
+	claude, err := exec.LookPath("claude")
+	if err != nil {
+		return ""
+	}
+
+	prompt := "다음은 코딩 에이전트 세션의 마지막 요청과 그 결과 보고다. 데스크톱 알림 본문으로 쓸 요약을 한 문장, 80자 이내로 출력해라. 무엇을 완료/변경했는지가 중심. 요약 문장 외에는 아무것도 출력하지 마라. 보고가 다른 언어면 그 언어를 따라라.\n\n[요청]\n" +
+		request + "\n\n[결과 보고]\n" + report
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, claude, "-p", "--model", "haiku")
+	cmd.Stdin = strings.NewReader(prompt)
+	cmd.Dir = os.TempDir()
+	cmd.Env = append(os.Environ(), "CLAUDE_NOTIFY_SUPPRESS=1")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return condense(string(out), 200)
+}
+
+func deliver(ev Event) {
 	if postToDaemon(ev) {
 		return
 	}
 	// Daemon not running: degrade to a direct OS notification.
-	beeep.AppName = "claude-notify"
-	title, body := notificationText(ev)
-	_ = beeep.Notify(title, body, "")
+	deliverNotification(ev)
 }
 
 func postToDaemon(ev Event) bool {

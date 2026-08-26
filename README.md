@@ -5,7 +5,8 @@ Claude Code 세션 여러 개를 돌릴 때 **어느 작업이 끝났는지** �
 터미널을 일일이 돌아다니며 확인할 필요 없이:
 
 - ✅ 작업 완료(Stop) / 🔔 입력 필요(Notification) 시 **OS 네이티브 알림**
-- 알림 제목 = **세션 제목**, 내용 = **Claude의 작업 요약** (transcript에서 마지막 응답 추출) — 어느 세션에서 뭘 했는지 즉시 식별
+- 알림 제목 = **세션 제목** (VSCode 확장이 생성한 제목 포함), 부제 = **프로젝트 경로**, 내용 = **AI 한 줄 요약** (`claude -p --model haiku`, 기존 인증 그대로 사용 · 실패 시 마지막 응답 발췌로 폴백)
+- macOS에서 `terminal-notifier` 설치 시 알림 아이콘이 해당 IDE로 뜨고 **클릭하면 그 IDE로 포커스** (VSCode/Cursor/Windsurf 자동 감지)
 - 트레이 메뉴에 최근 이벤트 목록, 클릭하면 해당 프로젝트 폴더 열기
 - macOS 메뉴바에 완료된 작업 수 뱃지
 
@@ -55,7 +56,8 @@ go build -o claude-notify .
 
 ## 플랫폼 참고
 
-- **macOS**: 알림은 `osascript` 경유라 발신 앱이 "Script Editor"로 표시되고 알림 아이콘 커스텀 불가 (UNUserNotificationCenter 기반 .app 번들은 로드맵). 최초 알림 시 알림 허용 필요할 수 있음. 로그인 시 자동 실행하려면 시스템 설정 → 로그인 항목에 바이너리 추가.
+- **macOS**: `brew install terminal-notifier` 강력 추천 — IDE 아이콘 + 클릭 시 IDE 포커스 + 경로 부제 지원. 없으면 `osascript` 폴백 (발신 앱 "Script Editor"로 표시, 클릭 동작 없음). 최초 알림 시 알림 허용 필요할 수 있음.
+- **AI 요약**: `claude` CLI가 PATH에 있으면 자동 사용. 끄려면 환경변수 `CLAUDE_NOTIFY_NO_AI=1`. 요약용 하위 세션의 hook 재귀는 `CLAUDE_NOTIFY_SUPPRESS` 가드로 차단됨. 로그인 시 자동 실행하려면 시스템 설정 → 로그인 항목에 바이너리 추가.
 - **Linux**: 트레이에 `libayatana-appindicator`, 알림에 `notify-send`(libnotify) 필요.
 - **Windows**: 토스트 알림 사용. 별도 의존성 없음.
 
