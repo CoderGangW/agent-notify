@@ -20,7 +20,8 @@ type daemonState struct {
 	mu     sync.Mutex
 	events []Event // newest first
 	items  []*systray.MenuItem
-	done   int // completed-task count since last clear
+	done   int  // completed-task count since last clear
+	muted  bool // suppress native notifications; events still listed
 }
 
 func runDaemon() {
@@ -29,6 +30,7 @@ func runDaemon() {
 }
 
 func (s *daemonState) onReady() {
+	s.muted = loadConfig().Muted
 	systray.SetIcon(trayIcon())
 	systray.SetTooltip("claude-notify")
 	if runtime.GOOS == "darwin" {
@@ -48,12 +50,24 @@ func (s *daemonState) onReady() {
 	}
 
 	systray.AddSeparator()
+	mute := systray.AddMenuItemCheckbox("알림 켜기", "끄면 배너 알림 없이 목록에만 기록", !s.muted)
 	clear := systray.AddMenuItem("목록 비우기", "")
 	quit := systray.AddMenuItem("종료", "")
 
 	go func() {
 		for {
 			select {
+			case <-mute.ClickedCh:
+				s.mu.Lock()
+				s.muted = !s.muted
+				muted := s.muted
+				s.mu.Unlock()
+				if muted {
+					mute.Uncheck()
+				} else {
+					mute.Check()
+				}
+				saveConfig(config{Muted: muted})
 			case <-clear.ClickedCh:
 				s.mu.Lock()
 				s.events = nil
@@ -117,7 +131,12 @@ func (s *daemonState) serve() {
 }
 
 func (s *daemonState) add(ev Event) {
-	deliverNotification(ev)
+	s.mu.Lock()
+	muted := s.muted
+	s.mu.Unlock()
+	if !muted {
+		deliverNotification(ev)
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
