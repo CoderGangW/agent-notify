@@ -17,7 +17,7 @@
   🇺🇸 <b>English</b>&nbsp;&nbsp;·&nbsp;&nbsp;🇰🇷 <a href="docs/README.ko.md">한국어</a>&nbsp;&nbsp;·&nbsp;&nbsp;🇨🇳 <a href="docs/README.zh-CN.md">简体中文</a>
 </p>
 
-<img src="assets/screenshot.png" width="360" alt="agent-notify dashboard"/>
+<img src="assets/main_screen_en.png" width="360" alt="agent-notify dashboard"/>
 
 </div>
 
