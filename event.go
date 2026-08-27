@@ -15,6 +15,8 @@ type Event struct {
 	Source    string    `json:"source"`   // "claude" | "codex" ("" = claude, pre-0.2 events)
 	Read      bool      `json:"read"`     // user acknowledged this event
 	Branch    string    `json:"branch"`   // git branch of the session, if known
+	Model     string    `json:"model"`    // model of the session's last reply
+	DurSec    int64     `json:"durSec"`   // session wall time in seconds
 	Title     string    `json:"title"`    // session title, if found
 	Activate  string    `json:"activate"` // macOS bundle id to focus on click
 	Message   string    `json:"message"`

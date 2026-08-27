@@ -85,6 +85,8 @@ func runHook() {
 		Kind:      kind,
 		Source:    "claude",
 		Branch:    info.Branch,
+		Model:     info.Model,
+		DurSec:    info.DurationSec,
 		Title:     title,
 		Activate:  activate,
 		Message:   in.Message, // Notification events carry their own message

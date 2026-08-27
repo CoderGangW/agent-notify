@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -17,11 +18,14 @@ import (
 // the last request (context for the AI summary). Content is either a
 // plain string or an array of typed blocks.
 type rawEntry struct {
-	Type      string `json:"type"`
-	IsMeta    bool   `json:"isMeta"`
-	Summary   string `json:"summary"`
-	GitBranch string `json:"gitBranch"`
-	Message   struct {
+	Type        string    `json:"type"`
+	IsMeta      bool      `json:"isMeta"`
+	IsSidechain bool      `json:"isSidechain"`
+	Summary     string    `json:"summary"`
+	GitBranch   string    `json:"gitBranch"`
+	Timestamp   time.Time `json:"timestamp"`
+	Message     struct {
+		Model   string          `json:"model"`
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
 }
@@ -59,6 +63,8 @@ type transcriptDetail struct {
 	LastUser      string // most recent user request, for summary context
 	LastAssistant string // Claude's final message = its report of the work
 	Branch        string // git branch the session was on (last entry wins)
+	Model         string // model of the last assistant message
+	DurationSec   int64  // wall time from first to last entry
 }
 
 func transcriptInfo(path string) transcriptDetail {
@@ -99,10 +105,13 @@ func transcriptInfo(path string) transcriptDetail {
 	d.LastUser = tail.lastUser
 	d.LastAssistant = tail.lastAssistant
 	d.Branch = tail.branch
+	d.Model = tail.model
+	firstTS := tail.firstTS
 
 	firstUser := tail.firstUser
 	if offset > 0 {
-		// Titles and the first prompt live at the head of the file.
+		// Titles, the first prompt, and the session start time live at the
+		// head of the file.
 		firstUser = ""
 		if _, err := f.Seek(0, io.SeekStart); err == nil {
 			head := make([]byte, 64*1024)
@@ -116,10 +125,14 @@ func transcriptInfo(path string) transcriptDetail {
 				d.Title = hs.title
 			}
 			firstUser = hs.firstUser
+			firstTS = hs.firstTS
 		}
 	}
 	if d.Title == "" {
 		d.Title = condense(firstUser, 60)
+	}
+	if !firstTS.IsZero() && !tail.lastTS.IsZero() && tail.lastTS.After(firstTS) {
+		d.DurationSec = int64(tail.lastTS.Sub(firstTS).Seconds())
 	}
 	return d
 }
@@ -130,6 +143,9 @@ type scanResult struct {
 	lastUser      string
 	lastAssistant string
 	branch        string
+	model         string
+	firstTS       time.Time
+	lastTS        time.Time
 }
 
 func scanLines(lines [][]byte) scanResult {
@@ -144,6 +160,17 @@ func scanLines(lines [][]byte) scanResult {
 		}
 		if e.GitBranch != "" {
 			r.branch = e.GitBranch
+		}
+		if !e.Timestamp.IsZero() {
+			if r.firstTS.IsZero() {
+				r.firstTS = e.Timestamp
+			}
+			r.lastTS = e.Timestamp
+		}
+		// Sidechain entries are subagent traffic: their content would leak
+		// into the title/summary as if the main session said it.
+		if e.IsSidechain {
+			continue
 		}
 		switch e.Type {
 		case "summary":
@@ -160,6 +187,9 @@ func scanLines(lines [][]byte) scanResult {
 		case "assistant":
 			if t := contentText(e.Message.Content); t != "" {
 				r.lastAssistant = clip(t, 4000)
+			}
+			if e.Message.Model != "" && e.Message.Model != "<synthetic>" {
+				r.model = e.Message.Model
 			}
 		}
 	}

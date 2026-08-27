@@ -347,6 +347,13 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
 .ev .branch span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ev .branch svg { width: 10px; height: 10px; flex-shrink: 0; }
 .ev:hover .proj { color: var(--accent); border-color: var(--accent-soft); }
+.ev .meta {
+  display: flex; align-items: center; gap: 4px;
+  color: var(--dim); font-size: 10px; margin-top: 2px;
+  opacity: 0.85;
+}
+.ev .meta svg { width: 10px; height: 10px; }
+.ev .meta .sep { font-style: normal; opacity: 0.5; }
 .ev .msg {
   color: var(--dim); font-size: 11px; line-height: 1.45; margin-top: 2px;
   overflow: hidden;
