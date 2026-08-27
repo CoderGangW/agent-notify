@@ -48,10 +48,32 @@ cat > "$APP/Contents/Info.plist" <<EOF
 EOF
 plutil -lint "$APP/Contents/Info.plist"
 
-codesign --force --deep --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
+# Developer ID + notarization makes the app run on anyone's Mac; an
+# Apple Development identity only runs on this machine's dev profile.
+case "$IDENTITY" in
+  "Developer ID Application"*)
+    codesign --force --deep --options runtime --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
+    ;;
+  *)
+    codesign --force --deep --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
+    echo "note: '$IDENTITY' is not a Developer ID cert — other Macs will need"
+    echo "      right-click→Open or 'xattr -cr agent-notify.app' on first run."
+    ;;
+esac
 codesign --verify --strict "$APP" && echo "codesign OK"
 
 (cd dist && zip -qry "agent-notify-macos-universal.app.zip" agent-notify.app)
+
+# Notarize when a keychain profile exists (create once with:
+#   xcrun notarytool store-credentials agent-notify --apple-id <id> --team-id <team> --password <app-specific-pw>)
+if [ -n "$NOTARY_PROFILE" ]; then
+  xcrun notarytool submit dist/agent-notify-macos-universal.app.zip \
+    --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$APP"
+  rm dist/agent-notify-macos-universal.app.zip
+  (cd dist && zip -qry "agent-notify-macos-universal.app.zip" agent-notify.app)
+  echo "notarized + stapled"
+fi
 ls -la dist/
 
 if [ -n "$1" ]; then
