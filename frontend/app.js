@@ -322,18 +322,23 @@ let currentTab = null; // set from defaultTab on first state fetch
 let defaultTab = "claude";
 let lastState = null;
 
-function applyTab() {
-  document.body.classList.toggle("tab-codex", currentTab === "codex");
+function updateInk() {
   const seg = document.querySelector("#tabs .seg");
   const ink = $("tab-ink");
   for (const b of seg.querySelectorAll(".tab")) {
-    const active = b.dataset.tab === currentTab;
-    b.classList.toggle("active", active);
-    if (active) {
-      ink.style.transform = `translateX(${b.offsetLeft - 3}px)`;
-      ink.style.width = b.offsetWidth + "px";
-    }
+    if (b.dataset.tab !== currentTab) continue;
+    ink.style.transform = `translateX(${b.offsetLeft - 3}px)`;
+    ink.style.width = b.offsetWidth + "px";
   }
+}
+
+function applyTab() {
+  document.body.classList.toggle("tab-codex", currentTab === "codex");
+  const seg = document.querySelector("#tabs .seg");
+  for (const b of seg.querySelectorAll(".tab")) {
+    b.classList.toggle("active", b.dataset.tab === currentTab);
+  }
+  updateInk();
   const pin = $("pin-btn");
   pin.classList.toggle("pinned", currentTab === defaultTab);
   pin.dataset.tip = t("tip.pin");
@@ -515,12 +520,18 @@ async function refresh() {
     renderLimits(st.limits || {});
     renderUsage(st.usage || { today: {}, week: {} });
     renderEvents(st.events || [], st.unread || {});
+    let badgeChanged = false;
     for (const src of ["claude", "codex"]) {
       const b = $("badge-" + src);
       const n = (st.unread || {})[src] || 0;
       const txt = n > 0 ? String(n) : "";
-      if (b.textContent !== txt) b.textContent = txt;
+      if (b.textContent !== txt) {
+        b.textContent = txt;
+        badgeChanged = true;
+      }
     }
+    // a badge appearing/disappearing changes the tab's width — resize the ink
+    if (badgeChanged && currentTab) updateInk();
     $("plan-chip").textContent = (st.limits && st.limits.plan) || "";
     const mute = $("mute-btn");
     const mstate = st.muted ? "off" : "on";

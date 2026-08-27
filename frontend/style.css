@@ -110,6 +110,14 @@ body.tab-codex {
 body.tab-codex .badge { color: #1a1a1a; }
 #tab-ink, #tabs .tab, .ev .proj, .more-btn, .text-btn { transition-property: color, background, border-color, transform, width; transition-duration: 0.3s; }
 
+#tabs .tab .beta {
+  font-style: italic;
+  font-size: 8.5px; font-weight: 600;
+  color: var(--dim);
+  margin-left: 4px;
+  letter-spacing: 0.05em;
+  vertical-align: 2px;
+}
 .tab-badge {
   display: inline-block; min-width: 15px;
   margin-left: 6px; padding: 0 4px;
@@ -119,7 +127,15 @@ body.tab-codex .badge { color: #1a1a1a; }
   vertical-align: 1px;
   transition: background 0.3s, color 0.3s;
 }
-body.tab-codex .tab-badge { color: #1a1a1a; }
+body.tab-codex #tabs .tab .beta {
+  font-style: italic;
+  font-size: 8.5px; font-weight: 600;
+  color: var(--dim);
+  margin-left: 4px;
+  letter-spacing: 0.05em;
+  vertical-align: 2px;
+}
+.tab-badge { color: #1a1a1a; }
 .tab-badge:empty { display: none; }
 .plan-chip {
   margin-left: 7px; padding: 1px 7px;
