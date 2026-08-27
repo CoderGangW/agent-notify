@@ -83,6 +83,7 @@ func runDaemon() {
 
 	go s.serve()
 	go firstRunSetup() // double-clicked .app installs its own hooks
+	go startAutoUpdate()
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

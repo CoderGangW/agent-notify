@@ -31,6 +31,7 @@ var messages = map[string]map[string]string{
 		"uninstall.removed":     "Removed %d hook(s): %s",
 		"codex.installed":       "Codex notify hook registered: %s",
 		"codex.already":         "%s already has a notify setting; set it manually to:",
+		"update.ready":          "Updated to %s — applies on next start",
 	},
 	"ko": {
 		"notif.done":            "작업 완료",
@@ -50,6 +51,7 @@ var messages = map[string]map[string]string{
 		"uninstall.removed":     "hook %d개 제거 완료: %s",
 		"codex.installed":       "Codex notify hook 등록 완료: %s",
 		"codex.already":         "%s에 이미 notify 설정 있음. 수동으로 이렇게 설정:",
+		"update.ready":          "%s 업데이트 완료 — 다음 시작 시 적용",
 	},
 	"zh": {
 		"notif.done":            "任务完成",
@@ -69,6 +71,7 @@ var messages = map[string]map[string]string{
 		"uninstall.removed":     "已移除 %d 个 hook：%s",
 		"codex.installed":       "Codex notify hook 已注册：%s",
 		"codex.already":         "%s 已有 notify 设置，请手动改为：",
+		"update.ready":          "已更新到 %s — 下次启动生效",
 	},
 }
 
