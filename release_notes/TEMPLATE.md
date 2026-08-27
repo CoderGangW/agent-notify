@@ -1,5 +1,16 @@
-<!-- 다음 릴리즈에 나갈 변경사항을 여기에 계속 적는다.
-     이 내용이 그대로 GitHub 릴리즈 본문 + 인앱 업데이트 알림의 근거가 된다.
+<!-- 다음 릴리즈 초안. 세 언어 모두 채운다 — 한국어가 메인, 영어/중국어는 접힘.
      release.sh가 배포 시 v<버전>.md 로 보관하고 이 파일을 리셋한다. -->
 
 - 
+
+<details><summary>🇺🇸 English</summary>
+
+- 
+
+</details>
+
+<details><summary>🇨🇳 简体中文</summary>
+
+- 
+
+</details>
