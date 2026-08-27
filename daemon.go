@@ -221,9 +221,27 @@ func computeSetup() setupStatus {
 		return setupCached
 	}
 	var st setupStatus
+	// parse instead of substring-matching: the quoted command is escaped
+	// inside the JSON file, so raw Contains checks miss it
 	if data, err := os.ReadFile(settingsPath()); err == nil {
-		st.Hooks = strings.Contains(string(data), `agent-notify" hook`) ||
-			strings.Contains(string(data), `agent-notify hook`)
+		var settings struct {
+			Hooks map[string][]struct {
+				Hooks []struct {
+					Command string `json:"command"`
+				} `json:"hooks"`
+			} `json:"hooks"`
+		}
+		if json.Unmarshal(data, &settings) == nil {
+			for _, entries := range settings.Hooks {
+				for _, e := range entries {
+					for _, h := range e.Hooks {
+						if isOurCommand(h.Command) {
+							st.Hooks = true
+						}
+					}
+				}
+			}
+		}
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		switch runtime.GOOS {
