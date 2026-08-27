@@ -206,6 +206,7 @@ func (s *daemonState) assetHandler() http.Handler {
 
 	mux := http.NewServeMux()
 	mux.Handle("/", static)
+	mux.Handle("/i18n/", http.FileServer(http.FS(i18nFS)))
 	mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) {
 		cfg := loadConfig()
 		s.mu.Lock()

@@ -65,122 +65,22 @@ const ICONS = {
   focus: svgWrap('<path d="M7 7h10v10"/><path d="M7 17 17 7"/>'),
 };
 
-// ---- i18n ----
-const I18N = {
-  en: {
-    "limits.title": "Plan limits",
-    "limits.none": "No limit data",
-    "usage.title": "Token usage",
-    "usage.local": "from local transcripts",
-    "usage.today": "Today",
-    "usage.week": "Last 7 days",
-    "usage.out": "Output today",
-    "usage.cache": "Cache read today",
-    "events.title": "Session events",
-    "events.clear": "Clear",
-    "events.readAll": "Mark all read",
-    "sessions.tab": "Active sessions",
-    "sessions.empty": "No active sessions",
-    "sessions.hint": "Sessions appear here while {agent} is running",
-    "state.working": "working",
-    "state.waiting": "waiting for input",
-    "state.idle": "idle",
-    "time.ago": "ago",
-    "events.empty": "No events yet",
-    "events.hint": "You\u2019ll see events here when {agent} sessions finish",
-    "bucket.five_hour": "5-hour session",
-    "bucket.seven_day": "Weekly (all)",
-    "bucket.seven_day_sonnet": "Weekly Sonnet",
-    "bucket.seven_day_opus": "Weekly Opus",
-    "reset.now": "resets now",
-    "tip.connected": "daemon connected",
-    "tip.mute": "mute/unmute notifications",
-    "tip.quit": "quit",
-    "tip.open": "open",
-    "tip.pin": "Make this tab the default",
-    "events.more": "Show more",
-    "events.less": "Show less",
-    reset: (d, h, m) =>
-      d > 0 ? `resets in ${d}d ${h}h` : h > 0 ? `resets in ${h}h ${m}m` : `resets in ${m}m`,
-  },
-  ko: {
-    "limits.title": "플랜 한도",
-    "limits.none": "한도 정보 없음",
-    "usage.title": "토큰 사용량",
-    "usage.local": "로컬 트랜스크립트 합산",
-    "usage.today": "오늘",
-    "usage.week": "최근 7일",
-    "usage.out": "오늘 출력",
-    "usage.cache": "오늘 캐시 읽기",
-    "events.title": "세션 이벤트",
-    "events.clear": "비우기",
-    "events.readAll": "모두 읽기",
-    "sessions.tab": "활성 세션",
-    "sessions.empty": "활성 세션이 없습니다",
-    "sessions.hint": "{agent} 세션이 실행되면 여기에 표시됩니다",
-    "state.working": "작업 중",
-    "state.waiting": "입력 대기",
-    "state.idle": "대기",
-    "time.ago": "전",
-    "events.empty": "아직 이벤트가 없습니다",
-    "events.hint": "{agent} 세션이 완료되면 여기에 표시됩니다",
-    "bucket.five_hour": "5시간 세션",
-    "bucket.seven_day": "주간 전체",
-    "bucket.seven_day_sonnet": "주간 Sonnet",
-    "bucket.seven_day_opus": "주간 Opus",
-    "reset.now": "리셋됨",
-    "tip.connected": "데몬 연결됨",
-    "tip.mute": "알림 끄기/켜기",
-    "tip.quit": "종료",
-    "tip.open": "열기",
-    "tip.pin": "이 탭을 기본값으로",
-    "events.more": "더보기",
-    "events.less": "접기",
-    reset: (d, h, m) =>
-      d > 0 ? `${d}일 ${h}h 후 리셋` : h > 0 ? `${h}h ${m}m 후 리셋` : `${m}m 후 리셋`,
-  },
-  zh: {
-    "limits.title": "套餐限额",
-    "limits.none": "无限额数据",
-    "usage.title": "令牌用量",
-    "usage.local": "本地转录汇总",
-    "usage.today": "今日",
-    "usage.week": "近7天",
-    "usage.out": "今日输出",
-    "usage.cache": "今日缓存读取",
-    "events.title": "会话事件",
-    "events.clear": "清空",
-    "events.readAll": "全部已读",
-    "sessions.tab": "活跃会话",
-    "sessions.empty": "暂无活跃会话",
-    "sessions.hint": "{agent} 会话运行时会显示在这里",
-    "state.working": "工作中",
-    "state.waiting": "等待输入",
-    "state.idle": "空闲",
-    "time.ago": "前",
-    "events.empty": "暂无事件",
-    "events.hint": "{agent} 会话完成后会显示在这里",
-    "bucket.five_hour": "5小时会话",
-    "bucket.seven_day": "每周（全部）",
-    "bucket.seven_day_sonnet": "每周 Sonnet",
-    "bucket.seven_day_opus": "每周 Opus",
-    "reset.now": "已重置",
-    "tip.connected": "守护进程已连接",
-    "tip.mute": "开/关通知",
-    "tip.quit": "退出",
-    "tip.open": "打开",
-    "tip.pin": "将此标签设为默认",
-    "events.more": "展开",
-    "events.less": "收起",
-    reset: (d, h, m) =>
-      d > 0 ? `${d}天${h}h后重置` : h > 0 ? `${h}h ${m}m后重置` : `${m}m后重置`,
-  },
-};
-
+// ---- i18n: dictionaries load from /i18n/<lang>.json (shared with Go) ----
 let lang = "ko";
+let dict = {};
+let dictEn = {};
 const agentName = () => (currentTab === "codex" ? "Codex" : "Claude Code");
 const t = (key) =>
-  (I18N[lang][key] || I18N.en[key] || key).replace("{agent}", agentName());
+  (dict[key] || dictEn[key] || key).replace("{agent}", agentName());
+
+async function loadLang(l) {
+  try {
+    if (!Object.keys(dictEn).length) {
+      dictEn = await (await fetch("/i18n/en.json")).json();
+    }
+    dict = l === "en" ? dictEn : await (await fetch("/i18n/" + l + ".json")).json();
+  } catch (_) {}
+}
 
 function applyI18n() {
   document.documentElement.lang = lang;
@@ -213,7 +113,11 @@ function fmtReset(iso) {
   if (isNaN(ms) || ms <= 0) return t("reset.now");
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
-  return I18N[lang].reset(Math.floor(h / 24), h >= 24 ? h % 24 : h, m);
+  const tpl = h >= 24 ? t("reset.day") : h > 0 ? t("reset.hour") : t("reset.min");
+  return tpl
+    .replace("{d}", Math.floor(h / 24))
+    .replace("{h}", h >= 24 ? h % 24 : h)
+    .replace("{m}", m);
 }
 
 function renderLimits(lim) {
@@ -730,8 +634,9 @@ async function refresh() {
     } else {
       $("pin-btn").classList.toggle("pinned", currentTab === defaultTab);
     }
-    if (st.lang && st.lang !== lang) {
-      lang = st.lang;
+    if ((st.lang && st.lang !== lang) || !Object.keys(dict).length) {
+      lang = st.lang || lang;
+      await loadLang(lang);
       applyI18n();
     }
     const sel = $("lang-sel");
@@ -777,7 +682,6 @@ $("quit-btn").addEventListener("click", () => post("/api/quit"));
 $("quit-btn").innerHTML = ICONS.x;
 $("mute-btn").innerHTML = ICONS.bell;
 $("pin-btn").innerHTML = ICONS.pin;
-applyI18n();
 applySubTab();
 refresh();
 setInterval(refresh, 2500);

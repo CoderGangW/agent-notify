@@ -173,6 +173,11 @@ body.tab-codex #tabs .tab .beta {
   justify-content: space-between;
   margin-bottom: 10px;
 }
+#events-card .card-head {
+  align-items: center;
+  min-height: 22px; /* badge/버튼 유무와 무관하게 높이 고정 — 탭 전환 시 점프 방지 */
+}
+#events-card .card-head > span { display: flex; }
 h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06em; }
 .sub { font-size: 10.5px; color: var(--dim); opacity: 0.75; }
 .text-btn {
@@ -280,12 +285,13 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
 .chip .val { transition: color 0.3s; }
 
 /* ---------- sub-tabs & sessions ---------- */
-.subtabs { display: flex; gap: 10px; }
+.subtabs { display: flex; gap: 10px; align-items: center; height: 20px; }
 .subtab {
+  display: inline-flex; align-items: center;
   background: none; border: none; cursor: pointer;
   color: var(--dim); font-size: 12px; font-weight: 700;
-  letter-spacing: 0.06em; padding: 0;
-  border-bottom: 2px solid transparent; padding-bottom: 2px;
+  letter-spacing: 0.06em; padding: 0 0 2px;
+  border-bottom: 2px solid transparent;
   transition: color 0.2s, border-color 0.2s;
 }
 .subtab.active { color: var(--text); border-color: var(--accent); }
