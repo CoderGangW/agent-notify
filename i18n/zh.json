@@ -12,6 +12,8 @@
   "events.more": "展开",
   "events.readAll": "全部已读",
   "events.title": "会话事件",
+  "greet.l1": "{name}，你好。",
+  "greet.l2": "欢迎！",
   "install.already": "hook 已安装：%s",
   "install.autostartFail": "开机自启注册失败（需手动启动）：%v",
   "install.autostartOK": "已注册登录自启（守护进程已启动）",

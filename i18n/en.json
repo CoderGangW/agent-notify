@@ -12,6 +12,8 @@
   "events.more": "Show more",
   "events.readAll": "Mark all read",
   "events.title": "Session events",
+  "greet.l1": "Hi, {name}.",
+  "greet.l2": "Welcome!",
   "install.already": "Hooks already installed: %s",
   "install.autostartFail": "Autostart registration failed (start manually): %v",
   "install.autostartOK": "Autostart at login registered (daemon started)",

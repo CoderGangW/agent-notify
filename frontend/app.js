@@ -1073,19 +1073,40 @@ function renderWelcomeChecks(setup) {
   }
 }
 
+// Apple-style greeting: the whole window blurs over and the two lines
+// ink themselves in, character by character (soft blur → sharp, not a
+// typewriter).
 function greetToast() {
   const name =
     (lastState && lastState.limits && lastState.limits.accountName) || "";
   if (!name) return;
-  const el = document.createElement("div");
-  el.id = "greet-toast";
-  el.textContent = t("welcome.greet").replace("{name}", name);
-  document.body.appendChild(el);
-  requestAnimationFrame(() => el.classList.add("show"));
+  const ov = document.createElement("div");
+  ov.id = "greet-ov";
+  const lines = [
+    t("greet.l1").replace("{name}", name),
+    t("greet.l2"),
+  ];
+  let delay = 350; // let the blur settle first
+  for (const line of lines) {
+    const div = document.createElement("div");
+    div.className = "greet-line";
+    for (const ch of line) {
+      const s = document.createElement("span");
+      s.className = "greet-ch";
+      s.textContent = ch === " " ? "\u00A0" : ch;
+      s.style.animationDelay = delay + "ms";
+      delay += 65;
+      div.appendChild(s);
+    }
+    delay += 220; // beat between lines
+    ov.appendChild(div);
+  }
+  document.body.appendChild(ov);
+  const hold = delay + 1400;
   setTimeout(() => {
-    el.classList.remove("show");
-    setTimeout(() => el.remove(), 400);
-  }, 2600);
+    ov.classList.add("out");
+    setTimeout(() => ov.remove(), 800);
+  }, hold);
 }
 
 function welcomeClose(startTour) {
