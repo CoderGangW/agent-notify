@@ -97,6 +97,9 @@ function applyI18n() {
   $("restart-btn").dataset.tip = t("tip.restart");
   $("help-btn").dataset.tip = t("tip.help");
   $("settings-btn").dataset.tip = t("tip.settings");
+  for (const opt of $("set-theme").options) {
+    opt.textContent = t("theme." + opt.value);
+  }
 }
 
 
@@ -707,6 +710,26 @@ async function refresh() {
   }
 }
 
+// ---- theme ----
+let themeSetting = "auto";
+const lightMQ = window.matchMedia("(prefers-color-scheme: light)");
+function applyTheme() {
+  const resolved =
+    themeSetting === "light" || themeSetting === "dark"
+      ? themeSetting
+      : lightMQ.matches
+        ? "light"
+        : "dark";
+  document.documentElement.dataset.theme = resolved;
+}
+lightMQ.addEventListener("change", applyTheme);
+applyTheme();
+$("set-theme").addEventListener("change", (e) => {
+  themeSetting = e.target.value;
+  applyTheme();
+  post("/api/settings", { theme: themeSetting });
+});
+
 // ---- settings panel ----
 let settingsOpen = false;
 function toggleSettings(open) {
@@ -725,6 +748,12 @@ document.addEventListener("keydown", (e) => {
 
 function renderSettings(cfg) {
   if (!cfg) return;
+  const th = $("set-theme");
+  if (document.activeElement !== th) th.value = cfg.theme || "auto";
+  if ((cfg.theme || "auto") !== themeSetting) {
+    themeSetting = cfg.theme || "auto";
+    applyTheme();
+  }
   const sel = $("lang-sel");
   if (document.activeElement !== sel) sel.value = cfg.lang || "auto";
   const tab = $("set-tab");

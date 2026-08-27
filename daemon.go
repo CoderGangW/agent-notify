@@ -413,6 +413,7 @@ func (s *daemonState) assetHandler() http.Handler {
 			DisableAutoUpdate *bool   `json:"disableAutoUpdate"`
 			DisableAISummary  *bool   `json:"disableAISummary"`
 			DisableLiveStatus *bool   `json:"disableLiveStatus"`
+			Theme             *string `json:"theme"`
 		}
 		if json.NewDecoder(r.Body).Decode(&req) != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
@@ -443,6 +444,12 @@ func (s *daemonState) assetHandler() http.Handler {
 		}
 		if req.DisableLiveStatus != nil {
 			c.DisableLiveStatus = *req.DisableLiveStatus
+		}
+		if req.Theme != nil {
+			switch *req.Theme {
+			case "", "auto", "light", "dark":
+				c.Theme = *req.Theme
+			}
 		}
 		saveConfig(c)
 		w.WriteHeader(http.StatusNoContent)
