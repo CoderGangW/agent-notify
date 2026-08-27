@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -65,19 +66,34 @@ func runHook() {
 		hostBundle = os.Getenv("__CFBundleIdentifier")
 	}
 
-	// Lightweight live-status events: one POST, no transcript parsing, no
-	// notification. Fired often (every tool call), so stay minimal.
+	// Live-status events. Tool events fire constantly and stay minimal;
+	// UserPromptSubmit is once per user message, so it can afford the same
+	// title resolution the notifications use.
 	switch in.HookEventName {
-	case "UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionEnd":
+	case "PreToolUse", "PostToolUse", "SessionEnd":
 		kind := map[string]string{
-			"UserPromptSubmit": "prompt",
-			"PreToolUse":       "pretool",
-			"PostToolUse":      "posttool",
-			"SessionEnd":       "end",
+			"PreToolUse":  "pretool",
+			"PostToolUse": "posttool",
+			"SessionEnd":  "end",
 		}[in.HookEventName]
 		postSession(sessionUpdate{
 			SessionID: in.SessionID, CWD: in.CWD, Kind: kind,
-			Tool: in.ToolName, Prompt: in.Prompt, Activate: hostBundle,
+			Tool: in.ToolName, Activate: hostBundle,
+		})
+		return
+	case "UserPromptSubmit":
+		pInfo := transcriptInfo(in.TranscriptPath)
+		pTitle := pInfo.Title
+		if vs, _ := vscodeTitle(in.SessionID); vs != "" {
+			pTitle = vs
+		}
+		if n := sessionName(in.SessionID); n != "" {
+			pTitle = n
+		}
+		postSession(sessionUpdate{
+			SessionID: in.SessionID, CWD: in.CWD, Kind: "prompt",
+			Prompt: cleanPrompt(in.Prompt), Activate: hostBundle,
+			Title: pTitle, Branch: pInfo.Branch, Model: pInfo.Model,
 		})
 		return
 	}
@@ -222,6 +238,19 @@ func aiSummarize(request, report string) string {
 		return ""
 	}
 	return condense(string(out), 200)
+}
+
+// cleanPrompt drops injected context blocks (<ide_opened_file>…,
+// <system-reminder>…) so the live view shows what the user actually typed.
+var injectedBlock = regexp.MustCompile(`(?s)<([a-zA-Z][\w-]*)>.*?</[a-zA-Z][\w-]*>`)
+
+func cleanPrompt(s string) string {
+	s = injectedBlock.ReplaceAllString(s, " ")
+	// an unclosed opening tag at the end (truncated block) — drop its tail
+	if i := strings.LastIndex(s, "<"); i >= 0 && !strings.Contains(s[i:], ">") {
+		s = s[:i]
+	}
+	return strings.TrimSpace(s)
 }
 
 func deliver(ev Event) {

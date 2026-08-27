@@ -27,7 +27,8 @@ type sessionUpdate struct {
 type sessionInfo struct {
 	ID        string    `json:"id"`
 	CWD       string    `json:"cwd"`
-	Title     string    `json:"title"` // last prompt excerpt, else Stop-time title
+	Title     string    `json:"title"` // session title (same chain as events)
+	Task      string    `json:"task"`  // current prompt excerpt
 	State     string    `json:"state"` // working | tool | waiting | idle
 	Tool      string    `json:"tool"`  // current tool while state == tool
 	Branch    string    `json:"branch"`
@@ -77,9 +78,7 @@ func (s *daemonState) applySessionUpdate(u sessionUpdate) {
 		info.State = "working"
 		info.Tool = ""
 		info.TurnStart = now
-		if p := condense(u.Prompt, 70); p != "" {
-			info.Title = p
-		}
+		info.Task = condense(u.Prompt, 90)
 	case "pretool":
 		info.State = "tool"
 		info.Tool = u.Tool

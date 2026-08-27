@@ -441,6 +441,7 @@ function renderSessions(sessions) {
         '<div class="head"><span class="name"></span><span class="branch"></span><span class="proj"></span></div>' +
         '<div class="meta"><span class="statetxt"></span><i class="sep">·</i>' +
         '<span class="elapsed" data-ts=""></span></div>' +
+        '<div class="task"></div>' +
         "</div>";
       li.querySelector(".proj").addEventListener("click", (e) => {
         e.stopPropagation(); // chip opens the folder; the row focuses the window
@@ -475,6 +476,9 @@ function renderSessions(sessions) {
       setText(proj.querySelector("span"), (s.cwd || "").split(/[\\/]/).pop() || "");
       proj.dataset.tip = s.cwd || "";
       setText(li.querySelector(".statetxt"), sessionStateText(s));
+      const task = li.querySelector(".task");
+      setText(task, s.task || "");
+      task.style.display = s.task ? "" : "none";
       const el = li.querySelector(".elapsed");
       const busyState = s.state === "tool" || s.state === "working";
       el.dataset.ts = busyState ? s.turnStart : s.lastSeen;

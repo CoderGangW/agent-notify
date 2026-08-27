@@ -306,6 +306,10 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
 .sess.idle:hover { opacity: 1; }
 .sess .statetxt { font-weight: 600; color: var(--text); opacity: 0.8; }
 .sess .elapsed { font-variant-numeric: tabular-nums; }
+.sess .task {
+  color: var(--dim); font-size: 11px; margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* ---------- events ---------- */
 #events {
