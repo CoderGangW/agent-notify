@@ -17,6 +17,8 @@
   🇺🇸 <a href="../README.md">English</a>&nbsp;&nbsp;·&nbsp;&nbsp;🇰🇷 <b>한국어</b>&nbsp;&nbsp;·&nbsp;&nbsp;🇨🇳 <a href="README.zh-CN.md">简体中文</a>
 </p>
 
+<img src="../assets/screenshot.png" width="360" alt="agent-notify 대시보드"/>
+
 </div>
 
 여러 Claude Code 세션을 동시에 돌릴 때 **어느 세션이 방금 끝났는지** 알려주는 크로스플랫폼(macOS / Windows / Linux) 트레이 앱 — 세션·토큰 사용량·플랜 한도 대시보드 포함.

@@ -17,6 +17,8 @@
   🇺🇸 <a href="../README.md">English</a>&nbsp;&nbsp;·&nbsp;&nbsp;🇰🇷 <a href="README.ko.md">한국어</a>&nbsp;&nbsp;·&nbsp;&nbsp;🇨🇳 <b>简体中文</b>
 </p>
 
+<img src="../assets/screenshot.png" width="360" alt="agent-notify 仪表盘"/>
+
 </div>
 
 跨平台（macOS / Windows / Linux）托盘应用：同时运行多个 Claude Code 会话时，告诉你**刚刚完成的是哪一个** — 并附带会话、令牌用量与套餐限额仪表盘。

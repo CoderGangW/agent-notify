@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 )
 
@@ -46,6 +47,13 @@ func main() {
 		enc.SetIndent("", "  ")
 		_ = enc.Encode(usage.report())
 		_ = enc.Encode(limits.report())
+	case "show": // open the dashboard window of the running daemon
+		resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/show", daemonPort), "", nil)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "daemon not running")
+			os.Exit(1)
+		}
+		resp.Body.Close()
 	case "version", "--version", "-v":
 		fmt.Println("agent-notify " + version)
 	default:

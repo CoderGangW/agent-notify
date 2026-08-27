@@ -339,15 +339,16 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
 }
 
 /* ---------- events ---------- */
-#events {
+#events, #sessions {
   list-style: none;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
   margin: 0 -6px;
   padding: 0 6px;
 }
-#events::-webkit-scrollbar { width: 5px; }
-#events::-webkit-scrollbar-thumb { background: var(--card-edge); border-radius: 3px; }
+#events::-webkit-scrollbar, #sessions::-webkit-scrollbar { width: 5px; }
+#events::-webkit-scrollbar-thumb, #sessions::-webkit-scrollbar-thumb { background: var(--card-edge); border-radius: 3px; }
 .ev {
   display: flex; gap: 9px; align-items: flex-start;
   padding: 8px 8px;

@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -94,6 +96,12 @@ func installBinary(exe string) string {
 	if err := os.Rename(tmp, dest); err != nil {
 		os.Remove(tmp)
 		return exe
+	}
+	// The source may carry the app bundle's Apple Development signature,
+	// which AMFI refuses (SIGKILL) for the standalone copy — re-sign ad hoc.
+	if runtime.GOOS == "darwin" {
+		_ = exec.Command("codesign", "--force", "-s", "-",
+			"--identifier", "com.codergangw.claude-notify", dest).Run()
 	}
 	fmt.Printf(T("install.binary")+"\n", dest)
 	// drop the pre-rename binary so stale copies don't linger

@@ -33,6 +33,7 @@ type daemonState struct {
 	pendingUpdate releaseInfo
 	app           *application.App
 	tray          *application.SystemTray
+	window        application.Window
 }
 
 func evSource(ev Event) string {
@@ -109,13 +110,10 @@ func runDaemon() {
 	// macOS can deliver status-item left clicks as right-button events
 	// (observed on macOS 27), which used to fall into the menuless
 	// right-click path and feel dead.
-	showWindow := func() {
-		_ = tray.PositionWindow(window, 8)
-		window.Show().Focus()
-	}
-	tray.OnClick(showWindow)
-	tray.OnRightClick(showWindow)
-	tray.OnDoubleClick(showWindow)
+	s.window = window
+	tray.OnClick(s.showWindow)
+	tray.OnRightClick(s.showWindow)
+	tray.OnDoubleClick(s.showWindow)
 
 	go s.serve()
 	go firstRunSetup() // double-clicked .app installs its own hooks
@@ -127,7 +125,7 @@ func runDaemon() {
 			_ = os.Remove(stamp)
 			go func() {
 				time.Sleep(800 * time.Millisecond)
-				window.Show().Focus()
+				s.showWindow()
 			}()
 		}
 	}
@@ -137,11 +135,23 @@ func runDaemon() {
 	}
 }
 
+func (s *daemonState) showWindow() {
+	if s.window == nil {
+		return
+	}
+	_ = s.tray.PositionWindow(s.window, 8)
+	s.window.Show().Focus()
+}
+
 // serve accepts events from hook processes on the fixed localhost port.
 func (s *daemonState) serve() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "ok")
+	})
+	mux.HandleFunc("/show", func(w http.ResponseWriter, r *http.Request) {
+		s.showWindow()
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

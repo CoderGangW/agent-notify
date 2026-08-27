@@ -17,6 +17,8 @@
   🇺🇸 <b>English</b>&nbsp;&nbsp;·&nbsp;&nbsp;🇰🇷 <a href="docs/README.ko.md">한국어</a>&nbsp;&nbsp;·&nbsp;&nbsp;🇨🇳 <a href="docs/README.zh-CN.md">简体中文</a>
 </p>
 
+<img src="assets/screenshot.png" width="360" alt="agent-notify dashboard"/>
+
 </div>
 
 A cross-platform (macOS / Windows / Linux) tray app that tells you **which Claude Code session just finished** when you're running several at once — with a dashboard for your sessions, token usage, and plan limits.
