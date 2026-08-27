@@ -116,22 +116,6 @@ function applyI18n() {
 }
 
 
-// 8-ray Claude spark: long cardinals, short diagonals, tapered via inner
-// valley points. Same geometry the app icon uses.
-function sparkPath(cx, cy, rLong, rShort, rValley) {
-  const pts = [];
-  for (let i = 0; i < 8; i++) {
-    const tip = (i * Math.PI) / 4;
-    const r = i % 2 === 0 ? rLong : rShort;
-    pts.push([cx + r * Math.cos(tip), cy + r * Math.sin(tip)]);
-    const v = tip + Math.PI / 8;
-    pts.push([cx + rValley * Math.cos(v), cy + rValley * Math.sin(v)]);
-  }
-  return (
-    "M" + pts.map((p) => p[0].toFixed(2) + " " + p[1].toFixed(2)).join("L") + "Z"
-  );
-}
-$("spark-path").setAttribute("d", sparkPath(19.4, 4.6, 4.2, 2.9, 1.15));
 
 function fmtTokens(n) {
   if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";

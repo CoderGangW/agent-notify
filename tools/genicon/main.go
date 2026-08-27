@@ -1,9 +1,7 @@
-// Generates claude-notify icons: a rounded bell with the Claude 8-ray
-// spark at its top-right. Authored as SVG, rasterized with oksvg, and
-// supersampled 4x for clean small sizes.
-//
-// oksvg mangles transform attributes, so the bell and spark are separate
-// SVGs composited via SetTarget placement instead.
+// Generates claude-notify icons: a rounded ">-" prompt glyph on a squircle
+// badge. oksvg's stroke rendering is unreliable, so every stroke is built
+// as a filled capsule (round-capped bar); overlapping capsules union under
+// nonzero fill, which also gives the chevron a smooth round elbow.
 package main
 
 import (
@@ -19,68 +17,72 @@ import (
 	"github.com/srwiley/rasterx"
 )
 
-// Hand-drawn bell on a 24-unit grid: smooth dome, flared skirt, rounded
-// lip bar, floating clapper. Overlapping subpaths union under nonzero fill.
-const bellPath = "M12 3.4" +
-	"C8.2 3.4 6.6 6.4 6.5 9.4" +
-	"C6.45 12.4 5.9 14.6 4.6 16.2" +
-	"L19.4 16.2" +
-	"C18.1 14.6 17.55 12.4 17.5 9.4" +
-	"C17.4 6.4 15.8 3.4 12 3.4Z" +
-	"M4.35 16.2L19.65 16.2" +
-	"C20.2 16.2 20.6 16.62 20.6 17.15" +
-	"C20.6 17.68 20.2 18.1 19.65 18.1" +
-	"L4.35 18.1" +
-	"C3.8 18.1 3.4 17.68 3.4 17.15" +
-	"C3.4 16.62 3.8 16.2 4.35 16.2Z" +
-	"M10.45 20.1a1.55 1.55 0 1 0 3.1 0a1.55 1.55 0 1 0 -3.1 0Z"
-
-// sparkPath builds the Claude spark: 8 tapered rays — long cardinals,
-// short diagonals — as a 16-point star polygon centered in a 10x10 box.
-func sparkPath() string {
-	const cx, cy, rLong, rShort, rValley = 5, 5, 4.7, 3.2, 1.3
-	var b strings.Builder
-	for i := 0; i < 8; i++ {
-		tip := float64(i) * math.Pi / 4
-		r := rLong
-		if i%2 == 1 {
-			r = rShort
-		}
-		cmd := "L"
-		if i == 0 {
-			cmd = "M"
-		}
-		fmt.Fprintf(&b, "%s%.3f %.3f", cmd, cx+r*math.Cos(tip), cy+r*math.Sin(tip))
-		v := tip + math.Pi/8
-		fmt.Fprintf(&b, "L%.3f %.3f", cx+rValley*math.Cos(v), cy+rValley*math.Sin(v))
-	}
-	b.WriteString("Z")
-	return b.String()
+// capsule returns a filled round-capped bar from p1 to p2 with half-width r.
+func capsule(x1, y1, x2, y2, r float64) string {
+	dx, dy := x2-x1, y2-y1
+	l := math.Hypot(dx, dy)
+	nx, ny := -dy/l*r, dx/l*r // unit normal * r
+	return fmt.Sprintf(
+		"M%.3f %.3fL%.3f %.3fA%.3f %.3f 0 0 0 %.3f %.3fL%.3f %.3fA%.3f %.3f 0 0 0 %.3f %.3fZ",
+		x1+nx, y1+ny, x2+nx, y2+ny,
+		r, r, x2-nx, y2-ny,
+		x1-nx, y1-ny,
+		r, r, x1+nx, y1+ny)
 }
 
-func drawInto(img *image.RGBA, svg string, x, y, w, h float64) {
+// glyph builds the ">-" mark centered on (12,12) of the 24-grid, scaled by s.
+func glyph(fill string, s, r float64) string {
+	pt := func(x, y float64) (float64, float64) {
+		return 12 + (x-12)*s, 12 + (y-12)*s
+	}
+	var b strings.Builder
+	seg := func(x1, y1, x2, y2 float64) {
+		ax, ay := pt(x1, y1)
+		bx, by := pt(x2, y2)
+		b.WriteString(capsule(ax, ay, bx, by, r*s))
+	}
+	seg(6.25, 7.5, 11.25, 12) // chevron upper arm
+	seg(11.25, 12, 6.25, 16.5) // chevron lower arm
+	seg(13.75, 12, 17.75, 12) // dash
+	return `<path fill="` + fill + `" d="` + b.String() + `"/>`
+}
+
+func roundedRect(x, y, w, h, r float64, fill string) string {
+	return fmt.Sprintf(
+		`<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" rx="%.2f" ry="%.2f" fill="%s"/>`,
+		x, y, w, h, r, r, fill)
+}
+
+func wrap(inner string) string {
+	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">` + inner + `</svg>`
+}
+
+// badge: orange squircle + light glyph. margin shrinks the badge inside the
+// canvas (macOS app icons keep ~10% transparent margin).
+func badgeSVG(margin float64) string {
+	const bg, fg = "#D97757", "#FFF6EF"
+	side := 24 - 2*margin
+	return wrap(
+		roundedRect(margin, margin, side, side, side*0.27, bg) +
+			glyph(fg, side/24*0.92, 1.45))
+}
+
+// mono: glyph only, for the macOS template tray icon.
+func monoSVG(color string) string {
+	return wrap(glyph(color, 1.12, 1.55))
+}
+
+func render(size int, svg, path string) {
+	const ss = 4 // supersample factor
+	big := size * ss
 	icon, err := oksvg.ReadIconStream(strings.NewReader(svg))
 	if err != nil {
 		panic(err)
 	}
-	icon.SetTarget(x, y, w, h)
-	b := img.Bounds()
-	scanner := rasterx.NewScannerGV(b.Dx(), b.Dy(), img, b)
-	icon.Draw(rasterx.NewDasher(b.Dx(), b.Dy(), scanner), 1.0)
-}
-
-func render(size int, fill, path string) {
-	const ss = 4 // supersample factor
-	S := float64(size * ss)
-	img := image.NewRGBA(image.Rect(0, 0, size*ss, size*ss))
-
-	bell := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="` + fill + `" d="` + bellPath + `"/></svg>`
-	spark := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="` + fill + `" d="` + sparkPath() + `"/></svg>`
-
-	// Bell fills the lower-left; the spark floats at the top-right with a
-	// clear gap so both read at 32px.
-	drawInto(img, bell, 0.015*S, 0.10*S, 0.88*S, 0.88*S)
-	drawInto(img, spark, 0.60*S, 0.0, 0.40*S, 0.40*S)
+	icon.SetTarget(0, 0, float64(big), float64(big))
+	img := image.NewRGBA(image.Rect(0, 0, big, big))
+	scanner := rasterx.NewScannerGV(big, big, img, img.Bounds())
+	icon.Draw(rasterx.NewDasher(big, big, scanner), 1.0)
 
 	small := resize.Resize(uint(size), uint(size), img, resize.Lanczos3)
 	out, err := os.Create(path)
@@ -98,10 +100,9 @@ func main() {
 	if len(os.Args) > 1 {
 		dir = os.Args[1]
 	}
-	const orange = "#D97757"
-	render(32, orange, dir+"/icon.png")
-	render(32, "#000000", dir+"/icon_mac.png")
-	render(256, orange, dir+"/logo.png")
-	render(1024, orange, dir+"/appicon.png")
+	render(32, badgeSVG(0.5), dir+"/icon.png")
+	render(32, monoSVG("#000000"), dir+"/icon_mac.png")
+	render(256, badgeSVG(0.5), dir+"/logo.png")
+	render(1024, badgeSVG(2.2), dir+"/appicon.png")
 	fmt.Println("done")
 }

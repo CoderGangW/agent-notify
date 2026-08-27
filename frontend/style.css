@@ -41,16 +41,13 @@ header {
   padding: 2px 4px;
 }
 .brand { display: flex; align-items: center; gap: 8px; }
-.logo { width: 22px; height: 22px; }
-.logo .bell-g path { fill: var(--accent); }
-.logo .spark {
-  fill: var(--accent);
-  transform-origin: 80% 20%;
-  animation: spin-in 0.9s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+.logo {
+  width: 22px; height: 22px;
+  animation: logo-pop 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.35) both;
 }
-@keyframes spin-in {
-  from { transform: rotate(-120deg) scale(0); opacity: 0; }
-  to { transform: rotate(0) scale(1); opacity: 1; }
+@keyframes logo-pop {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 .title { font-weight: 700; letter-spacing: 0.02em; }
 .dot {
