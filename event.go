@@ -16,8 +16,7 @@ type Event struct {
 	Read      bool      `json:"read"`     // user acknowledged this event
 	Branch    string    `json:"branch"`   // git branch of the session, if known
 	Model     string    `json:"model"`    // model of the session's last reply
-	TmuxSock  string    `json:"tmuxSock"` // tmux socket path when the session runs inside tmux
-	TmuxPane  string    `json:"tmuxPane"` // tmux pane id (%N) for exact pane focus
+	Mux       muxRef    `json:"mux"`      // multiplexer pane identity for exact focus
 	DurSec    int64     `json:"durSec"`   // session wall time in seconds
 	Title     string    `json:"title"`    // session title, if found
 	Activate  string    `json:"activate"` // macOS bundle id to focus on click

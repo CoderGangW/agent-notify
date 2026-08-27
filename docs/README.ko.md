@@ -85,6 +85,24 @@ macOS는 릴리즈 페이지의 **agent-notify.app**(서명됨, 유니버설)을
 | `agent-notify hook` / `codex-hook` | Claude Code / Codex가 호출하는 hook 엔드포인트 (직접 실행 X) |
 | `agent-notify peek <transcript.jsonl> [session-id]` | 디버그: 세션의 제목/요약 소스 확인 |
 
+## 클릭-포커스 지원 범위
+
+알림·이벤트·활성 세션을 클릭하면 실행되던 곳으로 이동합니다:
+
+| 호스트 | 정밀도 | 비고 |
+|---|---|---|
+| VSCode / Cursor / Windsurf | 정확한 워크스페이스 창 | |
+| tmux | 정확한 페인 | 윈도우 + 페인 + 클라이언트 전환 |
+| GNU screen | 윈도우 | |
+| WezTerm | 정확한 페인 | `wezterm cli` |
+| kitty | 윈도우 | `allow_remote_control` 필요 |
+| iTerm2 | 정확한 세션 | AppleScript |
+| Zellij | 페인 (베스트 에포트) | `focus-pane-with-id` 지원 버전 필요 |
+| [cmux](https://cmux.com) | 워크스페이스 + 페인 | Settings → Automation → socket 접근을 password/allowAll로 |
+| 그 외 터미널 | 앱 창 | 번들 ID 기반 |
+
+멀티플렉서 식별은 각 도구의 표준 환경변수(`$TMUX_PANE`, `$CMUX_PANEL_ID`, `$WEZTERM_PANE` 등)를 hook이 캡처하는 방식 — 어느 머신에서나 같은 이름입니다.
+
 ## 플랫폼 참고
 
 - **macOS**: 클릭-포커스를 위해 `brew install terminal-notifier` 강력 권장. 창 UI는 네이티브(Wails v3 / WebKit). 로컬 빌드는 `build/release-macos.sh`로 패키징·서명 (번들 ID `com.codergangw.claude-notify` 고정).

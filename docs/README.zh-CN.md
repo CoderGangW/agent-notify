@@ -85,6 +85,24 @@ macOS 也可从发布页下载 **agent-notify.app**（已签名、通用二进�
 | `agent-notify hook` / `codex-hook` | 由 Claude Code / Codex 调用的钩子端点（勿手动运行） |
 | `agent-notify peek <transcript.jsonl> [session-id]` | 调试：查看会话标题/摘要来源 |
 
+## 点击聚焦支持范围
+
+点击通知、事件或活跃会话即可跳回其运行位置：
+
+| 宿主 | 精度 | 备注 |
+|---|---|---|
+| VSCode / Cursor / Windsurf | 精确到工作区窗口 | |
+| tmux | 精确到窗格 | 窗口 + 窗格 + 客户端切换 |
+| GNU screen | 窗口 | |
+| WezTerm | 精确到窗格 | `wezterm cli` |
+| kitty | 窗口 | 需要 `allow_remote_control` |
+| iTerm2 | 精确到会话 | AppleScript |
+| Zellij | 窗格（尽力而为） | 需支持 `focus-pane-with-id` 的版本 |
+| [cmux](https://cmux.com) | 工作区 + 窗格 | Settings → Automation → socket 访问设为 password/allowAll |
+| 其他终端 | 应用窗口 | 基于 bundle id |
+
+复用器身份来自各工具的标准环境变量（`$TMUX_PANE`、`$CMUX_PANEL_ID`、`$WEZTERM_PANE` 等），由 hook 捕获 — 在任何机器上名称都相同。
+
 ## 平台说明
 
 - **macOS**：强烈建议 `brew install terminal-notifier` 以支持点击聚焦。窗口 UI 为原生（Wails v3 / WebKit）。本地构建用 `build/release-macos.sh` 打包签名（bundle id 固定为 `com.codergangw.claude-notify`）。

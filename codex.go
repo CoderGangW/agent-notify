@@ -44,15 +44,14 @@ func runCodexHook() {
 	if runtime.GOOS == "darwin" {
 		activate = os.Getenv("__CFBundleIdentifier")
 	}
-	tmuxSock, tmuxPane := tmuxContext()
+	mux := muxContext()
 	deliver(Event{
 		CWD:      cwd,
 		Kind:     "done",
 		Source:   "codex",
 		Title:    title,
 		Activate: activate,
-		TmuxSock: tmuxSock,
-		TmuxPane: tmuxPane,
+		Mux:      mux,
 		Message:  condense(n.Last, 180),
 		Time:     time.Now(),
 	})

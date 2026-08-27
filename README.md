@@ -85,6 +85,24 @@ macOS users can also grab **agent-notify.app** (signed, universal) from the rele
 | `agent-notify hook` / `codex-hook` | Hook endpoints called by Claude Code / Codex (never run manually) |
 | `agent-notify peek <transcript.jsonl> [session-id]` | Debug: print the title/summary sources resolved for a session |
 
+## Click-to-focus support
+
+Clicking a notification, event, or active session jumps back to where it ran:
+
+| Host | Precision | Notes |
+|---|---|---|
+| VSCode / Cursor / Windsurf | exact workspace window | |
+| tmux | exact pane | window + pane + client switch |
+| GNU screen | window | |
+| WezTerm | exact pane | `wezterm cli` |
+| kitty | window | needs `allow_remote_control` |
+| iTerm2 | exact session | AppleScript |
+| Zellij | pane (best effort) | needs a zellij with `focus-pane-with-id` |
+| [cmux](https://cmux.com) | workspace + pane | set Settings → Automation → socket access to password/allowAll |
+| any other terminal | app window | via its bundle id |
+
+Multiplexer identities come from each tool's standard environment variables (`$TMUX_PANE`, `$CMUX_PANEL_ID`, `$WEZTERM_PANE`, …) captured by the hook — the same names on every machine.
+
 ## Platform notes
 
 - **macOS**: `brew install terminal-notifier` strongly recommended for click-to-focus. The window UI is native (Wails v3 / WebKit). Local builds are packaged and signed with `build/release-macos.sh` (fixed bundle id `com.codergangw.claude-notify`).
