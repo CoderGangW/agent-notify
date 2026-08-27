@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -67,6 +68,11 @@ func runHook() {
 	vsTitle, activate := vscodeTitle(in.SessionID)
 	if vsTitle != "" {
 		title = vsTitle
+	}
+	// No IDE match: the hook inherits the hosting app's bundle id from the
+	// terminal Claude Code runs in, which is exactly what a click should focus.
+	if activate == "" && runtime.GOOS == "darwin" {
+		activate = os.Getenv("__CFBundleIdentifier")
 	}
 	// An explicitly user-set session name beats anything derived.
 	if n := sessionName(in.SessionID); n != "" {

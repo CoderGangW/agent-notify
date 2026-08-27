@@ -243,15 +243,17 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
   font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .ev .time { color: var(--dim); font-size: 10.5px; flex-shrink: 0; }
+.ev .head { align-items: center; }
 .ev .proj {
-  display: inline-flex; align-items: center; gap: 4px;
-  width: fit-content;
+  display: inline-flex; align-items: center; gap: 3px;
+  flex-shrink: 0; max-width: 130px;
   color: var(--dim); font-size: 10px;
   background: var(--bg); border: 1px solid var(--card-edge);
-  border-radius: 999px; padding: 2px 8px; margin-top: 3px;
+  border-radius: 999px; padding: 1px 7px;
   transition: color 0.15s, border-color 0.15s;
 }
-.ev .proj svg { width: 11px; height: 11px; }
+.ev .proj span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev .proj svg { width: 10px; height: 10px; flex-shrink: 0; }
 .ev:hover .proj { color: var(--accent); border-color: var(--accent-soft); }
 .ev .msg {
   color: var(--dim); font-size: 11px; line-height: 1.45; margin-top: 2px;

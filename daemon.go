@@ -238,13 +238,17 @@ func (s *daemonState) assetHandler() http.Handler {
 			return
 		}
 		s.mu.Lock()
-		var cwd string
+		var ev Event
 		if req.Index >= 0 && req.Index < len(s.events) {
-			cwd = s.events[req.Index].CWD
+			ev = s.events[req.Index]
 		}
 		s.mu.Unlock()
-		if cwd != "" {
-			openFolder(cwd)
+		// Prefer focusing the window the session ran in (IDE or terminal);
+		// fall back to opening the project folder.
+		if ev.Activate != "" && runtime.GOOS == "darwin" {
+			_ = exec.Command("open", "-b", ev.Activate).Start()
+		} else if ev.CWD != "" {
+			openFolder(ev.CWD)
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
