@@ -1,21 +1,36 @@
-MIT License
+agent-notify License (Source-Available, No-Derivatives)
 
 Copyright (c) 2026 CoderGangW
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software, its source code, and associated files (the
+"Software"):
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. to use and run the Software for any purpose, including commercial use;
+2. to copy and redistribute the Software in unmodified form only,
+   provided that this license and the above copyright notice are included
+   in all copies;
+3. to compile the unmodified source code for the sole purpose of running
+   the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+The following are NOT permitted without prior written permission from the
+copyright holder:
+
+a. modifying, adapting, translating, patching, or otherwise creating
+   derivative works of the Software or any part of it;
+b. distributing, publishing, or offering any modified version of the
+   Software;
+c. removing or altering this license, the copyright notice, or any
+   attribution contained in the Software.
+
+Contributions submitted to the official repository (e.g. pull requests)
+are licensed by their authors to the copyright holder for inclusion in
+the Software under this license.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

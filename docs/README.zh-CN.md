@@ -10,7 +10,7 @@
   <a href="https://github.com/CoderGangW/agent-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/agent-notify?color=8a2be2" alt="latest release"/></a>
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="platforms"/>
   <img src="https://img.shields.io/badge/Go-Wails%20v3-00ADD8?logo=go&logoColor=white" alt="Go + Wails"/>
-  <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"/></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/license-Source--Available%20ND-orange" alt="license"/></a>
 </p>
 
 <p>
@@ -112,4 +112,4 @@ go run ./tools/genicon assets && go build
 
 ## 许可证
 
-MIT
+源码可见许可：可自由使用与再分发未修改副本（含商业用途），修改及分发修改版需书面许可。见 [LICENSE](../LICENSE)。
