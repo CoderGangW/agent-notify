@@ -1219,9 +1219,17 @@ function greetIntro(onDone) {
 }
 
 function welcomeClose(startTour) {
-  $("welcome-overlay").classList.add("hidden");
-  if (startTour) greetIntro(tutStart);
-  else tutEnd(); // marks tutorialDone so it never auto-shows again
+  if (startTour) {
+    // mount the frost first, hide the welcome a frame later — the main
+    // UI must never peek through between the two screens
+    greetIntro(tutStart);
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => $("welcome-overlay").classList.add("hidden"))
+    );
+  } else {
+    $("welcome-overlay").classList.add("hidden");
+    tutEnd(); // marks tutorialDone so it never auto-shows again
+  }
 }
 $("welcome-start").addEventListener("click", () => welcomeClose(true));
 $("welcome-skip").addEventListener("click", () => welcomeClose(false));
