@@ -101,9 +101,17 @@ func runDaemon() {
 		e.Cancel()
 	})
 	tray.AttachWindow(window).WindowOffset(8)
-	// Left click and right click both toggle the window; there is no menu.
-	tray.OnClick(tray.ToggleWindow)
-	tray.OnRightClick(tray.ToggleWindow)
+	// Any click SHOWS the window — never toggle. Toggling races with
+	// HideOnFocusLost (the tray click first blurs and hides the window,
+	// then the toggle reads it as visible and hides it "again"), which
+	// made left clicks feel dead. Closing is Esc / clicking elsewhere.
+	showWindow := func() {
+		_ = tray.PositionWindow(window, 8)
+		window.Show().Focus()
+	}
+	tray.OnClick(showWindow)
+	tray.OnRightClick(showWindow)
+	tray.OnDoubleClick(showWindow)
 
 	go s.serve()
 	go firstRunSetup() // double-clicked .app installs its own hooks
