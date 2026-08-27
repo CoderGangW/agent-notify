@@ -25,11 +25,12 @@ type limitBucket struct {
 }
 
 type limitsReport struct {
-	Buckets   []limitBucket `json:"buckets"`
-	Plan      string        `json:"plan,omitempty"`    // subscription type from stored credentials
-	Account   string        `json:"account,omitempty"` // signed-in Claude account email
-	Error     string        `json:"error,omitempty"`
-	FetchedAt time.Time     `json:"fetchedAt"`
+	Buckets     []limitBucket `json:"buckets"`
+	Plan        string        `json:"plan,omitempty"`        // subscription type from stored credentials
+	Account     string        `json:"account,omitempty"`     // signed-in Claude account email
+	AccountName string        `json:"accountName,omitempty"` // display name from ~/.claude.json
+	Error       string        `json:"error,omitempty"`
+	FetchedAt   time.Time     `json:"fetchedAt"`
 }
 
 type limitsFetcher struct {
@@ -60,7 +61,7 @@ func fetchLimits() limitsReport {
 	r := limitsReport{FetchedAt: time.Now()}
 	token, plan := oauthCredentials()
 	r.Plan = plan
-	r.Account = claudeAccountEmail()
+	r.Account, r.AccountName = claudeAccount()
 	if token == "" {
 		r.Error = T("limits.nocreds")
 		return r
@@ -186,24 +187,25 @@ func claudeCLIVersion() string {
 	return cliVersion
 }
 
-// claudeAccountEmail reads the signed-in account from ~/.claude.json
+// claudeAccount reads the signed-in account from ~/.claude.json
 // (read-only; written by Claude Code at login).
-func claudeAccountEmail() string {
+func claudeAccount() (email, name string) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	data, err := os.ReadFile(filepath.Join(home, ".claude.json"))
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	var d struct {
 		OauthAccount struct {
 			EmailAddress string `json:"emailAddress"`
+			DisplayName  string `json:"displayName"`
 		} `json:"oauthAccount"`
 	}
 	if json.Unmarshal(data, &d) != nil {
-		return ""
+		return "", ""
 	}
-	return d.OauthAccount.EmailAddress
+	return d.OauthAccount.EmailAddress, d.OauthAccount.DisplayName
 }

@@ -721,3 +721,28 @@ footer .foot-actions { display: flex; align-items: center; gap: 2px; }
   display: flex; align-items: center; justify-content: center; gap: 10px;
 }
 .welcome-btns .tut-next { padding: 7px 20px; font-size: 12px; }
+
+/* setup fix button + greeting toast */
+#welcome-checks .fix-btn {
+  flex-shrink: 0; align-self: center;
+  background: var(--accent-soft); color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 999px;
+  font-size: 10px; font-weight: 700; cursor: pointer;
+  padding: 3px 10px; margin-left: auto;
+}
+#welcome-checks .fix-btn:hover { background: var(--accent); color: var(--on-accent); }
+#welcome-checks .fix-btn:disabled { opacity: 0.6; cursor: default; }
+#greet-toast {
+  position: fixed; left: 50%; top: 44%; z-index: 96;
+  transform: translate(-50%, -50%) scale(0.8);
+  background: var(--card);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 15px; font-weight: 700;
+  padding: 14px 26px; border-radius: 14px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.35);
+  pointer-events: none;
+}
+#greet-toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }

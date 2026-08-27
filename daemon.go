@@ -565,6 +565,56 @@ func (s *daemonState) assetHandler() http.Handler {
 		saveConfig(c)
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("/api/setup-fix", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Item string `json:"item"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		var err error
+		switch req.Item {
+		case "hooks":
+			bin := installDest()
+			if _, statErr := os.Stat(bin); statErr != nil {
+				bin, _ = os.Executable()
+			}
+			registerHooks(fmt.Sprintf("%q hook", bin))
+		case "autostart":
+			bin := installDest()
+			if _, statErr := os.Stat(bin); statErr != nil {
+				bin, _ = os.Executable()
+			}
+			c := loadConfig()
+			c.DisableAutostart = false
+			saveConfig(c)
+			err = installAutostart(bin, false)
+		case "notifier":
+			brew := findCLI("brew")
+			if brew == "" {
+				err = fmt.Errorf("homebrew not found")
+			} else {
+				err = exec.Command(brew, "install", "terminal-notifier").Run()
+			}
+		case "cli":
+			// official Anthropic installer, explicitly user-initiated
+			err = exec.Command("/bin/bash", "-c",
+				"curl -fsSL https://claude.ai/install.sh | bash").Run()
+		default:
+			http.Error(w, "unknown item", http.StatusBadRequest)
+			return
+		}
+		setupMu.Lock()
+		setupChecked = time.Time{} // force a fresh checklist
+		setupMu.Unlock()
+		resp := map[string]any{"ok": err == nil}
+		if err != nil {
+			resp["error"] = err.Error()
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	})
 	mux.HandleFunc("/api/github", func(w http.ResponseWriter, r *http.Request) {
 		openFolder("https://github.com/CoderGangW/agent-notify") // open/xdg-open handle URLs too
 		w.WriteHeader(http.StatusNoContent)

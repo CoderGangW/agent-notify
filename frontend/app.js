@@ -947,8 +947,10 @@ function tutBuild() {
   card.querySelector("#tut-skip").addEventListener("click", tutEnd);
   card.querySelector("#tut-prev").addEventListener("click", () => tutGo(tutStep - 1));
   card.querySelector("#tut-next").addEventListener("click", () => {
-    if (tutStep >= TUT_STEPS.length - 1) tutEnd();
-    else tutGo(tutStep + 1);
+    if (tutStep >= TUT_STEPS.length - 1) {
+      tutEnd();
+      greetToast();
+    } else tutGo(tutStep + 1);
   });
   return { hole, card };
 }
@@ -1026,22 +1028,64 @@ $("help-btn").addEventListener("click", tutStart);
 
 function renderWelcomeChecks(setup) {
   const rows = [
-    { ok: setup.hooks, key: "welcome.hooks" },
-    { ok: setup.autostart, key: "welcome.autostart" },
-    { ok: setup.terminalNotifier, key: "welcome.notifier", miss: "welcome.notifier.miss" },
-    { ok: setup.claudeCLI, key: "welcome.cli", miss: "welcome.cli.miss" },
+    { ok: setup.hooks, key: "welcome.hooks", item: "hooks", fixKey: "welcome.hooks.fix" },
+    { ok: setup.autostart, key: "welcome.autostart", item: "autostart", fixKey: "welcome.hooks.fix" },
+    { ok: setup.terminalNotifier, key: "welcome.notifier", miss: "welcome.notifier.miss", item: "notifier", fixKey: "welcome.fix" },
+    { ok: setup.claudeCLI, key: "welcome.cli", miss: "welcome.cli.miss", item: "cli", fixKey: "welcome.fix" },
   ];
-  $("welcome-checks").innerHTML = rows
-    .map((r) => {
-      const icon = r.ok ? ICONS.check : ICONS.bellOff;
-      const cls = r.ok ? "ok" : "miss";
-      const hint = !r.ok && r.miss ? "<small>" + t(r.miss) + "</small>" : "";
-      return (
-        '<li class="' + cls + '"><span class="ic">' + icon + "</span>" +
-        "<div><span>" + t(r.key) + "</span>" + hint + "</div></li>"
-      );
-    })
-    .join("");
+  const list = $("welcome-checks");
+  list.innerHTML = "";
+  for (const r of rows) {
+    const li = document.createElement("li");
+    li.className = r.ok ? "ok" : "miss";
+    li.innerHTML =
+      '<span class="ic">' + (r.ok ? ICONS.check : ICONS.bellOff) + "</span>" +
+      "<div><span></span>" +
+      (!r.ok && r.miss ? "<small>" + t(r.miss) + "</small>" : "") +
+      "</div>";
+    li.querySelector("div > span").textContent = t(r.key);
+    if (!r.ok) {
+      const btn = document.createElement("button");
+      btn.className = "fix-btn";
+      btn.textContent = t(r.fixKey);
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = t("welcome.fixing");
+        try {
+          const res = await (
+            await fetch("/api/setup-fix", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ item: r.item }),
+            })
+          ).json();
+          if (!res.ok) throw new Error(res.error || "");
+          await refresh();
+          renderWelcomeChecks((lastState && lastState.setup) || {});
+        } catch (_) {
+          btn.disabled = false;
+          btn.textContent = t("welcome.fixfail") + " · " + t(r.fixKey);
+        }
+      });
+      li.appendChild(btn);
+    }
+    list.appendChild(li);
+  }
+}
+
+function greetToast() {
+  const name =
+    (lastState && lastState.limits && lastState.limits.accountName) || "";
+  if (!name) return;
+  const el = document.createElement("div");
+  el.id = "greet-toast";
+  el.textContent = t("welcome.greet").replace("{name}", name);
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 400);
+  }, 2600);
 }
 
 function welcomeClose(startTour) {
