@@ -7,38 +7,25 @@ on:
 permissions:
   contents: write
 
-# Wails v3 needs cgo on macOS (AppKit/WebKit) and Linux (gtk3 + webkit2gtk);
-# Windows drives WebView2 through syscalls and stays pure Go. Linux arm64
-# builds on GitHub's native arm runner — cgo cross-compiling gtk is not
-# worth the pain.
+# macOS artifacts are built and signed locally with build/release-macos.sh
+# (the signing identity lives on the maintainer's Mac). CI covers Linux
+# (cgo + gtk3/webkit2gtk) and Windows (pure Go, icon via go-winres,
+# windowsgui subsystem so no console window pops up).
 jobs:
   build:
     strategy:
       matrix:
         include:
-          - runner: macos-latest
-            goos: darwin
-            goarch: arm64
-            cgo: "1"
-          - runner: macos-latest
-            goos: darwin
-            goarch: amd64
-            cgo: "1"
           - runner: ubuntu-latest
             goos: linux
             goarch: amd64
-            cgo: "1"
           - runner: ubuntu-24.04-arm
             goos: linux
             goarch: arm64
-            cgo: "1"
           - runner: windows-latest
             goos: windows
             goarch: amd64
-            cgo: "0"
     runs-on: ${{ matrix.runner }}
-    env:
-      MACOSX_DEPLOYMENT_TARGET: "13.0"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -49,13 +36,19 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Embed Windows icon resource
+        if: matrix.goos == 'windows'
+        shell: bash
+        run: go run github.com/tc-hib/go-winres@v0.3.3 make --in build/winres/winres.json
       - name: Build
         shell: bash
         run: |
-          ext=""
-          [ "${{ matrix.goos }}" = "windows" ] && ext=".exe"
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=${{ matrix.cgo }} \
-            go build -trimpath -ldflags="-s -w" -o "claude-notify-${{ matrix.goos }}-${{ matrix.goarch }}$ext" .
+          ext="" ; cgo=1 ; flags="-s -w"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            ext=".exe" ; cgo=0 ; flags="-s -w -H=windowsgui"
+          fi
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=$cgo \
+            go build -trimpath -ldflags="$flags" -o "claude-notify-${{ matrix.goos }}-${{ matrix.goarch }}$ext" .
       - uses: softprops/action-gh-release@v2
         with:
           files: claude-notify-${{ matrix.goos }}-${{ matrix.goarch }}*

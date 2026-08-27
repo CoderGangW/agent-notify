@@ -1,3 +1,5 @@
 /claude-notify
 *.exe
 nohup.out
+dist/
+rsrc_windows_*.syso

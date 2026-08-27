@@ -17,7 +17,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jackmordaunt/icns/v3"
 	"github.com/nfnt/resize"
+	"github.com/sergeymakinen/go-ico"
 	"github.com/srwiley/oksvg"
 	"github.com/srwiley/rasterx"
 )
@@ -168,16 +170,48 @@ func save(img image.Image, size int, path string) {
 	}
 }
 
+// writeICNS emits the macOS app-bundle icon (icns picks its own sizes).
+func writeICNS(img image.Image, path string) {
+	out, err := os.Create(path)
+	if err != nil {
+		panic(err)
+	}
+	defer out.Close()
+	if err := icns.Encode(out, img); err != nil {
+		panic(err)
+	}
+}
+
+// writeICO emits a multi-size Windows icon resource.
+func writeICO(path string, margin float64) {
+	var imgs []image.Image
+	for _, sz := range []int{16, 24, 32, 48, 64, 128, 256} {
+		imgs = append(imgs, badgeImg(sz, margin, false))
+	}
+	out, err := os.Create(path)
+	if err != nil {
+		panic(err)
+	}
+	defer out.Close()
+	if err := ico.EncodeAll(out, imgs); err != nil {
+		panic(err)
+	}
+}
+
 const ss = 4 // supersample factor
 
-func renderBadge(size int, margin float64, withWaves bool, path string) {
+func badgeImg(size int, margin float64, withWaves bool) image.Image {
 	const bg, fg = "#D97757", "#FFF6EF"
 	S := float64(size * ss)
 	img := image.NewRGBA(image.Rect(0, 0, size*ss, size*ss))
 	drawInto(img, squircleSVG(margin, bg), 0, 0, S, S)
 	inset := (margin + 0.6) / 24 * S
 	drawInto(img, markSVG(fg, withWaves), inset, inset, S-2*inset, S-2*inset)
-	save(img, size, path)
+	return resize.Resize(uint(size), uint(size), img, resize.Lanczos3)
+}
+
+func renderBadge(size int, margin float64, withWaves bool, path string) {
+	save(badgeImg(size, margin, withWaves), size, path)
 }
 
 func renderMono(size int, withWaves bool, path string) {
@@ -196,5 +230,7 @@ func main() {
 	renderMono(32, false, dir+"/icon_mac.png")
 	renderBadge(256, 0.5, false, dir+"/logo.png")
 	renderBadge(1024, 2.2, false, dir+"/appicon.png")
+	writeICNS(badgeImg(1024, 2.2, false), dir+"/appicon.icns")
+	writeICO(dir+"/appicon.ico", 0.5)
 	fmt.Println("done")
 }
