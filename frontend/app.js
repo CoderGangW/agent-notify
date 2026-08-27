@@ -865,6 +865,18 @@ bindSwitch("sw-ai", (on) => ({ disableAISummary: !on }));
 bindSwitch("sw-live", (on) => ({ disableLiveStatus: !on }));
 bindSwitch("sw-update", (on) => ({ disableAutoUpdate: !on }));
 bindSwitch("sw-autostart", (on) => ({ autostart: on }));
+$("reset-onboarding").addEventListener("click", () => {
+  try {
+    localStorage.removeItem("tutorialDone");
+  } catch (_) {}
+  toggleSettings(false);
+  tutEnd(); // clear any running tour state (also re-sets the flag —
+  try {
+    localStorage.removeItem("tutorialDone"); // — so clear it again)
+  } catch (_) {}
+  renderWelcomeChecks((lastState && lastState.setup) || {});
+  $("welcome-overlay").classList.remove("hidden");
+});
 
 
 // ---- update footer ----
