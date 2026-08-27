@@ -98,6 +98,7 @@ function applyI18n() {
   $("restart-btn").dataset.tip = t("tip.restart");
   $("help-btn").dataset.tip = t("tip.help");
   $("gh-btn").dataset.tip = t("tip.github");
+  $("pin-btn").dataset.tip = t("tip.pin");
   $("settings-btn").dataset.tip = t("tip.settings");
   for (const opt of $("set-theme").options) {
     opt.textContent = t("theme." + opt.value);
