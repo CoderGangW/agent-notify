@@ -71,7 +71,7 @@ go install github.com/CoderGangW/agent-notify@latest
 agent-notify install   # hook 등록 + 자동 시작 + 데몬 시작
 ```
 
-macOS는 릴리즈 페이지의 **agent-notify.app**(서명됨, 유니버설)을 받아 더블클릭으로 실행할 수도 있습니다.
+macOS는 릴리즈 페이지의 **agent-notify.app**(서명됨, 유니버설)을 받아 더블클릭만 하면 됩니다 — 첫 실행 시 데몬 시작과 함께 **hook·로그인 자동 시작까지 자동 설치**됩니다 (터미널 불필요).
 
 ## 명령어
 

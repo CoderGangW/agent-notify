@@ -71,7 +71,7 @@ go install github.com/CoderGangW/agent-notify@latest
 agent-notify install   # register hooks + autostart + start the daemon
 ```
 
-macOS users can also grab **agent-notify.app** (signed, universal) from the releases page — double-click to run, then `agent-notify install` from the app menu isn't needed if you already ran the installer.
+macOS users can also grab **agent-notify.app** (signed, universal) from the releases page — double-clicking it starts the daemon **and installs the hooks + login autostart on first run**, no terminal needed.
 
 ## Commands
 

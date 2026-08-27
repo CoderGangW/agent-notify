@@ -102,16 +102,9 @@ func installBinary(exe string) string {
 	return dest
 }
 
-func runInstall() {
-	exe, err := os.Executable()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	exe, _ = filepath.EvalSymlinks(exe)
-	exe = installBinary(exe)
-	command := fmt.Sprintf("%q hook", exe)
-
+// registerHooks points the Stop/Notification hooks at command, returning
+// how many entries were added or repointed (0,0 = already correct).
+func registerHooks(command string) (added, updated int) {
 	path := settingsPath()
 	settings := loadSettings(path)
 
@@ -121,7 +114,6 @@ func runInstall() {
 		settings["hooks"] = hooks
 	}
 
-	added, updated := 0, 0
 	for _, event := range []string{"Stop", "Notification"} {
 		entries := hookEntries(hooks, event)
 		found := false
@@ -149,20 +141,54 @@ func runInstall() {
 			added++
 		}
 	}
-
-	if added == 0 && updated == 0 {
-		fmt.Printf(T("install.already")+"\n", path)
-	} else {
+	if added > 0 || updated > 0 {
 		saveSettings(path, settings)
-		fmt.Printf(T("install.hooks")+"\n", added, updated, path)
+	}
+	return added, updated
+}
+
+func runInstall() {
+	exe, err := os.Executable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	exe, _ = filepath.EvalSymlinks(exe)
+	exe = installBinary(exe)
+	command := fmt.Sprintf("%q hook", exe)
+
+	added, updated := registerHooks(command)
+	if added == 0 && updated == 0 {
+		fmt.Printf(T("install.already")+"\n", settingsPath())
+	} else {
+		fmt.Printf(T("install.hooks")+"\n", added, updated, settingsPath())
 		fmt.Printf(T("install.command")+"\n", command)
 	}
 
-	if err := installAutostart(exe); err != nil {
+	if err := installAutostart(exe, true); err != nil {
 		fmt.Printf(T("install.autostartFail")+"\n", err)
 	} else {
 		fmt.Println(T("install.autostartOK"))
 	}
+}
+
+// firstRunSetup makes double-clicking the .app (or bare binary) enough:
+// copy the binary to its stable path, register hooks, and write the login
+// autostart — WITHOUT starting a second daemon; the caller is the daemon.
+// Fast no-op when everything already points at this install.
+func firstRunSetup() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	exe, _ = filepath.EvalSymlinks(exe)
+	installed := installBinary(exe)
+	command := fmt.Sprintf("%q hook", installed)
+	added, updated := registerHooks(command)
+	if added > 0 || updated > 0 {
+		fmt.Printf(T("install.hooks")+"\n", added, updated, settingsPath())
+	}
+	_ = installAutostart(installed, false)
 }
 
 func runUninstall() {

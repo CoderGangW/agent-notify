@@ -71,7 +71,7 @@ go install github.com/CoderGangW/agent-notify@latest
 agent-notify install   # 注册钩子 + 自启 + 启动守护进程
 ```
 
-macOS 也可从发布页下载 **agent-notify.app**（已签名、通用二进制），双击运行。
+macOS 也可从发布页下载 **agent-notify.app**（已签名、通用二进制）— 双击即可：首次运行会启动守护进程并**自动安装钩子和登录自启**，无需终端。
 
 ## 命令
 

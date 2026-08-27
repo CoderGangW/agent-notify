@@ -82,6 +82,7 @@ func runDaemon() {
 	tray.OnRightClick(tray.ToggleWindow)
 
 	go s.serve()
+	go firstRunSetup() // double-clicked .app installs its own hooks
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

@@ -13,7 +13,7 @@ const launchdLabel = "com.codergangw.claude-notify"
 
 // installAutostart registers the daemon to start at login and starts it
 // now where the mechanism supports it.
-func installAutostart(exe string) error {
+func installAutostart(exe string, start bool) error {
 	switch runtime.GOOS {
 	case "darwin":
 		home, err := os.UserHomeDir()
@@ -51,6 +51,11 @@ func installAutostart(exe string) error {
 		}
 		target := fmt.Sprintf("gui/%d", os.Getuid())
 		service := target + "/" + launchdLabel
+		if !start {
+			// The plist loads at next login; the calling process is already
+			// the running daemon, so bootstrapping now would just collide.
+			return nil
+		}
 		if exec.Command("launchctl", "print", service).Run() == nil {
 			_ = exec.Command("launchctl", "bootout", service).Run()
 			// bootout is asynchronous; wait until the label is gone
