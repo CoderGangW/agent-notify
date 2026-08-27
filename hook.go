@@ -18,14 +18,57 @@ import (
 
 // hookInput is the JSON Claude Code writes to a hook's stdin.
 type hookInput struct {
-	SessionID      string `json:"session_id"`
-	CWD            string `json:"cwd"`
-	HookEventName  string `json:"hook_event_name"`
-	Message        string `json:"message"`
-	ToolName       string `json:"tool_name"`
-	Prompt         string `json:"prompt"`
-	TranscriptPath string `json:"transcript_path"`
-	StopHookActive bool   `json:"stop_hook_active"`
+	SessionID      string          `json:"session_id"`
+	CWD            string          `json:"cwd"`
+	HookEventName  string          `json:"hook_event_name"`
+	Message        string          `json:"message"`
+	ToolName       string          `json:"tool_name"`
+	ToolInput      json.RawMessage `json:"tool_input"`
+	Prompt         string          `json:"prompt"`
+	TranscriptPath string          `json:"transcript_path"`
+	StopHookActive bool            `json:"stop_hook_active"`
+}
+
+// toolDetail condenses a tool_input into a one-line "what is it doing"
+// hint for the live session list. Field priority mirrors how specific
+// each field is about the actual work.
+func toolDetail(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var in struct {
+		Description string `json:"description"` // Bash, Task: human-written summary
+		Command     string `json:"command"`
+		FilePath    string `json:"file_path"`
+		Pattern     string `json:"pattern"`
+		URL         string `json:"url"`
+		Query       string `json:"query"`
+		Path        string `json:"path"`
+		Skill       string `json:"skill"`
+	}
+	if json.Unmarshal(raw, &in) != nil {
+		return ""
+	}
+	v := ""
+	switch {
+	case in.Description != "":
+		v = in.Description
+	case in.Command != "":
+		v = in.Command
+	case in.FilePath != "":
+		v = filepath.Base(in.FilePath)
+	case in.Pattern != "":
+		v = in.Pattern
+	case in.URL != "":
+		v = in.URL
+	case in.Query != "":
+		v = in.Query
+	case in.Skill != "":
+		v = in.Skill
+	case in.Path != "":
+		v = filepath.Base(in.Path)
+	}
+	return condense(v, 90)
 }
 
 // asyncPayload travels from the fast hook process to the detached
@@ -87,7 +130,8 @@ func runHook() {
 		}[in.HookEventName]
 		postSession(sessionUpdate{
 			SessionID: in.SessionID, CWD: in.CWD, Kind: kind,
-			Tool: in.ToolName, Activate: hostBundle,
+			Tool: in.ToolName, Detail: toolDetail(in.ToolInput),
+			Activate: hostBundle,
 		})
 		return
 	case "UserPromptSubmit":

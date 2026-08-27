@@ -58,6 +58,14 @@ const ICONS = {
   x: svgWrap('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
   eyeOff: svgWrap('<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/>'),
   power: svgWrap('<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>'),
+  sparkles: svgWrap('<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/>'),
+  terminal: svgWrap('<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>'),
+  file: svgWrap('<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>'),
+  pencil: svgWrap('<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>'),
+  search: svgWrap('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'),
+  globe: svgWrap('<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>'),
+  bot: svgWrap('<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>'),
+  wrench: svgWrap('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>'),
   chevron: svgWrap('<path d="m6 9 6 6 6-6"/>'),
   // loader spins via SMIL around the exact viewBox center — CSS transforms
   // on svg elements rotate off-axis in WebKit no matter the origin syntax
@@ -321,15 +329,27 @@ document.querySelectorAll(".subtab").forEach((b) =>
   })
 );
 
+// which icon a running tool gets; unknown tools fall back to the wrench
+function toolIconName(tool) {
+  const n = (tool || "").toLowerCase();
+  if (n.includes("bash") || n.includes("shell") || n.includes("terminal")) return "terminal";
+  if (n.includes("edit") || n.includes("write") || n.includes("notebook")) return "pencil";
+  if (n.includes("read")) return "file";
+  if (n.includes("web") || n.includes("fetch")) return "globe";
+  if (n.includes("grep") || n.includes("glob") || n.includes("search")) return "search";
+  if (n.includes("task") || n.includes("agent")) return "bot";
+  return "wrench";
+}
+
 function stateIcon(s) {
-  if (s.state === "tool") return ['<span class="ic spin tool">' + ICONS.loader + "</span>", ""];
-  if (s.state === "working") return ['<span class="ic spin work">' + ICONS.loader + "</span>", ""];
+  if (s.state === "tool") return ['<span class="ic act tool">' + ICONS[toolIconName(s.tool)] + "</span>", ""];
+  if (s.state === "working") return ['<span class="ic act work">' + ICONS.sparkles + "</span>", ""];
   if (s.state === "waiting") return ['<span class="ic wait">' + ICONS.bellRing + "</span>", ""];
   return ['<span class="ic idle">' + ICONS.check + "</span>", ""];
 }
 
 function sessionStateText(s) {
-  if (s.state === "tool") return (s.tool || "tool");
+  if (s.state === "tool") return (s.tool || "tool") + (s.detail ? ": " + s.detail : "");
   if (s.state === "working") return t("state.working");
   if (s.state === "waiting") return t("state.waiting");
   return t("state.idle");
@@ -447,13 +467,17 @@ function renderSessions(all) {
       li.dataset.sid = s.id;
       li.className = "ev sess " + s.state;
       const ic = li.querySelector(".ic");
-      if (ic.dataset.state !== s.state) {
-        ic.dataset.state = s.state;
-        if (s.state === "tool") { ic.className = "ic spin tool"; ic.innerHTML = ICONS.loader; }
-        else if (s.state === "working") { ic.className = "ic spin work"; ic.innerHTML = ICONS.loader; }
+      // key includes the tool icon: Bash → Read swaps the glyph, same state
+      const ikey = s.state + (s.state === "tool" ? ":" + toolIconName(s.tool) : "");
+      if (ic.dataset.state !== ikey) {
+        ic.dataset.state = ikey;
+        if (s.state === "tool") { ic.className = "ic act tool"; ic.innerHTML = ICONS[toolIconName(s.tool)]; }
+        else if (s.state === "working") { ic.className = "ic act work"; ic.innerHTML = ICONS.sparkles; }
         else if (s.state === "waiting") { ic.className = "ic wait"; ic.innerHTML = ICONS.bellRing; }
         else { ic.className = "ic idle"; ic.innerHTML = ICONS.check; }
       }
+      // outside the state guard: the tool name can change while state stays "tool"
+      ic.dataset.tip = sessionStateText(s);
       setText(li.querySelector(".name"),
         s.title || (s.cwd || "").split(/[\\/]/).pop() || "claude");
       const br = li.querySelector(".branch");
@@ -1274,8 +1298,8 @@ const TUT_STEPS = [
   {
     sel: "#events-card", key: "s4", subtab: "sessions",
     legend: [
-      { cls: "spin work", icon: "loader", key: "tut.leg.working" },
-      { cls: "spin tool", icon: "loader", key: "tut.leg.tool" },
+      { cls: "act work", icon: "sparkles", key: "tut.leg.working" },
+      { cls: "act tool", icon: "terminal", key: "tut.leg.tool" },
       { cls: "wait", icon: "bellRing", key: "tut.leg.waiting" },
       { cls: "idle", icon: "check", key: "tut.leg.idle" },
     ],

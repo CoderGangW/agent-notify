@@ -60,6 +60,7 @@ func (s *daemonState) unreadLocked() (claude, codex int) {
 
 func runDaemon() {
 	s := &daemonState{muted: loadConfig().Muted}
+	setupNativeNotify() // no-op unless running from the .app bundle
 
 	app := application.New(application.Options{
 		Name:        "agent-notify",
@@ -163,6 +164,11 @@ func (s *daemonState) serve() {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		// prompt submit is the one moment the session's Ghostty surface is
+		// guaranteed focused — capture its id now (outside the state lock)
+		if u.Kind == "prompt" && u.Activate == ghosttyBundle && u.Mux.Kind == "" {
+			u.Surface = ghosttyCaptureSurface()
+		}
 		s.applySessionUpdate(u)
 		w.WriteHeader(http.StatusNoContent)
 	})
@@ -178,6 +184,14 @@ func (s *daemonState) serve() {
 		}
 		if ev.Time.IsZero() {
 			ev.Time = time.Now()
+		}
+		// events outlive their session: pin the Ghostty surface id now
+		if ev.Surface == "" && ev.SessionID != "" {
+			s.mu.Lock()
+			if info := s.sessions[ev.SessionID]; info != nil {
+				ev.Surface = info.Surface
+			}
+			s.mu.Unlock()
 		}
 		s.add(ev)
 		w.WriteHeader(http.StatusNoContent)
@@ -421,7 +435,7 @@ func (s *daemonState) assetHandler() http.Handler {
 		}
 		s.mu.Unlock()
 		s.refreshBadge()
-		focusTarget(ev.Activate, ev.Mux, ev.CWD)
+		focusTarget(ev.Activate, ev.Mux, ev.Surface, ev.CWD)
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/folder", func(w http.ResponseWriter, r *http.Request) {
@@ -464,7 +478,7 @@ func (s *daemonState) assetHandler() http.Handler {
 			info = *p
 		}
 		s.mu.Unlock()
-		focusTarget(info.Activate, info.Mux, info.CWD)
+		focusTarget(info.Activate, info.Mux, info.Surface, info.CWD)
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/hide-session", func(w http.ResponseWriter, r *http.Request) {
@@ -668,13 +682,18 @@ func (s *daemonState) assetHandler() http.Handler {
 // focusTarget jumps to a session: select its exact multiplexer pane
 // first, then bring the hosting app forward; with neither, open the
 // project folder.
-func focusTarget(activate string, mux muxRef, cwd string) {
+func focusTarget(activate string, mux muxRef, surface, cwd string) {
 	muxFocus(mux)
 	if activate != "" && runtime.GOOS == "darwin" {
 		// VSCode-family apps focus the window that already has the folder
 		// open when handed its path — window-level precision for free.
 		if cwd != "" && ideBundles[activate] {
 			_ = exec.Command("open", "-b", activate, cwd).Start()
+			return
+		}
+		// Ghostty: jump to the exact surface via its AppleScript API
+		// (focus also activates the window — no open -b needed then)
+		if activate == ghosttyBundle && ghosttyFocus(surface, cwd) {
 			return
 		}
 		_ = exec.Command("open", "-b", activate).Start()

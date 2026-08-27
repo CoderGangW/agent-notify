@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
+	"time"
 )
 
 // Terminal-multiplexer awareness. Every supported multiplexer stamps its
@@ -114,4 +117,80 @@ func muxFocus(m muxRef) {
 end tell`, m.Pane)
 		_ = exec.Command("osascript", "-e", script).Run()
 	}
+}
+
+// ---- Ghostty (macOS) ----
+// Ghostty has no per-surface env var yet (ghostty-org/ghostty#10603 is
+// still open), but 1.3+ ships a real AppleScript object model:
+// application > windows > tabs > terminals, each terminal with a stable
+// id and working directory. The daemon captures the focused terminal's id
+// the moment a prompt is submitted — the one moment the session's surface
+// is guaranteed frontmost — and clicking replays `focus` on that exact
+// terminal. https://ghostty.org/docs/features/applescript
+
+const ghosttyBundle = "com.mitchellh.ghostty"
+
+// terminal ids are UUIDs in practice; accept hex-and-dashes only so the
+// value can be spliced into a script without any escaping concerns
+var ghosttyIDRe = regexp.MustCompile(`^[0-9A-Fa-f-]{1,64}$`)
+
+// osascript runs a script with a hard timeout (a pending Automation
+// permission dialog must not wedge the daemon) and returns trimmed stdout.
+func osascript(script string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "osascript", "-e", script).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// asQuote escapes a string for an AppleScript literal (strconv.Quote is
+// wrong here: it \u-escapes non-ASCII, which AppleScript doesn't parse).
+func asQuote(s string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
+}
+
+// ghosttyCaptureSurface returns the id of the focused Ghostty terminal,
+// or "" when Ghostty isn't running/frontmost (stale capture is worse
+// than none). `application id ... is running` does not launch the app.
+func ghosttyCaptureSurface() string {
+	id := osascript(`if application id "` + ghosttyBundle + `" is running then
+	tell application id "` + ghosttyBundle + `"
+		if frontmost then
+			try
+				return (id of focused terminal of selected tab of front window) as text
+			end try
+		end if
+	end tell
+end if
+return ""`)
+	if ghosttyIDRe.MatchString(id) {
+		return id
+	}
+	return ""
+}
+
+// ghosttyFocus selects the captured surface; without one it falls back to
+// the terminal whose working directory equals the session cwd. Returns
+// true when a terminal was focused (Ghostty's focus command also raises
+// and activates its window).
+func ghosttyFocus(surface, cwd string) bool {
+	focusBy := func(filter string) bool {
+		return osascript(`if application id "`+ghosttyBundle+`" is running then
+	tell application id "`+ghosttyBundle+`"
+		set m to every terminal whose `+filter+`
+		if m is not {} then
+			focus item 1 of m
+			return "ok"
+		end if
+	end tell
+end if
+return ""`) == "ok"
+	}
+	if ghosttyIDRe.MatchString(surface) && focusBy(`id is "`+surface+`"`) {
+		return true
+	}
+	return cwd != "" && focusBy("working directory is "+asQuote(cwd))
 }

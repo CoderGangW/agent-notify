@@ -17,6 +17,8 @@ type sessionUpdate struct {
 	CWD       string `json:"cwd"`
 	Kind      string `json:"kind"` // prompt | pretool | posttool | idle | waiting | end
 	Tool      string `json:"tool"`
+	Detail    string `json:"detail"`  // one-line tool_input hint (file, command, …)
+	Surface   string `json:"surface"` // Ghostty terminal id, captured daemon-side
 	Prompt    string `json:"prompt"`
 	Activate  string `json:"activate"`
 	Title     string `json:"title"`
@@ -32,8 +34,10 @@ type sessionInfo struct {
 	CWD       string    `json:"cwd"`
 	Title     string    `json:"title"` // session title (same chain as events)
 	Task      string    `json:"task"`  // current prompt excerpt
-	State     string    `json:"state"` // working | tool | waiting | idle
-	Tool      string    `json:"tool"`  // current tool while state == tool
+	State     string    `json:"state"`  // working | tool | waiting | idle
+	Tool      string    `json:"tool"`    // current tool while state == tool
+	Detail    string    `json:"detail"`  // what the tool is doing, one line
+	Surface   string    `json:"-"`       // Ghostty terminal id for exact focus
 	Branch    string    `json:"branch"`
 	Model     string    `json:"model"`
 	Activate  string    `json:"activate"`
@@ -89,21 +93,29 @@ func (s *daemonState) applySessionUpdate(u sessionUpdate) {
 	case "prompt":
 		info.State = "working"
 		info.Tool = ""
+		info.Detail = ""
 		info.TurnStart = now
 		info.Task = condense(u.Prompt, 500)
 		info.Hidden = false // a new turn resurfaces a user-hidden session
+		if u.Surface != "" {
+			info.Surface = u.Surface // a failed capture keeps the last good id
+		}
 	case "pretool":
 		info.State = "tool"
 		info.Tool = u.Tool
+		info.Detail = u.Detail
 	case "posttool":
 		info.State = "working"
 		info.Tool = ""
+		info.Detail = ""
 	case "waiting":
 		info.State = "waiting"
 		info.Tool = ""
+		info.Detail = ""
 	case "idle":
 		info.State = "idle"
 		info.Tool = ""
+		info.Detail = ""
 	}
 }
 

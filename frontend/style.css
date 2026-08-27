@@ -324,6 +324,14 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
    see ICONS.loader; CSS transforms on svg rotate off-axis in WebKit */
 .sess .ic.work { color: var(--accent); }
 .sess .ic.tool { color: var(--warn); }
+/* active states shine: the glyph breathes with a soft glow */
+.sess .ic.act svg, #tut-card .tut-legend .ic.act svg {
+  animation: icon-shine 1.5s ease-in-out infinite;
+}
+@keyframes icon-shine {
+  0%, 100% { opacity: 0.45; filter: none; }
+  50% { opacity: 1; filter: drop-shadow(0 0 5px currentColor); }
+}
 .sess .ic.wait { color: var(--warn); }
 .sess .ic.wait svg { animation: wiggle 1.4s ease-in-out infinite; }
 @keyframes wiggle {
@@ -335,7 +343,10 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
 .sess .ic.idle { color: var(--dim); }
 .sess.idle { opacity: 0.62; }
 .sess.idle:hover { opacity: 1; }
-.sess .statetxt { font-weight: 600; color: var(--text); opacity: 0.8; }
+.sess .statetxt {
+  font-weight: 600; color: var(--text); opacity: 0.8;
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .sess .elapsed { font-variant-numeric: tabular-nums; }
 .sess .task {
   color: var(--dim); font-size: 11px; line-height: 1.45; margin-top: 2px;

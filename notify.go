@@ -12,16 +12,20 @@ import (
 
 // deliverNotification shows one native notification for an event.
 //
-// On macOS it prefers terminal-notifier when installed: -activate makes a
-// click focus the session's IDE — osascript notifications belong to
-// Script Editor, so a click opens Script Editor instead. (-sender icon
-// faking died in terminal-notifier 3.0 / the UserNotifications framework.)
-// Everything else (and the fallback) is beeep.
+// The bundled daemon posts through UNUserNotificationCenter: the banner
+// carries the app's own icon and a click focuses the exact session
+// surface. Unbundled contexts (hook fallback while the daemon is down,
+// dev binaries) can't use it, so they degrade to terminal-notifier when
+// installed (-activate at least focuses the hosting app; its icon is
+// unavoidably terminal-notifier's own) and finally to beeep.
 func deliverNotification(ev Event) {
 	title, body := notificationText(ev)
 	subtitle := shortPath(ev.CWD)
 
 	if runtime.GOOS == "darwin" {
+		if nativeNotify(ev, title, subtitle, body) {
+			return
+		}
 		if tn := findTerminalNotifier(); tn != "" {
 			args := []string{"-title", title, "-message", body}
 			if subtitle != "" {
