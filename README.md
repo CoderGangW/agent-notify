@@ -106,6 +106,7 @@ go run ./tools/genicon assets && go build
 - [x] Click a notification / event to focus the session's IDE or terminal
 - [x] Dashboard window: sessions, token usage, plan limits
 - [x] Codex CLI support
+- [ ] Focus the exact session panel inside the VSCode extension (blocked on a deep-link API from the extension)
 - [ ] Webhooks (ntfy / Slack / Telegram / Discord) for away-from-keyboard alerts
 - [ ] Live session status (PreToolUse/PostToolUse: running tool, elapsed time)
 - [ ] Collect events from remote machines

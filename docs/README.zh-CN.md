@@ -106,6 +106,7 @@ go run ./tools/genicon assets && go build
 - [x] 点击通知/事件聚焦会话的 IDE 或终端
 - [x] 仪表盘窗口：会话、令牌用量、套餐限额
 - [x] Codex CLI 支持
+- [ ] 聚焦 VSCode 扩展中的特定会话面板（依赖扩展提供深链接 API）
 - [ ] Webhook（ntfy / Slack / Telegram / Discord）— 离开电脑时推送到手机
 - [ ] 实时会话状态（PreToolUse/PostToolUse：运行中的工具、耗时）
 - [ ] 收集远程机器的事件

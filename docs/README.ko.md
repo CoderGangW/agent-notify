@@ -106,6 +106,7 @@ go run ./tools/genicon assets && go build
 - [x] 알림/이벤트 클릭으로 세션의 IDE 또는 터미널 포커스
 - [x] 대시보드 창: 세션, 토큰 사용량, 플랜 한도
 - [x] Codex CLI 지원
+- [ ] VSCode 익스텐션의 특정 세션 패널까지 포커스 (익스텐션 딥링크 API 필요)
 - [ ] Webhook (ntfy / Slack / Telegram / Discord) — 자리 비웠을 때 폰 알림
 - [ ] 실시간 세션 상태 (PreToolUse/PostToolUse: 실행 중인 도구, 경과 시간)
 - [ ] 원격 머신 이벤트 수집
