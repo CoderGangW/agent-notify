@@ -105,6 +105,10 @@ func runDaemon() {
 	// HideOnFocusLost (the tray click first blurs and hides the window,
 	// then the toggle reads it as visible and hides it "again"), which
 	// made left clicks feel dead. Closing is Esc / clicking elsewhere.
+	// Any click SHOWS the window — never toggle, and bind every button:
+	// macOS can deliver status-item left clicks as right-button events
+	// (observed on macOS 27), which used to fall into the menuless
+	// right-click path and feel dead.
 	showWindow := func() {
 		_ = tray.PositionWindow(window, 8)
 		window.Show().Focus()

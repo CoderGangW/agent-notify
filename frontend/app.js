@@ -133,7 +133,7 @@ function fmtReset(iso) {
 function renderLimits(lim) {
   const body = $("limits-body");
   const note = $("limits-note");
-  note.textContent = lim.error ? lim.error : "";
+  note.textContent = lim.error ? lim.error : lim.account || "";
   if (!lim.buckets || lim.buckets.length === 0) {
     body.innerHTML =
       '<div class="limits-err">' +
