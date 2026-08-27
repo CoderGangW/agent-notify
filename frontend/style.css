@@ -9,6 +9,9 @@
   --on-accent: #fff;
   --codex-accent: #f2f2f0;
   --codex-on-accent: #1a1a1a;
+  --tip-top: rgba(60, 53, 47, 0.92);
+  --tip-bot: rgba(36, 31, 27, 0.94);
+  --tip-edge: rgba(255, 255, 255, 0.1);
   --good: #7fb069;
   --warn: #e8a838;
   --bad: #e4573d;
@@ -24,6 +27,9 @@ html[data-theme="light"] {
   --on-accent: #fff;
   --codex-accent: #2b2520;
   --codex-on-accent: #fff;
+  --tip-top: rgba(255, 253, 250, 0.95);
+  --tip-bot: rgba(244, 238, 230, 0.96);
+  --tip-edge: rgba(0, 0, 0, 0.12);
   --good: #5c9147;
   --warn: #c08a1d;
   --bad: #cc4630;
@@ -536,10 +542,10 @@ footer .foot-actions { display: flex; align-items: center; gap: 2px; }
 #tooltip {
   position: fixed; z-index: 99;
   max-width: 280px;
-  background: linear-gradient(180deg, rgba(60, 53, 47, 0.92), rgba(36, 31, 27, 0.94));
+  background: linear-gradient(180deg, var(--tip-top), var(--tip-bot));
   -webkit-backdrop-filter: blur(12px) saturate(1.4);
   backdrop-filter: blur(12px) saturate(1.4);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--tip-edge);
   color: var(--text);
   font-size: 10.5px; line-height: 1.45; font-weight: 500;
   padding: 5px 10px; border-radius: 9px;
@@ -561,9 +567,9 @@ footer .foot-actions { display: flex; align-items: center; gap: 2px; }
   left: var(--ax, 50%);
   bottom: -4.8px;
   margin-left: -4px;
-  background: rgba(36, 31, 27, 0.96);
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--tip-bot);
+  border-right: 1px solid var(--tip-edge);
+  border-bottom: 1px solid var(--tip-edge);
   transform: rotate(45deg);
   border-radius: 0 0 2px 0;
 }
@@ -573,10 +579,10 @@ footer .foot-actions { display: flex; align-items: center; gap: 2px; }
 }
 #tooltip.below::after {
   bottom: auto; top: -4.8px;
-  background: rgba(58, 51, 45, 0.94);
+  background: var(--tip-top);
   border: none;
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid var(--tip-edge);
+  border-top: 1px solid var(--tip-edge);
   border-radius: 2px 0 0 0;
 }
 #tooltip.show { opacity: 1; transform: none; }
