@@ -9,7 +9,7 @@ import (
 	"os"
 )
 
-const version = "0.2.5"
+const version = "0.3.0"
 
 func main() {
 	cmd := "daemon"
