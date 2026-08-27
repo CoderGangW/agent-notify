@@ -94,6 +94,7 @@ function applyI18n() {
   $("mute-btn").dataset.tip = t("tip.mute");
   $("quit-btn").dataset.tip = t("tip.quit");
   $("restart-btn").dataset.tip = t("tip.restart");
+  $("help-btn").dataset.tip = t("tip.help");
 }
 
 

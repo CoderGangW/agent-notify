@@ -38,6 +38,7 @@
   "state.working": "working",
   "time.ago": "ago",
   "tip.connected": "daemon connected",
+  "tip.help": "Tutorial",
   "tip.mute": "mute/unmute notifications",
   "tip.open": "open",
   "tip.pin": "Make this tab the default",

@@ -38,6 +38,7 @@
   "state.working": "工作中",
   "time.ago": "前",
   "tip.connected": "守护进程已连接",
+  "tip.help": "使用引导",
   "tip.mute": "开/关通知",
   "tip.open": "打开",
   "tip.pin": "将此标签设为默认",
