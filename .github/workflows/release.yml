@@ -3,6 +3,11 @@ name: release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to (re)build assets for'
+        required: true
 
 permissions:
   contents: write
@@ -52,4 +57,5 @@ jobs:
             go build -trimpath -ldflags="$flags" -o "agent-notify-${{ matrix.goos }}-${{ matrix.goarch }}$ext" .
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: agent-notify-${{ matrix.goos }}-${{ matrix.goarch }}*
