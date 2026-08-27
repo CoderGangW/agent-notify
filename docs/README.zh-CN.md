@@ -17,6 +17,12 @@
   🇺🇸 <a href="../README.md">English</a>&nbsp;&nbsp;·&nbsp;&nbsp;🇰🇷 <a href="README.ko.md">한국어</a>&nbsp;&nbsp;·&nbsp;&nbsp;🇨🇳 <b>简体中文</b>
 </p>
 
+<p>
+  <a href="https://github.com/CoderGangW/agent-notify/releases/latest/download/agent-notify-macos-universal.app.zip"><img src="https://img.shields.io/badge/macOS-Download-111111?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"/></a>
+  <a href="https://github.com/CoderGangW/agent-notify/releases/latest/download/agent-notify-windows-amd64.exe"><img src="https://img.shields.io/badge/Windows-Download-0a66c2?style=for-the-badge" alt="Download for Windows"/></a>
+  <a href="https://github.com/CoderGangW/agent-notify/releases/latest/download/agent-notify-linux-amd64"><img src="https://img.shields.io/badge/Linux-Download-f4a028?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux"/></a>
+</p>
+
 <img src="../assets/main_screen_cn.png" width="360" alt="agent-notify 仪表盘"/>
 
 </div>
