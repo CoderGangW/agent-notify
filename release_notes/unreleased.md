@@ -1,9 +1,10 @@
-<!-- 다음 릴리즈 초안. 세 언어 모두 채운다 — 한국어가 메인, 영어/중국어는 접힘.
-     release.sh가 배포 시 v<버전>.md 로 보관하고 이 파일을 리셋한다. -->
+<!-- Draft for the next release. Fill all three languages — English is
+     the main body, Korean/Chinese are collapsed.
+     release.sh archives this as v<version>.md on release and resets it. -->
 
 - 
 
-<details><summary>🇺🇸 English</summary>
+<details><summary>🇰🇷 한국어</summary>
 
 - 
 
