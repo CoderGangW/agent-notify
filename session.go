@@ -40,6 +40,7 @@ type sessionInfo struct {
 	Mux       muxRef    `json:"mux"`
 	TurnStart time.Time `json:"turnStart"` // start of the current turn
 	LastSeen  time.Time `json:"lastSeen"`
+	Hidden    bool      `json:"-"` // excluded from the list by the user
 }
 
 func (s *daemonState) applySessionUpdate(u sessionUpdate) {
@@ -90,6 +91,7 @@ func (s *daemonState) applySessionUpdate(u sessionUpdate) {
 		info.Tool = ""
 		info.TurnStart = now
 		info.Task = condense(u.Prompt, 500)
+		info.Hidden = false // a new turn resurfaces a user-hidden session
 	case "pretool":
 		info.State = "tool"
 		info.Tool = u.Tool
@@ -114,6 +116,9 @@ func (s *daemonState) sessionListLocked() []sessionInfo {
 	for id, info := range s.sessions {
 		if info.LastSeen.Before(cutoff) {
 			delete(s.sessions, id)
+			continue
+		}
+		if info.Hidden {
 			continue
 		}
 		out = append(out, *info)

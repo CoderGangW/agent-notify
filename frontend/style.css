@@ -75,6 +75,14 @@ header {
   to { transform: scale(1); opacity: 1; }
 }
 .title { font-weight: 700; letter-spacing: 0.02em; }
+.dev-chip {
+  margin-left: 6px; margin-right: auto; padding: 0 6px; border-radius: 999px;
+  font-size: 8.5px; font-weight: 800; letter-spacing: 0.08em; line-height: 14px;
+  color: var(--warn); border: 1px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  animation: fade-in 0.3s ease both;
+  vertical-align: 1px;
+}
 .dot {
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--good);
@@ -365,6 +373,16 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
   from { transform: translateX(-14px); opacity: 0; }
   to { transform: none; opacity: 1; }
 }
+/* user hid the row: slide out, then collapse the height it held */
+.ev.leave {
+  height: 0 !important;
+  padding-top: 0; padding-bottom: 0;
+  opacity: 0; transform: translateX(14px);
+  overflow: hidden; pointer-events: none;
+  transition: height 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    padding 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.18s ease, transform 0.24s ease;
+}
 .ev .ic { position: relative; line-height: 1; padding-top: 2px; }
 .ev.unread .ic::after { /* unread marker */
   content: "";
@@ -568,6 +586,31 @@ footer .foot-actions { display: flex; align-items: center; gap: 2px; }
 }
 #upd-btn[data-state="checking"], #upd-btn[data-state="applying"] { opacity: 0.7; cursor: default; }
 #upd-btn[data-state="done"] { color: var(--good); cursor: default; }
+
+/* ---------- session context menu ---------- */
+#ctxmenu {
+  position: fixed; z-index: 90;
+  min-width: 130px;
+  background: var(--card);
+  border: 1px solid var(--card-edge);
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  opacity: 0; transform: translateY(-4px) scale(0.96);
+  transform-origin: top left;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+#ctxmenu.show { opacity: 1; transform: none; pointer-events: auto; }
+.ctx-item {
+  display: flex; align-items: center; gap: 7px;
+  width: 100%;
+  background: none; border: none; cursor: pointer;
+  color: var(--text); font-size: 11px; text-align: left;
+  padding: 5px 8px; border-radius: 7px;
+}
+.ctx-item:hover { background: var(--accent-soft); }
+.ctx-item svg { width: 12px; height: 12px; color: var(--dim); flex-shrink: 0; }
 
 /* ---------- custom tooltip ---------- */
 #tooltip {

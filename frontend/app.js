@@ -56,6 +56,7 @@ const ICONS = {
   bellRing: svgWrap('<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M22 8c0-2.3-.8-4.3-2-6"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/>'),
   check: svgWrap('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'),
   x: svgWrap('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+  eyeOff: svgWrap('<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/>'),
   power: svgWrap('<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>'),
   chevron: svgWrap('<path d="m6 9 6 6 6-6"/>'),
   // loader spins via SMIL around the exact viewBox center — CSS transforms
@@ -289,7 +290,8 @@ function reconcile(list, items, keyFn, createFn, updateFn) {
     updateFn(el, it, i);
     prev = el;
   });
-  for (const el of byKey.values()) el.remove();
+  // rows animating out remove themselves on transitionend
+  for (const el of byKey.values()) if (!el.classList.contains("leave")) el.remove();
 }
 
 function setText(el, txt) {
@@ -333,21 +335,84 @@ function sessionStateText(s) {
   return t("state.idle");
 }
 
+// ---- session context menu: right-click a row to exclude it ----
+const ctxEl = document.createElement("div");
+ctxEl.id = "ctxmenu";
+document.addEventListener("DOMContentLoaded", () => document.body.appendChild(ctxEl));
+
+function closeCtx() {
+  ctxEl.classList.remove("show");
+}
+
+function openCtx(e, sid) {
+  ctxEl.innerHTML = "";
+  const btn = document.createElement("button");
+  btn.className = "ctx-item";
+  btn.innerHTML = ICONS.eyeOff + "<span></span>";
+  btn.querySelector("span").textContent = t("sessions.hide");
+  btn.addEventListener("click", () => {
+    hideSession(sid);
+    closeCtx();
+  });
+  ctxEl.appendChild(btn);
+  ctxEl.classList.add("show");
+  const x = Math.max(6, Math.min(e.clientX, window.innerWidth - ctxEl.offsetWidth - 6));
+  const y = Math.max(6, Math.min(e.clientY, window.innerHeight - ctxEl.offsetHeight - 6));
+  ctxEl.style.left = x + "px";
+  ctxEl.style.top = y + "px";
+}
+
+document.addEventListener("mousedown", (e) => {
+  if (!ctxEl.contains(e.target)) closeCtx();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeCtx();
+});
+window.addEventListener("blur", closeCtx);
+document.addEventListener("scroll", closeCtx, true);
+
+const hiddenPending = new Set(); // filtered locally until the daemon's list confirms
+
+function hideSession(sid) {
+  hiddenPending.add(sid);
+  post("/api/hide-session", { id: sid });
+  const li = document.querySelector('#sessions li[data-sid="' + CSS.escape(sid) + '"]');
+  if (!li) return;
+  // collapse smoothly: pin the current height, then transition to 0
+  li.style.height = li.offsetHeight + "px";
+  void li.offsetHeight; // reflow so the transition starts from the pinned value
+  li.classList.add("leave");
+  li.addEventListener("transitionend", (ev) => {
+    if (ev.propertyName !== "height") return; // opacity/transform finish earlier
+    li.remove();
+    if (lastState) renderSessions(lastState.sessions || []); // empty state may need to appear
+  });
+}
+
 function renderSessions(all) {
   const tab = currentTab || "claude";
-  const sessions = all.filter((s) => (s.source || "claude") === tab);
+  // drop locally-hidden rows; forget ids the daemon no longer reports
+  const ids = new Set(all.map((s) => s.id));
+  for (const sid of hiddenPending) if (!ids.has(sid)) hiddenPending.delete(sid);
+  const sessions = all.filter(
+    (s) => (s.source || "claude") === tab && !hiddenPending.has(s.id)
+  );
   $("sess-badge").textContent = "";
   const busy = sessions.filter((s) => s.state === "tool" || s.state === "working").length;
   if (busy > 0) $("sess-badge").textContent = String(busy);
   if (subTab !== "sessions") return;
   const list = $("sessions");
   const empty = $("empty");
-  empty.classList.toggle("hidden", sessions.length > 0);
-  list.classList.toggle("hidden", sessions.length === 0);
+  // a row mid-collapse keeps the list visible until its transition ends
+  const showEmpty = sessions.length === 0 && !list.querySelector(".leave");
+  empty.classList.toggle("hidden", !showEmpty);
+  list.classList.toggle("hidden", showEmpty);
   if (sessions.length === 0) {
-    list.innerHTML = "";
-    empty.querySelector("[data-i18n]").textContent = t("sessions.empty");
-    empty.querySelectorAll("span")[1].textContent = t("sessions.hint");
+    if (showEmpty) {
+      list.innerHTML = "";
+      empty.querySelector("[data-i18n]").textContent = t("sessions.empty");
+      empty.querySelectorAll("span")[1].textContent = t("sessions.hint");
+    }
     return;
   }
 
@@ -372,6 +437,10 @@ function renderSessions(all) {
       li.addEventListener("click", () =>
         post("/api/focus-session", { id: li.dataset.sid })
       );
+      li.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        openCtx(e, li.dataset.sid);
+      });
       return li;
     },
     (li, s) => {
@@ -670,6 +739,7 @@ async function refresh() {
     const st = await res.json();
     lastState = st;
     $("live-dot").classList.remove("off");
+    $("dev-chip").classList.toggle("hidden", !st.dev);
     defaultTab = st.defaultTab || "claude";
     if (currentTab === null) {
       currentTab = defaultTab;

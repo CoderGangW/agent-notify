@@ -35,6 +35,7 @@
   "reset.min": "{m}m 후 리셋",
   "reset.now": "리셋됨",
   "sessions.empty": "활성 세션이 없습니다",
+  "sessions.hide": "목록에서 제외",
   "sessions.hint": "{agent} 세션이 실행되면 여기에 표시됩니다",
   "sessions.tab": "활성 세션",
   "set.ai": "AI 요약",

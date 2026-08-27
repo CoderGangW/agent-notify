@@ -35,6 +35,7 @@
   "reset.min": "resets in {m}m",
   "reset.now": "resets now",
   "sessions.empty": "No active sessions",
+  "sessions.hide": "Remove from list",
   "sessions.hint": "Sessions appear here while {agent} is running",
   "sessions.tab": "Active sessions",
   "set.ai": "AI summary",

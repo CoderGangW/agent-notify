@@ -322,7 +322,9 @@ func (s *daemonState) assetHandler() http.Handler {
 			UpdateAvail string         `json:"updateAvail"` // version waiting for a user-approved install
 			Usage       usageReport    `json:"usage"`
 			Limits      limitsReport   `json:"limits"`
+			Dev         bool           `json:"dev"` // running via tools/dev.sh
 		}{Version: version, Settings: cfg, Setup: computeSetup(),
+			Dev:    os.Getenv("AGENT_NOTIFY_DEV") != "",
 			Events: s.events, Sessions: s.sessionListLocked(),
 			Unread: map[string]int{"claude": uc, "codex": ux}, Muted: s.muted,
 			Lang: resolveLang(cfg.Lang), LangSetting: cfg.Lang, DefaultTab: cfg.DefaultTab}
@@ -463,6 +465,21 @@ func (s *daemonState) assetHandler() http.Handler {
 		}
 		s.mu.Unlock()
 		focusTarget(info.Activate, info.Mux, info.CWD)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/hide-session", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID string `json:"id"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		s.mu.Lock()
+		if p := s.sessions[req.ID]; p != nil {
+			p.Hidden = true
+		}
+		s.mu.Unlock()
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/update-check", func(w http.ResponseWriter, r *http.Request) {
