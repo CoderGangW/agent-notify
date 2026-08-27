@@ -17,10 +17,11 @@ import (
 // the last request (context for the AI summary). Content is either a
 // plain string or an array of typed blocks.
 type rawEntry struct {
-	Type    string `json:"type"`
-	IsMeta  bool   `json:"isMeta"`
-	Summary string `json:"summary"`
-	Message struct {
+	Type      string `json:"type"`
+	IsMeta    bool   `json:"isMeta"`
+	Summary   string `json:"summary"`
+	GitBranch string `json:"gitBranch"`
+	Message   struct {
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
 }
@@ -57,6 +58,7 @@ type transcriptDetail struct {
 	Title         string // session title (summary entry, else first prompt)
 	LastUser      string // most recent user request, for summary context
 	LastAssistant string // Claude's final message = its report of the work
+	Branch        string // git branch the session was on (last entry wins)
 }
 
 func transcriptInfo(path string) transcriptDetail {
@@ -96,6 +98,7 @@ func transcriptInfo(path string) transcriptDetail {
 	d.Title = tail.title
 	d.LastUser = tail.lastUser
 	d.LastAssistant = tail.lastAssistant
+	d.Branch = tail.branch
 
 	firstUser := tail.firstUser
 	if offset > 0 {
@@ -126,6 +129,7 @@ type scanResult struct {
 	firstUser     string
 	lastUser      string
 	lastAssistant string
+	branch        string
 }
 
 func scanLines(lines [][]byte) scanResult {
@@ -137,6 +141,9 @@ func scanLines(lines [][]byte) scanResult {
 		var e rawEntry
 		if json.Unmarshal(line, &e) != nil || e.IsMeta {
 			continue
+		}
+		if e.GitBranch != "" {
+			r.branch = e.GitBranch
 		}
 		switch e.Type {
 		case "summary":

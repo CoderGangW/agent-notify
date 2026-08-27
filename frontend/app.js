@@ -57,6 +57,7 @@ const ICONS = {
   check: svgWrap('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'),
   x: svgWrap('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
   chevron: svgWrap('<path d="m6 9 6 6 6-6"/>'),
+  branch: svgWrap('<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>'),
   pin: svgWrap('<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"/>'),
   focus: svgWrap('<path d="M7 7h10v10"/><path d="M7 17 17 7"/>'),
 };
@@ -74,6 +75,7 @@ const I18N = {
     "usage.cache": "Cache read today",
     "events.title": "Session events",
     "events.clear": "Clear",
+    "events.readAll": "Mark all read",
     "events.empty": "No events yet",
     "events.hint": "Finished Claude Code sessions show up here",
     "bucket.five_hour": "5-hour session",
@@ -102,6 +104,7 @@ const I18N = {
     "usage.cache": "오늘 캐시 읽기",
     "events.title": "세션 이벤트",
     "events.clear": "비우기",
+    "events.readAll": "모두 읽기",
     "events.empty": "아직 이벤트 없음",
     "events.hint": "Claude Code 세션이 끝나면 여기 뜸",
     "bucket.five_hour": "5시간 세션",
@@ -130,6 +133,7 @@ const I18N = {
     "usage.cache": "今日缓存读取",
     "events.title": "会话事件",
     "events.clear": "清空",
+    "events.readAll": "全部已读",
     "events.empty": "暂无事件",
     "events.hint": "Claude Code 会话结束后显示在这里",
     "bucket.five_hour": "5小时会话",
@@ -207,8 +211,12 @@ function renderLimits(lim) {
     el.querySelector(".meta").textContent =
       pct.toFixed(0) + "% · " + fmtReset(b.resetsAt);
     const bar = el.querySelector(".bar > i");
-    bar.style.width = pct + "%";
     bar.className = pct >= 90 ? "bad" : pct >= 70 ? "warn" : "";
+    // Setting the width in the creation frame skips the transition; a
+    // rAF hop lets the 0-width state paint first so the bar rises.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => (bar.style.width = pct + "%"))
+    );
   }
 }
 
@@ -329,7 +337,7 @@ function applyTab() {
   const pin = $("pin-btn");
   pin.classList.toggle("pinned", currentTab === defaultTab);
   pin.dataset.tip = t("tip.pin");
-  if (lastState) renderEvents(lastState.events || [], lastState.done || 0);
+  if (lastState) renderEvents(lastState.events || [], lastState.unread || {});
 }
 
 document.querySelector("#tabs .seg").addEventListener("click", (e) => {
@@ -387,8 +395,9 @@ function toggleMsg(msg, btn, key) {
   }
 }
 
-function renderEvents(events, done) {
-  $("done-badge").textContent = done > 0 ? String(done) : "";
+function renderEvents(events, unread) {
+  const tabUnread = (unread || {})[currentTab || "claude"] || 0;
+  $("done-badge").textContent = tabUnread > 0 ? String(tabUnread) : "";
   const list = $("events");
   const empty = $("empty");
   const tab = currentTab || "claude";
@@ -401,12 +410,15 @@ function renderEvents(events, done) {
     if ((ev.source || "claude") !== tab) return;
     const key = evKey(ev);
     const li = document.createElement("li");
-    li.className = "ev" + (knownNewest && ev.time > knownNewest ? " new" : "");
+    li.className =
+      "ev" +
+      (knownNewest && ev.time > knownNewest ? " new" : "") +
+      (ev.read ? "" : " unread");
     const when = new Date(ev.time);
     li.innerHTML =
       '<span class="ic"></span>' +
       '<div class="body">' +
-      '<div class="head"><span class="name"></span><span class="proj"></span><span class="time"></span></div>' +
+      '<div class="head"><span class="name"></span><span class="branch"></span><span class="proj"></span><span class="time"></span></div>' +
       '<div class="msg"></div>' +
       "</div>";
     const ic = li.querySelector(".ic");
@@ -418,6 +430,13 @@ function renderEvents(events, done) {
       when.getHours().toString().padStart(2, "0") +
       ":" +
       when.getMinutes().toString().padStart(2, "0");
+    const br = li.querySelector(".branch");
+    if (ev.branch) {
+      br.innerHTML = ICONS.branch + "<span></span>";
+      br.querySelector("span").textContent = ev.branch;
+    } else {
+      br.remove();
+    }
     const proj = li.querySelector(".proj");
     proj.innerHTML = ICONS.focus + "<span></span>";
     proj.querySelector("span").textContent =
@@ -433,7 +452,10 @@ function renderEvents(events, done) {
       const isOpen = expanded.has(key);
       if (!isOpen) msg.classList.add("clamp");
       // Overflow check needs layout: append first, measure after.
-      li.addEventListener("click", () => post("/api/open", { index: i }));
+      li.addEventListener("click", () => {
+        li.classList.remove("unread"); // optimistic; server marks it too
+        post("/api/open", { index: i });
+      });
       list.appendChild(li);
       const overflows = isOpen || msg.scrollHeight > msg.clientHeight + 1;
       if (overflows) {
@@ -449,7 +471,10 @@ function renderEvents(events, done) {
       }
     } else {
       msg.remove();
-      li.addEventListener("click", () => post("/api/open", { index: i }));
+      li.addEventListener("click", () => {
+        li.classList.remove("unread");
+        post("/api/open", { index: i });
+      });
       list.appendChild(li);
     }
   });
@@ -489,7 +514,14 @@ async function refresh() {
     if (document.activeElement !== sel && sel.value !== want) sel.value = want;
     renderLimits(st.limits || {});
     renderUsage(st.usage || { today: {}, week: {} });
-    renderEvents(st.events || [], st.done || 0);
+    renderEvents(st.events || [], st.unread || {});
+    for (const src of ["claude", "codex"]) {
+      const b = $("badge-" + src);
+      const n = (st.unread || {})[src] || 0;
+      const txt = n > 0 ? String(n) : "";
+      if (b.textContent !== txt) b.textContent = txt;
+    }
+    $("plan-chip").textContent = (st.limits && st.limits.plan) || "";
     const mute = $("mute-btn");
     const mstate = st.muted ? "off" : "on";
     if (mute.dataset.state !== mstate) {
@@ -505,6 +537,9 @@ async function refresh() {
 $("lang-sel").addEventListener("change", (e) => post("/api/lang", { lang: e.target.value }));
 $("mute-btn").addEventListener("click", () => post("/api/mute"));
 $("clear-btn").addEventListener("click", () => post("/api/clear"));
+$("readall-btn").addEventListener("click", () =>
+  post("/api/read-all", { source: currentTab || "claude" })
+);
 $("quit-btn").addEventListener("click", () => post("/api/quit"));
 
 $("quit-btn").innerHTML = ICONS.x;

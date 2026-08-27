@@ -110,6 +110,27 @@ body.tab-codex {
 body.tab-codex .badge { color: #1a1a1a; }
 #tab-ink, #tabs .tab, .ev .proj, .more-btn, .text-btn { transition-property: color, background, border-color, transform, width; transition-duration: 0.3s; }
 
+.tab-badge {
+  display: inline-block; min-width: 15px;
+  margin-left: 6px; padding: 0 4px;
+  background: var(--accent); color: #fff;
+  font-size: 9.5px; font-weight: 700; line-height: 15px;
+  border-radius: 999px; text-align: center;
+  vertical-align: 1px;
+  transition: background 0.3s, color 0.3s;
+}
+body.tab-codex .tab-badge { color: #1a1a1a; }
+.tab-badge:empty { display: none; }
+.plan-chip {
+  margin-left: 7px; padding: 1px 7px;
+  background: var(--accent-soft); color: var(--accent);
+  border: 1px solid var(--accent);
+  font-size: 9.5px; font-weight: 700;
+  border-radius: 999px; letter-spacing: 0.04em;
+  vertical-align: 1px;
+}
+.plan-chip:empty { display: none; }
+
 /* ---------- cards ---------- */
 .card {
   background: var(--card);
@@ -268,7 +289,16 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
   from { transform: translateX(-14px); opacity: 0; }
   to { transform: none; opacity: 1; }
 }
-.ev .ic { line-height: 1; padding-top: 2px; }
+.ev .ic { position: relative; line-height: 1; padding-top: 2px; }
+.ev.unread .ic::after { /* unread marker */
+  content: "";
+  position: absolute; top: -1px; right: -3px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 5px var(--accent);
+}
+.ev:not(.unread) { opacity: 0.62; }
+.ev:not(.unread):hover { opacity: 1; }
 .ev .ic svg { width: 15px; height: 15px; display: block; }
 .ev .ic.done { color: var(--good); }
 .ev .ic.attn { color: var(--accent); }
@@ -293,6 +323,13 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
 }
 .ev .proj span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ev .proj svg { width: 10px; height: 10px; flex-shrink: 0; }
+.ev .branch {
+  display: inline-flex; align-items: center; gap: 2px;
+  flex-shrink: 1; min-width: 0; max-width: 90px;
+  color: var(--dim); font-size: 10px;
+}
+.ev .branch span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev .branch svg { width: 10px; height: 10px; flex-shrink: 0; }
 .ev:hover .proj { color: var(--accent); border-color: var(--accent-soft); }
 .ev .msg {
   color: var(--dim); font-size: 11px; line-height: 1.45; margin-top: 2px;

@@ -26,6 +26,7 @@ type limitBucket struct {
 
 type limitsReport struct {
 	Buckets   []limitBucket `json:"buckets"`
+	Plan      string        `json:"plan,omitempty"` // subscription type from stored credentials
 	Error     string        `json:"error,omitempty"`
 	FetchedAt time.Time     `json:"fetchedAt"`
 }
@@ -56,7 +57,8 @@ func (l *limitsFetcher) report() limitsReport {
 
 func fetchLimits() limitsReport {
 	r := limitsReport{FetchedAt: time.Now()}
-	token := oauthAccessToken()
+	token, plan := oauthCredentials()
+	r.Plan = plan
 	if token == "" {
 		r.Error = T("limits.nocreds")
 		return r
@@ -117,9 +119,9 @@ func fetchLimits() limitsReport {
 	return r
 }
 
-// oauthAccessToken reads Claude Code's stored OAuth token: macOS keychain
-// first, then ~/.claude/.credentials.json (Linux/Windows).
-func oauthAccessToken() string {
+// oauthCredentials reads Claude Code's stored OAuth token and subscription
+// type: macOS keychain first, then ~/.claude/.credentials.json.
+func oauthCredentials() (token, plan string) {
 	var data []byte
 	if runtime.GOOS == "darwin" {
 		out, err := exec.Command("security", "find-generic-password",
@@ -131,28 +133,30 @@ func oauthAccessToken() string {
 	if data == nil {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return ""
+			return "", ""
 		}
 		b, err := os.ReadFile(filepath.Join(home, ".claude", ".credentials.json"))
 		if err != nil {
-			return ""
+			return "", ""
 		}
 		data = b
 	}
 	var creds struct {
 		ClaudeAiOauth struct {
-			AccessToken string `json:"accessToken"`
-			ExpiresAt   int64  `json:"expiresAt"` // ms epoch
+			AccessToken      string `json:"accessToken"`
+			ExpiresAt        int64  `json:"expiresAt"` // ms epoch
+			SubscriptionType string `json:"subscriptionType"`
 		} `json:"claudeAiOauth"`
 	}
 	if json.Unmarshal(data, &creds) != nil {
-		return ""
+		return "", ""
 	}
 	c := creds.ClaudeAiOauth
+	plan = strings.Title(strings.ReplaceAll(c.SubscriptionType, "_", " "))
 	if c.ExpiresAt > 0 && time.Now().UnixMilli() > c.ExpiresAt {
-		return ""
+		return "", plan
 	}
-	return c.AccessToken
+	return c.AccessToken, plan
 }
 
 var (

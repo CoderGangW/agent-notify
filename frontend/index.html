@@ -45,15 +45,15 @@
   <nav id="tabs">
     <div class="seg">
       <span id="tab-ink"></span>
-      <button class="tab" data-tab="claude">Claude</button>
-      <button class="tab" data-tab="codex">Codex</button>
+      <button class="tab" data-tab="claude">Claude<span class="tab-badge" id="badge-claude"></span></button>
+      <button class="tab" data-tab="codex">Codex<span class="tab-badge" id="badge-codex"></span></button>
     </div>
     <button id="pin-btn" class="icon-btn" title=""></button>
   </nav>
 
   <section class="card" id="limits-card">
     <div class="card-head">
-      <h2 data-i18n="limits.title">플랜 한도</h2>
+      <h2><span data-i18n="limits.title">플랜 한도</span><span class="plan-chip" id="plan-chip"></span></h2>
       <span class="sub" id="limits-note"></span>
     </div>
     <div id="limits-body" class="gauges"></div>
@@ -76,7 +76,10 @@
   <section class="card grow" id="events-card">
     <div class="card-head">
       <h2><span data-i18n="events.title">세션 이벤트</span> <span class="badge" id="done-badge"></span></h2>
-      <button id="clear-btn" class="text-btn" data-i18n="events.clear">비우기</button>
+      <span>
+        <button id="readall-btn" class="text-btn" data-i18n="events.readAll">모두 읽기</button>
+        <button id="clear-btn" class="text-btn" data-i18n="events.clear">비우기</button>
+      </span>
     </div>
     <ul id="events"></ul>
     <div id="empty" class="empty"><span data-i18n="events.empty">아직 이벤트 없음</span><span data-i18n="events.hint">Claude Code 세션이 끝나면 여기 뜸</span></div>

@@ -27,10 +27,31 @@ const maxEvents = 50
 type daemonState struct {
 	mu     sync.Mutex
 	events []Event // newest first
-	done   int     // completed-task count since last clear
 	muted  bool    // suppress native notifications; events still listed
 	app    *application.App
 	tray   *application.SystemTray
+}
+
+func evSource(ev Event) string {
+	if ev.Source == "codex" {
+		return "codex"
+	}
+	return "claude"
+}
+
+// unreadLocked returns per-source unacknowledged counts; caller holds mu.
+func (s *daemonState) unreadLocked() (claude, codex int) {
+	for _, ev := range s.events {
+		if ev.Read {
+			continue
+		}
+		if evSource(ev) == "codex" {
+			codex++
+		} else {
+			claude++
+		}
+	}
+	return
 }
 
 func runDaemon() {
@@ -138,9 +159,6 @@ func (s *daemonState) add(ev Event) {
 	if len(s.events) > maxEvents {
 		s.events = s.events[:maxEvents]
 	}
-	if ev.Kind == "done" {
-		s.done++
-	}
 	s.mu.Unlock()
 
 	if !muted {
@@ -149,17 +167,17 @@ func (s *daemonState) add(ev Event) {
 	s.refreshBadge()
 }
 
-// refreshBadge mirrors the completed count next to the macOS tray icon.
+// refreshBadge mirrors the unread count next to the macOS tray icon.
 func (s *daemonState) refreshBadge() {
 	if runtime.GOOS != "darwin" {
 		return
 	}
 	s.mu.Lock()
-	done := s.done
+	uc, ux := s.unreadLocked()
 	s.mu.Unlock()
 	label := ""
-	if done > 0 {
-		label = strconv.Itoa(done)
+	if uc+ux > 0 {
+		label = strconv.Itoa(uc + ux)
 	}
 	s.tray.SetLabel(label)
 }
@@ -177,16 +195,17 @@ func (s *daemonState) assetHandler() http.Handler {
 	mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) {
 		cfg := loadConfig()
 		s.mu.Lock()
+		uc, ux := s.unreadLocked()
 		resp := struct {
-			Events      []Event      `json:"events"`
-			Done        int          `json:"done"`
-			Muted       bool         `json:"muted"`
-			Lang        string       `json:"lang"`        // resolved UI language
-			LangSetting string       `json:"langSetting"` // raw config value
-			DefaultTab  string       `json:"defaultTab"`
-			Usage       usageReport  `json:"usage"`
-			Limits      limitsReport `json:"limits"`
-		}{Events: s.events, Done: s.done, Muted: s.muted,
+			Events      []Event        `json:"events"`
+			Unread      map[string]int `json:"unread"` // per-source unacknowledged counts
+			Muted       bool           `json:"muted"`
+			Lang        string         `json:"lang"`        // resolved UI language
+			LangSetting string         `json:"langSetting"` // raw config value
+			DefaultTab  string         `json:"defaultTab"`
+			Usage       usageReport    `json:"usage"`
+			Limits      limitsReport   `json:"limits"`
+		}{Events: s.events, Unread: map[string]int{"claude": uc, "codex": ux}, Muted: s.muted,
 			Lang: resolveLang(cfg.Lang), LangSetting: cfg.Lang, DefaultTab: cfg.DefaultTab}
 		s.mu.Unlock()
 		resp.Usage = usage.report()
@@ -240,7 +259,24 @@ func (s *daemonState) assetHandler() http.Handler {
 	mux.HandleFunc("/api/clear", func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		s.events = nil
-		s.done = 0
+		s.mu.Unlock()
+		s.refreshBadge()
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/read-all", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Source string `json:"source"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		s.mu.Lock()
+		for i := range s.events {
+			if evSource(s.events[i]) == req.Source {
+				s.events[i].Read = true
+			}
+		}
 		s.mu.Unlock()
 		s.refreshBadge()
 		w.WriteHeader(http.StatusNoContent)
@@ -256,9 +292,11 @@ func (s *daemonState) assetHandler() http.Handler {
 		s.mu.Lock()
 		var ev Event
 		if req.Index >= 0 && req.Index < len(s.events) {
+			s.events[req.Index].Read = true // interacting acknowledges it
 			ev = s.events[req.Index]
 		}
 		s.mu.Unlock()
+		s.refreshBadge()
 		// Prefer focusing the window the session ran in (IDE or terminal);
 		// fall back to opening the project folder.
 		if ev.Activate != "" && runtime.GOOS == "darwin" {
@@ -279,9 +317,11 @@ func (s *daemonState) assetHandler() http.Handler {
 		s.mu.Lock()
 		var cwd string
 		if req.Index >= 0 && req.Index < len(s.events) {
+			s.events[req.Index].Read = true // interacting acknowledges it
 			cwd = s.events[req.Index].CWD
 		}
 		s.mu.Unlock()
+		s.refreshBadge()
 		if cwd != "" {
 			openFolder(cwd)
 		}
