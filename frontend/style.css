@@ -619,6 +619,10 @@ footer .foot-actions { display: flex; align-items: center; gap: 2px; }
 #tooltip.show { opacity: 1; transform: none; }
 
 /* ---------- onboarding tour ---------- */
+#tut-block {
+  display: none;
+  position: fixed; inset: 0; z-index: 89; /* under the spotlight/card, over everything else */
+}
 #tut-hole {
   display: none;
   position: fixed; z-index: 90;

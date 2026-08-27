@@ -1035,6 +1035,8 @@ let tutStep = -1;
 let tutEls = null;
 
 function tutBuild() {
+  const block = document.createElement("div");
+  block.id = "tut-block"; // swallows clicks on the UI under the tour
   const hole = document.createElement("div");
   hole.id = "tut-hole";
   const card = document.createElement("div");
@@ -1045,14 +1047,14 @@ function tutBuild() {
     '<button class="text-btn" id="tut-skip"></button>' +
     '<button class="text-btn" id="tut-prev"></button>' +
     '<button class="tut-next" id="tut-next"></button></span></div>';
-  document.body.append(hole, card);
+  document.body.append(block, hole, card);
   card.querySelector("#tut-skip").addEventListener("click", tutEnd);
   card.querySelector("#tut-prev").addEventListener("click", () => tutGo(tutStep - 1));
   card.querySelector("#tut-next").addEventListener("click", () => {
     if (tutStep >= TUT_STEPS.length - 1) tutEnd();
     else tutGo(tutStep + 1);
   });
-  return { hole, card };
+  return { block, hole, card };
 }
 
 function tutGo(i) {
@@ -1073,7 +1075,8 @@ function tutGo(i) {
   if (!target) return tutEnd();
   const r = target.getBoundingClientRect();
   const pad = 6;
-  const { hole, card } = tutEls;
+  const { block, hole, card } = tutEls;
+  block.style.display = "block";
   const first = hole.style.display !== "block"; // entering the tour
   hole.style.cssText =
     `display:block;left:${r.left - pad}px;top:${r.top - pad}px;` +
@@ -1127,6 +1130,7 @@ function tutGo(i) {
 function tutEnd() {
   tutStep = -1;
   if (tutEls) {
+    tutEls.block.style.display = "none";
     tutEls.hole.style.display = "none";
     tutEls.card.style.display = "none";
     tutEls.hole.classList.remove("shown");
