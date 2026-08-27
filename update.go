@@ -16,9 +16,9 @@ import (
 
 // Auto-update, ulio-style but tokenless (public repo): the daemon checks
 // the latest GitHub release, downloads the matching binary, verifies it
-// runs, and swaps it into the stable install path. Under launchd the
-// daemon then exits non-zero so KeepAlive respawns the new version;
-// elsewhere the update applies on next start.
+// runs, and swaps it into the stable install path. A detached helper
+// then relaunches the new version (launchctl kickstart / open) while
+// the old daemon exits; elsewhere the update applies on next start.
 
 const releaseAPI = "https://api.github.com/repos/CoderGangW/agent-notify/releases/latest"
 
@@ -98,9 +98,10 @@ func checkUpdate() (releaseInfo, error) {
 }
 
 // applyUpdate downloads, verifies, and swaps the binary. When restartOK
-// and running as the launchd-managed binary, it exits so KeepAlive brings
-// the new version up and reports restarted=true (the exit is deferred a
-// beat so an HTTP caller gets its response first).
+// and running as an installed copy (CLI path or app bundle), a detached
+// helper relaunches the new version and this process exits, reporting
+// restarted=true (the exit is deferred a beat so an HTTP caller gets its
+// response first).
 func applyUpdate(info releaseInfo, restartOK bool) (bool, error) {
 	if info.AssetURL == "" {
 		return false, fmt.Errorf("no asset for %s-%s in v%s", runtime.GOOS, runtime.GOARCH, info.Latest)
@@ -148,14 +149,23 @@ func applyUpdate(info releaseInfo, restartOK bool) (bool, error) {
 
 	self, _ := os.Executable()
 	self, _ = filepath.EvalSymlinks(self)
-	if restartOK && runtime.GOOS == "darwin" && self == target && os.Getppid() == 1 {
-		// launchd KeepAlive(SuccessfulExit=false) restarts us as the new
-		// version; the event feed rebuilds, config is on disk.
-		go func() {
-			time.Sleep(700 * time.Millisecond)
-			os.Exit(1)
-		}()
-		return true, nil
+	if restartOK && runtime.GOOS == "darwin" && (self == target || self == appBundleBin) {
+		// Hand the relaunch to a detached helper: kickstart the launchd
+		// job when one manages us, else reopen the app bundle, else run
+		// the CLI binary. We exit 0 so a KeepAlive job doesn't also
+		// respawn on top of the helper's instance (the loser of that
+		// race would exit nonzero and put launchd in a respawn loop).
+		script := fmt.Sprintf(
+			"sleep 1; launchctl kickstart -k gui/%d/%s 2>/dev/null || open -b %s 2>/dev/null || (%q daemon >/dev/null 2>&1 &)",
+			os.Getuid(), launchdLabel, launchdLabel, target)
+		helper := exec.Command("/bin/sh", "-c", script)
+		if err := helper.Start(); err == nil {
+			go func() {
+				time.Sleep(700 * time.Millisecond)
+				os.Exit(0)
+			}()
+			return true, nil
+		}
 	}
 	return false, nil
 }
