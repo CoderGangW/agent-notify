@@ -24,8 +24,11 @@ CUR=$(sed -n 's/^const version = "\(.*\)"/\1/p' main.go)
 sed -i '' "s/const version = \"$CUR\"/const version = \"$VERSION\"/" main.go
 sed -i '' "s/\"$CUR\"/\"$VERSION\"/g" build/winres/winres.json
 
-# strip the draft's comment header for the release body
-BODY=$(sed '/^<!--/,/-->$/d' "$NOTES")
+# strip HTML comment blocks for the release body. NOT sed ranges: BSD
+# sed hunts the end pattern on LATER lines only, so a one-line comment
+# swallows the whole file and ships an empty release body.
+BODY=$(awk 'BEGIN{c=0} /<!--/{c=1} c==0{print} /-->/{c=0}' "$NOTES")
+[ -n "$(echo "$BODY" | tr -d '[:space:]-')" ] || { echo "release body came out empty" >&2; exit 1; }
 git add -A && git commit -m "release: $TAG"
 git tag "$TAG"
 git push origin main "$TAG"
