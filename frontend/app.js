@@ -423,6 +423,10 @@ function renderSessions(sessions) {
     proj.querySelector("span").textContent =
       (s.cwd || "").split(/[\\/]/).pop() || "";
     proj.dataset.tip = s.cwd || "";
+    proj.addEventListener("click", (e) => {
+      e.stopPropagation(); // chip opens the folder; the row focuses the window
+      post("/api/folder", { id: s.id });
+    });
     const st = li.querySelector(".statetxt");
     st.textContent = sessionStateText(s);
     const el = li.querySelector(".elapsed");

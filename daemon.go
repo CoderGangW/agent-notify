@@ -324,17 +324,22 @@ func (s *daemonState) assetHandler() http.Handler {
 	})
 	mux.HandleFunc("/api/folder", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Index int `json:"index"`
+			Index *int   `json:"index"` // event by position …
+			ID    string `json:"id"`    // … or live session by id
 		}
 		if json.NewDecoder(r.Body).Decode(&req) != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		s.mu.Lock()
 		var cwd string
-		if req.Index >= 0 && req.Index < len(s.events) {
-			s.events[req.Index].Read = true // interacting acknowledges it
-			cwd = s.events[req.Index].CWD
+		s.mu.Lock()
+		if req.Index != nil && *req.Index >= 0 && *req.Index < len(s.events) {
+			s.events[*req.Index].Read = true // interacting acknowledges it
+			cwd = s.events[*req.Index].CWD
+		} else if req.ID != "" {
+			if info := s.sessions[req.ID]; info != nil {
+				cwd = info.CWD
+			}
 		}
 		s.mu.Unlock()
 		s.refreshBadge()
