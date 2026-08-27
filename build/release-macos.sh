@@ -29,8 +29,9 @@ rm -rf dist && mkdir -p dist
 echo "version $VERSION · signing as: $IDENTITY"
 
 export MACOSX_DEPLOYMENT_TARGET=13.0
-CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/agent-notify-darwin-arm64 .
-CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/agent-notify-darwin-amd64 .
+./build/patch-wails.sh
+CGO_ENABLED=1 GOARCH=arm64 go build -mod=vendor -trimpath -ldflags="-s -w" -o dist/agent-notify-darwin-arm64 .
+CGO_ENABLED=1 GOARCH=amd64 go build -mod=vendor -trimpath -ldflags="-s -w" -o dist/agent-notify-darwin-amd64 .
 
 APP="dist/agent-notify.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"

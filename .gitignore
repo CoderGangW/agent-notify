@@ -4,3 +4,4 @@ nohup.out
 dist/
 rsrc_windows_*.syso
 /agent-notify
+vendor/
