@@ -81,13 +81,13 @@ const I18N = {
     "events.readAll": "Mark all read",
     "sessions.tab": "Active sessions",
     "sessions.empty": "No active sessions",
-    "sessions.hint": "Sessions show up here while Claude Code is working",
+    "sessions.hint": "Sessions appear here while {agent} is running",
     "state.working": "working",
     "state.waiting": "waiting for input",
     "state.idle": "idle",
     "time.ago": "ago",
     "events.empty": "No events yet",
-    "events.hint": "Finished Claude Code sessions show up here",
+    "events.hint": "You\u2019ll see events here when {agent} sessions finish",
     "bucket.five_hour": "5-hour session",
     "bucket.seven_day": "Weekly (all)",
     "bucket.seven_day_sonnet": "Weekly Sonnet",
@@ -116,14 +116,14 @@ const I18N = {
     "events.clear": "비우기",
     "events.readAll": "모두 읽기",
     "sessions.tab": "활성 세션",
-    "sessions.empty": "활성 세션 없음",
-    "sessions.hint": "Claude Code가 작업 중이면 여기 뜸",
+    "sessions.empty": "활성 세션이 없습니다",
+    "sessions.hint": "{agent} 세션이 실행되면 여기에 표시됩니다",
     "state.working": "작업 중",
     "state.waiting": "입력 대기",
     "state.idle": "대기",
     "time.ago": "전",
-    "events.empty": "아직 이벤트 없음",
-    "events.hint": "Claude Code 세션이 끝나면 여기 뜸",
+    "events.empty": "아직 이벤트가 없습니다",
+    "events.hint": "{agent} 세션이 완료되면 여기에 표시됩니다",
     "bucket.five_hour": "5시간 세션",
     "bucket.seven_day": "주간 전체",
     "bucket.seven_day_sonnet": "주간 Sonnet",
@@ -153,13 +153,13 @@ const I18N = {
     "events.readAll": "全部已读",
     "sessions.tab": "活跃会话",
     "sessions.empty": "暂无活跃会话",
-    "sessions.hint": "Claude Code 工作时会显示在这里",
+    "sessions.hint": "{agent} 会话运行时会显示在这里",
     "state.working": "工作中",
     "state.waiting": "等待输入",
     "state.idle": "空闲",
     "time.ago": "前",
     "events.empty": "暂无事件",
-    "events.hint": "Claude Code 会话结束后显示在这里",
+    "events.hint": "{agent} 会话完成后会显示在这里",
     "bucket.five_hour": "5小时会话",
     "bucket.seven_day": "每周（全部）",
     "bucket.seven_day_sonnet": "每周 Sonnet",
@@ -178,7 +178,9 @@ const I18N = {
 };
 
 let lang = "ko";
-const t = (key) => I18N[lang][key] || I18N.en[key] || key;
+const agentName = () => (currentTab === "codex" ? "Codex" : "Claude Code");
+const t = (key) =>
+  (I18N[lang][key] || I18N.en[key] || key).replace("{agent}", agentName());
 
 function applyI18n() {
   document.documentElement.lang = lang;
@@ -413,7 +415,9 @@ function sessionStateText(s) {
   return t("state.idle");
 }
 
-function renderSessions(sessions) {
+function renderSessions(all) {
+  const tab = currentTab || "claude";
+  const sessions = all.filter((s) => (s.source || "claude") === tab);
   $("sess-badge").textContent = "";
   const busy = sessions.filter((s) => s.state === "tool" || s.state === "working").length;
   if (busy > 0) $("sess-badge").textContent = String(busy);
@@ -524,7 +528,10 @@ function applyTab() {
   const pin = $("pin-btn");
   pin.classList.toggle("pinned", currentTab === defaultTab);
   pin.dataset.tip = t("tip.pin");
-  if (lastState) renderEvents(lastState.events || [], lastState.unread || {});
+  if (lastState) {
+    renderSessions(lastState.sessions || []);
+    renderEvents(lastState.events || [], lastState.unread || {});
+  }
 }
 
 document.querySelector("#tabs .seg").addEventListener("click", (e) => {

@@ -13,6 +13,7 @@ import (
 // sessionUpdate is what a hook sends to /session.
 type sessionUpdate struct {
 	SessionID string `json:"session_id"`
+	Source    string `json:"source"` // "claude" (default) | "codex"
 	CWD       string `json:"cwd"`
 	Kind      string `json:"kind"` // prompt | pretool | posttool | idle | waiting | end
 	Tool      string `json:"tool"`
@@ -26,6 +27,7 @@ type sessionUpdate struct {
 // sessionInfo is the daemon-side state exposed to the window.
 type sessionInfo struct {
 	ID        string    `json:"id"`
+	Source    string    `json:"source"`
 	CWD       string    `json:"cwd"`
 	Title     string    `json:"title"` // session title (same chain as events)
 	Task      string    `json:"task"`  // current prompt excerpt
@@ -54,7 +56,11 @@ func (s *daemonState) applySessionUpdate(u sessionUpdate) {
 	}
 	info := s.sessions[u.SessionID]
 	if info == nil {
-		info = &sessionInfo{ID: u.SessionID, TurnStart: now}
+		src := u.Source
+		if src == "" {
+			src = "claude"
+		}
+		info = &sessionInfo{ID: u.SessionID, Source: src, TurnStart: now}
 		s.sessions[u.SessionID] = info
 	}
 	info.LastSeen = now
