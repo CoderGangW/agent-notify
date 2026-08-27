@@ -25,11 +25,12 @@ var frontendFS embed.FS
 const maxEvents = 50
 
 type daemonState struct {
-	mu     sync.Mutex
-	events []Event // newest first
-	muted  bool    // suppress native notifications; events still listed
-	app    *application.App
-	tray   *application.SystemTray
+	mu       sync.Mutex
+	events   []Event // newest first
+	sessions map[string]*sessionInfo
+	muted    bool // suppress native notifications; events still listed
+	app      *application.App
+	tray     *application.SystemTray
 }
 
 func evSource(ev Event) string {
@@ -117,6 +118,19 @@ func (s *daemonState) serve() {
 	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "ok")
 	})
+	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+			return
+		}
+		var u sessionUpdate
+		if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		s.applySessionUpdate(u)
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("/event", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST only", http.StatusMethodNotAllowed)
@@ -198,6 +212,7 @@ func (s *daemonState) assetHandler() http.Handler {
 		uc, ux := s.unreadLocked()
 		resp := struct {
 			Events      []Event        `json:"events"`
+			Sessions    []sessionInfo  `json:"sessions"`
 			Unread      map[string]int `json:"unread"` // per-source unacknowledged counts
 			Muted       bool           `json:"muted"`
 			Lang        string         `json:"lang"`        // resolved UI language
@@ -205,7 +220,8 @@ func (s *daemonState) assetHandler() http.Handler {
 			DefaultTab  string         `json:"defaultTab"`
 			Usage       usageReport    `json:"usage"`
 			Limits      limitsReport   `json:"limits"`
-		}{Events: s.events, Unread: map[string]int{"claude": uc, "codex": ux}, Muted: s.muted,
+		}{Events: s.events, Sessions: s.sessionListLocked(),
+			Unread: map[string]int{"claude": uc, "codex": ux}, Muted: s.muted,
 			Lang: resolveLang(cfg.Lang), LangSetting: cfg.Lang, DefaultTab: cfg.DefaultTab}
 		s.mu.Unlock()
 		resp.Usage = usage.report()
@@ -324,6 +340,27 @@ func (s *daemonState) assetHandler() http.Handler {
 		s.refreshBadge()
 		if cwd != "" {
 			openFolder(cwd)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/focus-session", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID string `json:"id"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		s.mu.Lock()
+		var info sessionInfo
+		if p := s.sessions[req.ID]; p != nil {
+			info = *p
+		}
+		s.mu.Unlock()
+		if info.Activate != "" && runtime.GOOS == "darwin" {
+			_ = exec.Command("open", "-b", info.Activate).Start()
+		} else if info.CWD != "" {
+			openFolder(info.CWD)
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})

@@ -75,13 +75,17 @@
 
   <section class="card grow" id="events-card">
     <div class="card-head">
-      <h2><span data-i18n="events.title">세션 이벤트</span> <span class="badge" id="done-badge"></span></h2>
-      <span>
+      <div class="subtabs">
+        <button class="subtab active" data-subtab="sessions"><span data-i18n="sessions.tab">활성 세션</span><span class="badge" id="sess-badge"></span></button>
+        <button class="subtab" data-subtab="events"><span data-i18n="events.title">이벤트</span><span class="badge" id="done-badge"></span></button>
+      </div>
+      <span id="events-actions">
         <button id="readall-btn" class="text-btn" data-i18n="events.readAll">모두 읽기</button>
         <button id="clear-btn" class="text-btn" data-i18n="events.clear">비우기</button>
       </span>
     </div>
-    <ul id="events"></ul>
+    <ul id="sessions"></ul>
+    <ul id="events" class="hidden"></ul>
     <div id="empty" class="empty"><span data-i18n="events.empty">아직 이벤트 없음</span><span data-i18n="events.hint">Claude Code 세션이 끝나면 여기 뜸</span></div>
   </section>
 </div>

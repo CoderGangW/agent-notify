@@ -57,6 +57,8 @@ const ICONS = {
   check: svgWrap('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'),
   x: svgWrap('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
   chevron: svgWrap('<path d="m6 9 6 6 6-6"/>'),
+  loader: svgWrap('<path d="M21 12a9 9 0 1 1-6.219-8.56"/>'),
+  wrench: svgWrap('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>'),
   clock: svgWrap('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'),
   branch: svgWrap('<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>'),
   pin: svgWrap('<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"/>'),
@@ -77,6 +79,13 @@ const I18N = {
     "events.title": "Session events",
     "events.clear": "Clear",
     "events.readAll": "Mark all read",
+    "sessions.tab": "Active sessions",
+    "sessions.empty": "No active sessions",
+    "sessions.hint": "Sessions show up here while Claude Code is working",
+    "state.working": "working",
+    "state.waiting": "waiting for input",
+    "state.idle": "idle",
+    "time.ago": "ago",
     "events.empty": "No events yet",
     "events.hint": "Finished Claude Code sessions show up here",
     "bucket.five_hour": "5-hour session",
@@ -106,6 +115,13 @@ const I18N = {
     "events.title": "세션 이벤트",
     "events.clear": "비우기",
     "events.readAll": "모두 읽기",
+    "sessions.tab": "활성 세션",
+    "sessions.empty": "활성 세션 없음",
+    "sessions.hint": "Claude Code가 작업 중이면 여기 뜸",
+    "state.working": "작업 중",
+    "state.waiting": "입력 대기",
+    "state.idle": "대기",
+    "time.ago": "전",
     "events.empty": "아직 이벤트 없음",
     "events.hint": "Claude Code 세션이 끝나면 여기 뜸",
     "bucket.five_hour": "5시간 세션",
@@ -135,6 +151,13 @@ const I18N = {
     "events.title": "会话事件",
     "events.clear": "清空",
     "events.readAll": "全部已读",
+    "sessions.tab": "活跃会话",
+    "sessions.empty": "暂无活跃会话",
+    "sessions.hint": "Claude Code 工作时会显示在这里",
+    "state.working": "工作中",
+    "state.waiting": "等待输入",
+    "state.idle": "空闲",
+    "time.ago": "前",
     "events.empty": "暂无事件",
     "events.hint": "Claude Code 会话结束后显示在这里",
     "bucket.five_hour": "5小时会话",
@@ -325,6 +348,105 @@ function renderUsage(u) {
   }
 }
 
+// ---- events-card sub-tabs (active sessions / events) ----
+let subTab = "sessions";
+
+function applySubTab() {
+  for (const b of document.querySelectorAll(".subtab")) {
+    b.classList.toggle("active", b.dataset.subtab === subTab);
+  }
+  $("sessions").classList.toggle("hidden", subTab !== "sessions");
+  $("events").classList.toggle("hidden", subTab !== "events");
+  $("events-actions").classList.toggle("hidden", subTab !== "events");
+  if (lastState) {
+    renderSessions(lastState.sessions || []);
+    renderEvents(lastState.events || [], lastState.unread || {});
+  }
+}
+document.querySelectorAll(".subtab").forEach((b) =>
+  b.addEventListener("click", () => {
+    if (b.dataset.subtab === subTab) return;
+    subTab = b.dataset.subtab;
+    applySubTab();
+  })
+);
+
+function stateIcon(s) {
+  if (s.state === "tool") return ['<span class="ic spin tool">' + ICONS.loader + "</span>", ""];
+  if (s.state === "working") return ['<span class="ic spin work">' + ICONS.loader + "</span>", ""];
+  if (s.state === "waiting") return ['<span class="ic wait">' + ICONS.bellRing + "</span>", ""];
+  return ['<span class="ic idle">' + ICONS.check + "</span>", ""];
+}
+
+function sessionStateText(s) {
+  if (s.state === "tool") return (s.tool || "tool");
+  if (s.state === "working") return t("state.working");
+  if (s.state === "waiting") return t("state.waiting");
+  return t("state.idle");
+}
+
+function renderSessions(sessions) {
+  $("sess-badge").textContent = "";
+  const busy = sessions.filter((s) => s.state === "tool" || s.state === "working").length;
+  if (busy > 0) $("sess-badge").textContent = String(busy);
+  if (subTab !== "sessions") return;
+  const list = $("sessions");
+  const empty = $("empty");
+  empty.classList.toggle("hidden", sessions.length > 0);
+  list.classList.toggle("hidden", sessions.length === 0);
+  if (sessions.length === 0) {
+    list.innerHTML = "";
+    empty.querySelector("[data-i18n]").textContent = t("sessions.empty");
+    empty.querySelectorAll("span")[1].textContent = t("sessions.hint");
+    return;
+  }
+  list.innerHTML = "";
+  for (const s of sessions) {
+    const li = document.createElement("li");
+    li.className = "ev sess " + s.state;
+    li.innerHTML =
+      stateIcon(s)[0] +
+      '<div class="body">' +
+      '<div class="head"><span class="name"></span><span class="branch"></span><span class="proj"></span></div>' +
+      '<div class="meta"><span class="statetxt"></span><i class="sep">·</i>' +
+      '<span class="elapsed" data-ts=""></span></div>' +
+      "</div>";
+    li.querySelector(".name").textContent =
+      s.title || (s.cwd || "").split(/[\\/]/).pop() || "claude";
+    const br = li.querySelector(".branch");
+    if (s.branch) {
+      br.innerHTML = ICONS.branch + "<span></span>";
+      br.querySelector("span").textContent = s.branch;
+    } else br.remove();
+    const proj = li.querySelector(".proj");
+    proj.innerHTML = ICONS.focus + "<span></span>";
+    proj.querySelector("span").textContent =
+      (s.cwd || "").split(/[\\/]/).pop() || "";
+    proj.dataset.tip = s.cwd || "";
+    const st = li.querySelector(".statetxt");
+    st.textContent = sessionStateText(s);
+    const el = li.querySelector(".elapsed");
+    // busy states tick from turn start; quiet states show last activity
+    const busyState = s.state === "tool" || s.state === "working";
+    el.dataset.ts = busyState ? s.turnStart : s.lastSeen;
+    el.dataset.mode = busyState ? "run" : "ago";
+    li.addEventListener("click", () => post("/api/focus-session", { id: s.id }));
+    list.appendChild(li);
+  }
+  tickElapsed();
+}
+
+function tickElapsed() {
+  for (const el of document.querySelectorAll(".elapsed")) {
+    const ts = new Date(el.dataset.ts);
+    if (isNaN(ts)) continue;
+    const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+    el.textContent =
+      el.dataset.mode === "run" ? fmtDur(sec) : fmtDur(sec) + " " + t("time.ago");
+  }
+}
+setInterval(tickElapsed, 1000);
+
 // ---- tabs ----
 let currentTab = null; // set from defaultTab on first state fetch
 let defaultTab = "claude";
@@ -411,8 +533,11 @@ function toggleMsg(msg, btn, key) {
 function renderEvents(events, unread) {
   const tabUnread = (unread || {})[currentTab || "claude"] || 0;
   $("done-badge").textContent = tabUnread > 0 ? String(tabUnread) : "";
+  if (subTab !== "events") return;
   const list = $("events");
   const empty = $("empty");
+  empty.querySelector("[data-i18n]").textContent = t("events.empty");
+  empty.querySelectorAll("span")[1].textContent = t("events.hint");
   const tab = currentTab || "claude";
   const shown = events.filter((ev) => (ev.source || "claude") === tab);
   empty.classList.toggle("hidden", shown.length > 0);
@@ -534,6 +659,7 @@ async function refresh() {
     if (document.activeElement !== sel && sel.value !== want) sel.value = want;
     renderLimits(st.limits || {});
     renderUsage(st.usage || { today: {}, week: {} });
+    renderSessions(st.sessions || []);
     renderEvents(st.events || [], st.unread || {});
     let badgeChanged = false;
     for (const src of ["claude", "codex"]) {
@@ -572,5 +698,6 @@ $("quit-btn").innerHTML = ICONS.x;
 $("mute-btn").innerHTML = ICONS.bell;
 $("pin-btn").innerHTML = ICONS.pin;
 applyI18n();
+applySubTab();
 refresh();
 setInterval(refresh, 2500);

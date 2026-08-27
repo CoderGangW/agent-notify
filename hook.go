@@ -20,6 +20,8 @@ type hookInput struct {
 	CWD            string `json:"cwd"`
 	HookEventName  string `json:"hook_event_name"`
 	Message        string `json:"message"`
+	ToolName       string `json:"tool_name"`
+	Prompt         string `json:"prompt"`
 	TranscriptPath string `json:"transcript_path"`
 	StopHookActive bool   `json:"stop_hook_active"`
 }
@@ -58,6 +60,28 @@ func runHook() {
 		return
 	}
 
+	hostBundle := ""
+	if runtime.GOOS == "darwin" {
+		hostBundle = os.Getenv("__CFBundleIdentifier")
+	}
+
+	// Lightweight live-status events: one POST, no transcript parsing, no
+	// notification. Fired often (every tool call), so stay minimal.
+	switch in.HookEventName {
+	case "UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionEnd":
+		kind := map[string]string{
+			"UserPromptSubmit": "prompt",
+			"PreToolUse":       "pretool",
+			"PostToolUse":      "posttool",
+			"SessionEnd":       "end",
+		}[in.HookEventName]
+		postSession(sessionUpdate{
+			SessionID: in.SessionID, CWD: in.CWD, Kind: kind,
+			Tool: in.ToolName, Prompt: in.Prompt, Activate: hostBundle,
+		})
+		return
+	}
+
 	kind := "done"
 	if in.HookEventName == "Notification" {
 		kind = "attention"
@@ -92,6 +116,16 @@ func runHook() {
 		Message:   in.Message, // Notification events carry their own message
 		Time:      time.Now(),
 	}
+
+	// Keep the live session view in sync: Stop = idle, Notification = waiting.
+	sKind := "idle"
+	if kind == "attention" {
+		sKind = "waiting"
+	}
+	postSession(sessionUpdate{
+		SessionID: in.SessionID, CWD: in.CWD, Kind: sKind,
+		Activate: activate, Title: title, Branch: info.Branch, Model: info.Model,
+	})
 
 	if kind == "done" && ev.Message == "" {
 		if spawnSummarizer(asyncPayload{Event: ev, Request: info.LastUser, Report: info.LastAssistant}) {
@@ -196,6 +230,22 @@ func deliver(ev Event) {
 	}
 	// Daemon not running: degrade to a direct OS notification.
 	deliverNotification(ev)
+}
+
+// postSession best-effort delivers a live-status update; no daemon, no problem.
+func postSession(u sessionUpdate) {
+	buf, err := json.Marshal(u)
+	if err != nil {
+		return
+	}
+	client := http.Client{Timeout: 700 * time.Millisecond}
+	resp, err := client.Post(
+		fmt.Sprintf("http://127.0.0.1:%d/session", daemonPort),
+		"application/json", bytes.NewReader(buf))
+	if err != nil {
+		return
+	}
+	resp.Body.Close()
 }
 
 func postToDaemon(ev Event) bool {

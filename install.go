@@ -114,7 +114,7 @@ func registerHooks(command string) (added, updated int) {
 		settings["hooks"] = hooks
 	}
 
-	for _, event := range []string{"Stop", "Notification"} {
+	for _, event := range []string{"Stop", "Notification", "UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionEnd"} {
 		entries := hookEntries(hooks, event)
 		found := false
 		for _, e := range entries {
@@ -205,7 +205,7 @@ func runUninstall() {
 	}
 
 	removed := 0
-	for _, event := range []string{"Stop", "Notification"} {
+	for _, event := range []string{"Stop", "Notification", "UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionEnd"} {
 		entries := hookEntries(hooks, event)
 		var kept []any
 		for _, e := range entries {
