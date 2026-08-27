@@ -165,6 +165,11 @@ func runInstall() {
 		fmt.Printf(T("install.command")+"\n", command)
 	}
 
+	// explicit install = explicit opt back in
+	if c := loadConfig(); c.DisableAutostart {
+		c.DisableAutostart = false
+		saveConfig(c)
+	}
 	if err := installAutostart(exe, true); err != nil {
 		fmt.Printf(T("install.autostartFail")+"\n", err)
 	} else {
@@ -188,7 +193,9 @@ func firstRunSetup() {
 	if added > 0 || updated > 0 {
 		fmt.Printf(T("install.hooks")+"\n", added, updated, settingsPath())
 	}
-	_ = installAutostart(installed, false)
+	if !loadConfig().DisableAutostart {
+		_ = installAutostart(installed, false)
+	}
 }
 
 func runUninstall() {

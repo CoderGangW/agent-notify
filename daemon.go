@@ -477,6 +477,7 @@ func (s *daemonState) assetHandler() http.Handler {
 			DisableAISummary  *bool   `json:"disableAISummary"`
 			DisableLiveStatus *bool   `json:"disableLiveStatus"`
 			Theme             *string `json:"theme"`
+			Autostart         *bool   `json:"autostart"`
 		}
 		if json.NewDecoder(r.Body).Decode(&req) != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
@@ -513,6 +514,19 @@ func (s *daemonState) assetHandler() http.Handler {
 			case "", "auto", "light", "dark":
 				c.Theme = *req.Theme
 			}
+		}
+		if req.Autostart != nil {
+			c.DisableAutostart = !*req.Autostart
+			if *req.Autostart {
+				if bin := installDest(); bin != "" {
+					_ = installAutostart(bin, false)
+				}
+			} else {
+				removeAutostartFiles()
+			}
+			setupMu.Lock()
+			setupChecked = time.Time{} // welcome checklist re-checks
+			setupMu.Unlock()
 		}
 		saveConfig(c)
 		w.WriteHeader(http.StatusNoContent)

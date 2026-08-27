@@ -15,6 +15,7 @@ type config struct {
 	DisableAISummary  bool   `json:"disableAISummary,omitempty"`  // skip the haiku one-liner
 	DisableLiveStatus bool   `json:"disableLiveStatus,omitempty"` // skip live session updates
 	Theme             string `json:"theme,omitempty"`             // "auto" (default) | "light" | "dark"
+	DisableAutostart  bool   `json:"disableAutostart,omitempty"`  // don't (re)register login autostart
 }
 
 func configPath() string {

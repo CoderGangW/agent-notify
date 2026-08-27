@@ -762,6 +762,7 @@ function renderSettings(cfg) {
   $("sw-ai").classList.toggle("on", !cfg.disableAISummary);
   $("sw-live").classList.toggle("on", !cfg.disableLiveStatus);
   $("sw-update").classList.toggle("on", !cfg.disableAutoUpdate);
+  $("sw-autostart").classList.toggle("on", !cfg.disableAutostart);
 }
 
 function bindSwitch(id, build) {
@@ -775,6 +776,7 @@ bindSwitch("sw-mute", (on) => ({ muted: on }));
 bindSwitch("sw-ai", (on) => ({ disableAISummary: !on }));
 bindSwitch("sw-live", (on) => ({ disableLiveStatus: !on }));
 bindSwitch("sw-update", (on) => ({ disableAutoUpdate: !on }));
+bindSwitch("sw-autostart", (on) => ({ autostart: on }));
 $("set-tab").addEventListener("change", (e) => post("/api/settings", { defaultTab: e.target.value }));
 
 // ---- update footer ----

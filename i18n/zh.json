@@ -35,6 +35,8 @@
   "sessions.tab": "活跃会话",
   "set.ai": "AI 摘要",
   "set.ai.d": "用 haiku 总结完成通知（消耗少量令牌）",
+  "set.autostart": "登录时自动启动",
+  "set.autostart.d": "登录后自动运行守护进程",
   "set.lang": "语言",
   "set.live": "实时会话跟踪",
   "set.live.d": "活跃会话标签的状态更新",

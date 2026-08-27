@@ -35,6 +35,8 @@
   "sessions.tab": "활성 세션",
   "set.ai": "AI 요약",
   "set.ai.d": "완료 알림 본문을 haiku로 요약합니다 (토큰 소량 사용)",
+  "set.autostart": "로그인 시 자동 시작",
+  "set.autostart.d": "로그인하면 데몬을 자동으로 실행합니다",
   "set.lang": "언어",
   "set.live": "실시간 세션 추적",
   "set.live.d": "활성 세션 탭의 상태 업데이트",

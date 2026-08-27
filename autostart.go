@@ -151,3 +151,23 @@ Categories=Utility;
 `, exe)
 	_ = os.WriteFile(filepath.Join(appDir, "agent-notify.desktop"), []byte(content), 0o644)
 }
+
+// removeAutostartFiles unregisters login autostart WITHOUT touching the
+// running daemon (uninstallAutostart boots the launchd job out, which
+// would kill the process serving the settings toggle).
+func removeAutostartFiles() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		_ = os.Remove(filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist"))
+	case "windows":
+		_ = exec.Command("reg", "delete",
+			`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
+			"/v", "agent-notify", "/f").Run()
+	default:
+		_ = os.Remove(filepath.Join(home, ".config", "autostart", "agent-notify.desktop"))
+	}
+}

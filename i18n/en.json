@@ -35,6 +35,8 @@
   "sessions.tab": "Active sessions",
   "set.ai": "AI summary",
   "set.ai.d": "Summarize completion notifications with haiku (uses a few tokens)",
+  "set.autostart": "Start at login",
+  "set.autostart.d": "Launch the daemon automatically when you log in",
   "set.lang": "Language",
   "set.live": "Live session tracking",
   "set.live.d": "Status updates for the Active sessions tab",
