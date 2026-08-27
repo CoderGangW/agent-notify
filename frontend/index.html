@@ -58,7 +58,10 @@
   <section class="card" id="usage-card">
     <div class="card-head">
       <h2 data-i18n="usage.title">토큰 사용량</h2>
-      <span class="sub" data-i18n="usage.local">로컬 트랜스크립트 합산</span>
+      <span class="head-right">
+        <span class="sub" data-i18n="usage.local">로컬 트랜스크립트 합산</span>
+        <button id="stats-btn" class="icon-btn"></button>
+      </span>
     </div>
     <div class="usage-grid">
       <div class="stat"><span class="num" id="u-today">–</span><span class="lbl" data-i18n="usage.today">오늘</span></div>
@@ -123,6 +126,29 @@
       <div><span data-i18n="set.reset">앱 초기화</span><small data-i18n="set.reset.d"></small></div>
       <button class="fix-btn" id="reset-onboarding" data-i18n="set.reset.btn">초기화</button>
     </div>
+  </div>
+  </div>
+
+  <div id="stats-overlay" class="hidden">
+  <div id="stats-panel">
+    <div class="set-head">
+      <h3 data-i18n="stats.title">사용량 통계</h3>
+      <button id="stats-close" class="icon-btn"></button>
+    </div>
+    <div class="stats-bar">
+      <div class="subtabs" id="stats-gran">
+        <button class="subtab" data-gran="hour" data-i18n="stats.hour">시간별</button>
+        <button class="subtab active" data-gran="day" data-i18n="stats.day">일별</button>
+        <button class="subtab" data-gran="month" data-i18n="stats.month">월별</button>
+      </div>
+      <span class="legend">
+        <i class="sw out"></i><span data-i18n="stats.out">출력</span>
+        <i class="sw in"></i><span data-i18n="stats.in">입력</span>
+      </span>
+    </div>
+    <div id="chart"></div>
+    <div id="chart-x"></div>
+    <p class="zoom-hint" data-i18n="stats.zoom"></p>
   </div>
   </div>
 

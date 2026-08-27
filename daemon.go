@@ -565,6 +565,10 @@ func (s *daemonState) assetHandler() http.Handler {
 		saveConfig(c)
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(usage.stats())
+	})
 	mux.HandleFunc("/api/setup-fix", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Item string `json:"item"`

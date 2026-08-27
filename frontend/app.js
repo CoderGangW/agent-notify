@@ -66,6 +66,7 @@ const ICONS = {
   focus: svgWrap('<path d="M7 7h10v10"/><path d="M7 17 17 7"/>'),
   rotate: svgWrap('<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>'),
   github: svgWrap('<path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/>'),
+  chart: svgWrap('<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>'),
   gear: svgWrap('<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'),
   help: svgWrap('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>'),
 };
@@ -100,6 +101,7 @@ function applyI18n() {
   $("gh-btn").dataset.tip = t("tip.github");
   $("pin-btn").dataset.tip = t("tip.pin");
   $("settings-btn").dataset.tip = t("tip.settings");
+  $("stats-btn").dataset.tip = t("tip.stats");
   ddTheme.render();
 }
 
@@ -879,6 +881,94 @@ $("reset-onboarding").addEventListener("click", () => {
 });
 
 
+
+// ---- usage statistics modal ----
+let statsData = null;
+let statsGran = "day"; // default daily; wheel zooms hour ↔ day ↔ month
+const GRANS = ["hour", "day", "month"];
+
+function statsLabel(pt, gran) {
+  if (gran === "hour") {
+    const [d, h] = pt.t.split("T");
+    return d.slice(5).replace("-", "/") + " " + h + ":00";
+  }
+  if (gran === "day") return pt.t.slice(5).replace("-", "/");
+  return pt.t.replace("-", "/");
+}
+
+function renderStats() {
+  if (!statsData) return;
+  for (const b of document.querySelectorAll("#stats-gran .subtab")) {
+    b.classList.toggle("active", b.dataset.gran === statsGran);
+  }
+  const pts =
+    statsGran === "hour" ? statsData.hourly
+    : statsGran === "day" ? statsData.daily
+    : statsData.monthly;
+  const chart = $("chart");
+  const xs = $("chart-x");
+  chart.innerHTML = "";
+  xs.innerHTML = "";
+  const max = Math.max(1, ...pts.map((p) => p.in + p.out));
+  pts.forEach((p, i) => {
+    const col = document.createElement("div");
+    col.className = "cbar";
+    const total = p.in + p.out;
+    const hIn = Math.round((p.in / max) * 100);
+    const hOut = Math.round((p.out / max) * 100);
+    col.innerHTML =
+      '<i class="seg in" style="height:' + hIn + '%"></i>' +
+      '<i class="seg out" style="height:' + hOut + '%"></i>';
+    col.dataset.tip =
+      statsLabel(p, statsGran) +
+      " · " + t("stats.out") + " " + fmtTokens(p.out) +
+      " · " + t("stats.in") + " " + fmtTokens(p.in);
+    if (total === 0) col.classList.add("zero");
+    chart.appendChild(col);
+    // sparse x labels: ~6 ticks
+    const step = Math.max(1, Math.ceil(pts.length / 6));
+    if (i % step === 0) {
+      const lab = document.createElement("span");
+      lab.textContent = statsLabel(p, statsGran);
+      lab.style.left = ((i + 0.5) / pts.length) * 100 + "%";
+      xs.appendChild(lab);
+    }
+  });
+}
+
+async function openStats() {
+  $("stats-overlay").classList.remove("hidden");
+  try {
+    statsData = await (await fetch("/api/stats")).json();
+  } catch (_) {}
+  renderStats();
+}
+$("stats-btn").addEventListener("click", openStats);
+$("stats-close").addEventListener("click", () => $("stats-overlay").classList.add("hidden"));
+$("stats-overlay").addEventListener("click", (e) => {
+  if (e.target === $("stats-overlay")) $("stats-overlay").classList.add("hidden");
+});
+document.querySelectorAll("#stats-gran .subtab").forEach((b) =>
+  b.addEventListener("click", () => {
+    statsGran = b.dataset.gran;
+    renderStats();
+  })
+);
+// wheel zoom: scroll up (zoom in) → finer buckets, down → coarser
+let wheelLock = 0;
+$("chart").addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const now = Date.now();
+  if (now - wheelLock < 350) return;
+  wheelLock = now;
+  const i = GRANS.indexOf(statsGran);
+  const j = e.deltaY < 0 ? Math.max(0, i - 1) : Math.min(GRANS.length - 1, i + 1);
+  if (j !== i) {
+    statsGran = GRANS[j];
+    renderStats();
+  }
+}, { passive: false });
+
 // ---- update footer ----
 let updState = "idle"; // idle | checking | latest | available | applying | done
 let updLatest = "";
@@ -1117,11 +1207,11 @@ function greetIntro(onDone) {
   const btn = cta.querySelector("button");
   btn.textContent = t("greet.start");
   btn.addEventListener("click", () => {
-    ov.classList.add("out");
+    ov.classList.add("out"); // whole-screen fade, then the tour begins
     setTimeout(() => {
       ov.remove();
       if (onDone) onDone();
-    }, 650);
+    }, 750);
   });
   ov.appendChild(cta);
   document.body.appendChild(ov);
@@ -1165,6 +1255,8 @@ $("restart-btn").addEventListener("click", () => {
 $("quit-btn").innerHTML = ICONS.x;
 $("help-btn").innerHTML = ICONS.help;
 $("settings-btn").innerHTML = ICONS.gear;
+$("stats-btn").innerHTML = ICONS.chart;
+$("stats-close").innerHTML = ICONS.x;
 $("settings-close").innerHTML = ICONS.x;
 $("restart-btn").innerHTML = ICONS.rotate;
 $("gh-btn").innerHTML = ICONS.github;
