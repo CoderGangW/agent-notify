@@ -268,6 +268,25 @@ func (s *daemonState) assetHandler() http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("/api/folder", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Index int `json:"index"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		s.mu.Lock()
+		var cwd string
+		if req.Index >= 0 && req.Index < len(s.events) {
+			cwd = s.events[req.Index].CWD
+		}
+		s.mu.Unlock()
+		if cwd != "" {
+			openFolder(cwd)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		go s.app.Quit()

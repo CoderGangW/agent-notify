@@ -420,6 +420,10 @@ function renderEvents(events, done) {
     proj.querySelector("span").textContent =
       (ev.cwd || "").split(/[\\/]/).pop() || "claude";
     proj.dataset.tip = ev.cwd || "";
+    proj.addEventListener("click", (e) => {
+      e.stopPropagation(); // chip opens the folder; the row focuses the window
+      post("/api/folder", { index: i });
+    });
     const msg = li.querySelector(".msg");
     if (ev.message) {
       msg.textContent = ev.message;

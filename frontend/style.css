@@ -259,7 +259,10 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
   cursor: pointer;
   transition: background 0.15s;
 }
-.ev:hover { background: var(--accent-soft); }
+/* row highlight only when the pointer is on the row itself, not on the
+   chip/expand controls that have their own hover affordance */
+.ev:hover:not(:has(.proj:hover, .more-btn:hover)) { background: var(--accent-soft); }
+.ev .proj:hover { color: var(--accent); border-color: var(--accent); }
 .ev.new { animation: slide-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
 @keyframes slide-in {
   from { transform: translateX(-14px); opacity: 0; }
