@@ -168,8 +168,8 @@ var (
 // unknown user agents hard, so a real version string matters.
 func claudeCLIVersion() string {
 	cliVersionOnce.Do(func() {
-		claude, err := exec.LookPath("claude")
-		if err != nil {
+		claude := findCLI("claude")
+		if claude == "" {
 			return
 		}
 		out, err := exec.Command(claude, "--version").Output()

@@ -46,19 +46,27 @@ func deliverNotification(ev Event) {
 	_ = beeep.Notify(title, body, "")
 }
 
-// findTerminalNotifier checks PATH plus the usual Homebrew locations,
-// since a login-item daemon may not inherit a brew-aware PATH.
-func findTerminalNotifier() string {
-	if p, err := exec.LookPath("terminal-notifier"); err == nil {
+// findCLI resolves a command via PATH plus the usual install locations —
+// a launchd daemon's PATH is just /usr/bin:/bin and misses homebrew and
+// ~/.local/bin.
+func findCLI(name string) string {
+	if p, err := exec.LookPath(name); err == nil {
 		return p
 	}
-	for _, p := range []string{"/opt/homebrew/bin/terminal-notifier", "/usr/local/bin/terminal-notifier"} {
-		if _, err := os.Stat(p); err == nil {
+	dirs := []string{"/opt/homebrew/bin", "/usr/local/bin"}
+	if home, err := os.UserHomeDir(); err == nil {
+		dirs = append([]string{filepath.Join(home, ".local", "bin"), filepath.Join(home, ".claude", "local")}, dirs...)
+	}
+	for _, d := range dirs {
+		p := filepath.Join(d, name)
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
 			return p
 		}
 	}
 	return ""
 }
+
+func findTerminalNotifier() string { return findCLI("terminal-notifier") }
 
 func notificationText(ev Event) (title, body string) {
 	name := ev.Title

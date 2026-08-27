@@ -226,8 +226,8 @@ func aiSummarize(request, report string) string {
 		strings.TrimSpace(report) == "" {
 		return ""
 	}
-	claude, err := exec.LookPath("claude")
-	if err != nil {
+	claude := findCLI("claude")
+	if claude == "" {
 		return ""
 	}
 

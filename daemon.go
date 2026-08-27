@@ -238,8 +238,7 @@ func computeSetup() setupStatus {
 		}
 	}
 	st.TerminalNotifier = runtime.GOOS != "darwin" || findTerminalNotifier() != ""
-	_, err := exec.LookPath("claude")
-	st.ClaudeCLI = err == nil
+	st.ClaudeCLI = findCLI("claude") != ""
 	setupCached, setupChecked = st, time.Now()
 	return st
 }
