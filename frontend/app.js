@@ -348,6 +348,34 @@ function renderUsage(u) {
   }
 }
 
+// reconcile keeps DOM rows keyed and updates them in place — full
+// innerHTML rebuilds every poll made the whole card flash and dropped
+// hover/animation state.
+function reconcile(list, items, keyFn, createFn, updateFn) {
+  const byKey = new Map();
+  for (const el of [...list.children]) byKey.set(el.dataset.key, el);
+  let prev = null;
+  items.forEach((it, i) => {
+    const k = keyFn(it, i);
+    let el = byKey.get(k);
+    if (el) byKey.delete(k);
+    else {
+      el = createFn(it);
+      el.dataset.key = k;
+    }
+    // insert before updating: updateFn may measure layout (overflow checks)
+    const want = prev ? prev.nextSibling : list.firstChild;
+    if (el !== want) list.insertBefore(el, want);
+    updateFn(el, it, i);
+    prev = el;
+  });
+  for (const el of byKey.values()) el.remove();
+}
+
+function setText(el, txt) {
+  if (el.textContent !== txt) el.textContent = txt;
+}
+
 // ---- events-card sub-tabs (active sessions / events) ----
 let subTab = "sessions";
 
@@ -400,43 +428,59 @@ function renderSessions(sessions) {
     empty.querySelectorAll("span")[1].textContent = t("sessions.hint");
     return;
   }
-  list.innerHTML = "";
-  for (const s of sessions) {
-    const li = document.createElement("li");
-    li.className = "ev sess " + s.state;
-    li.innerHTML =
-      stateIcon(s)[0] +
-      '<div class="body">' +
-      '<div class="head"><span class="name"></span><span class="branch"></span><span class="proj"></span></div>' +
-      '<div class="meta"><span class="statetxt"></span><i class="sep">·</i>' +
-      '<span class="elapsed" data-ts=""></span></div>' +
-      "</div>";
-    li.querySelector(".name").textContent =
-      s.title || (s.cwd || "").split(/[\\/]/).pop() || "claude";
-    const br = li.querySelector(".branch");
-    if (s.branch) {
-      br.innerHTML = ICONS.branch + "<span></span>";
-      br.querySelector("span").textContent = s.branch;
-    } else br.remove();
-    const proj = li.querySelector(".proj");
-    proj.innerHTML = ICONS.focus + "<span></span>";
-    proj.querySelector("span").textContent =
-      (s.cwd || "").split(/[\\/]/).pop() || "";
-    proj.dataset.tip = s.cwd || "";
-    proj.addEventListener("click", (e) => {
-      e.stopPropagation(); // chip opens the folder; the row focuses the window
-      post("/api/folder", { id: s.id });
-    });
-    const st = li.querySelector(".statetxt");
-    st.textContent = sessionStateText(s);
-    const el = li.querySelector(".elapsed");
-    // busy states tick from turn start; quiet states show last activity
-    const busyState = s.state === "tool" || s.state === "working";
-    el.dataset.ts = busyState ? s.turnStart : s.lastSeen;
-    el.dataset.mode = busyState ? "run" : "ago";
-    li.addEventListener("click", () => post("/api/focus-session", { id: s.id }));
-    list.appendChild(li);
-  }
+
+  reconcile(
+    list,
+    sessions,
+    (s) => s.id,
+    (s) => {
+      const li = document.createElement("li");
+      li.innerHTML =
+        '<span class="ic"></span>' +
+        '<div class="body">' +
+        '<div class="head"><span class="name"></span><span class="branch"></span><span class="proj"></span></div>' +
+        '<div class="meta"><span class="statetxt"></span><i class="sep">·</i>' +
+        '<span class="elapsed" data-ts=""></span></div>' +
+        "</div>";
+      li.querySelector(".proj").addEventListener("click", (e) => {
+        e.stopPropagation(); // chip opens the folder; the row focuses the window
+        post("/api/folder", { id: li.dataset.sid });
+      });
+      li.addEventListener("click", () =>
+        post("/api/focus-session", { id: li.dataset.sid })
+      );
+      return li;
+    },
+    (li, s) => {
+      li.dataset.sid = s.id;
+      li.className = "ev sess " + s.state;
+      const ic = li.querySelector(".ic");
+      if (ic.dataset.state !== s.state) {
+        ic.dataset.state = s.state;
+        if (s.state === "tool") { ic.className = "ic spin tool"; ic.innerHTML = ICONS.loader; }
+        else if (s.state === "working") { ic.className = "ic spin work"; ic.innerHTML = ICONS.loader; }
+        else if (s.state === "waiting") { ic.className = "ic wait"; ic.innerHTML = ICONS.bellRing; }
+        else { ic.className = "ic idle"; ic.innerHTML = ICONS.check; }
+      }
+      setText(li.querySelector(".name"),
+        s.title || (s.cwd || "").split(/[\\/]/).pop() || "claude");
+      const br = li.querySelector(".branch");
+      if (s.branch) {
+        if (!br.firstChild) br.innerHTML = ICONS.branch + "<span></span>";
+        setText(br.querySelector("span"), s.branch);
+        br.style.display = "";
+      } else br.style.display = "none";
+      const proj = li.querySelector(".proj");
+      if (!proj.firstChild) proj.innerHTML = ICONS.focus + "<span></span>";
+      setText(proj.querySelector("span"), (s.cwd || "").split(/[\\/]/).pop() || "");
+      proj.dataset.tip = s.cwd || "";
+      setText(li.querySelector(".statetxt"), sessionStateText(s));
+      const el = li.querySelector(".elapsed");
+      const busyState = s.state === "tool" || s.state === "working";
+      el.dataset.ts = busyState ? s.turnStart : s.lastSeen;
+      el.dataset.mode = busyState ? "run" : "ago";
+    }
+  );
   tickElapsed();
 }
 
@@ -542,91 +586,112 @@ function renderEvents(events, unread) {
   const empty = $("empty");
   empty.querySelector("[data-i18n]").textContent = t("events.empty");
   empty.querySelectorAll("span")[1].textContent = t("events.hint");
+
   const tab = currentTab || "claude";
-  const shown = events.filter((ev) => (ev.source || "claude") === tab);
+  const shown = [];
+  events.forEach((ev, i) => {
+    if ((ev.source || "claude") === tab) shown.push([ev, i]);
+  });
   empty.classList.toggle("hidden", shown.length > 0);
   list.classList.toggle("hidden", shown.length === 0);
 
-  list.innerHTML = "";
-  events.forEach((ev, i) => {
-    if ((ev.source || "claude") !== tab) return;
-    const key = evKey(ev);
-    const li = document.createElement("li");
-    li.className =
-      "ev" +
-      (knownNewest && ev.time > knownNewest ? " new" : "") +
-      (ev.read ? "" : " unread");
-    const when = new Date(ev.time);
-    li.innerHTML =
-      '<span class="ic"></span>' +
-      '<div class="body">' +
-      '<div class="head"><span class="name"></span><span class="branch"></span><span class="proj"></span><span class="time"></span></div>' +
-      '<div class="meta"></div>' +
-      '<div class="msg"></div>' +
-      "</div>";
-    const ic = li.querySelector(".ic");
-    ic.className = "ic " + (ev.kind === "attention" ? "attn" : "done");
-    ic.innerHTML = ev.kind === "attention" ? ICONS.bellRing : ICONS.check;
-    li.querySelector(".name").textContent =
-      ev.title || (ev.cwd || "").split("/").pop() || "claude";
-    li.querySelector(".time").textContent =
-      when.getHours().toString().padStart(2, "0") +
-      ":" +
-      when.getMinutes().toString().padStart(2, "0");
-    const br = li.querySelector(".branch");
-    if (ev.branch) {
-      br.innerHTML = ICONS.branch + "<span></span>";
-      br.querySelector("span").textContent = ev.branch;
-    } else {
-      br.remove();
-    }
-    const meta = li.querySelector(".meta");
-    const bits = [];
-    if (ev.durSec > 0) bits.push(ICONS.clock + "<span>" + fmtDur(ev.durSec) + "</span>");
-    if (ev.model) bits.push("<span>" + shortModel(ev.model) + "</span>");
-    if (bits.length) meta.innerHTML = bits.join('<i class="sep">·</i>');
-    else meta.remove();
-    const proj = li.querySelector(".proj");
-    proj.innerHTML = ICONS.focus + "<span></span>";
-    proj.querySelector("span").textContent =
-      (ev.cwd || "").split(/[\\/]/).pop() || "claude";
-    proj.dataset.tip = ev.cwd || "";
-    proj.addEventListener("click", (e) => {
-      e.stopPropagation(); // chip opens the folder; the row focuses the window
-      post("/api/folder", { index: i });
-    });
-    const msg = li.querySelector(".msg");
-    if (ev.message) {
-      msg.textContent = ev.message;
-      const isOpen = expanded.has(key);
-      if (!isOpen) msg.classList.add("clamp");
-      // Overflow check needs layout: append first, measure after.
+  reconcile(
+    list,
+    shown,
+    ([ev]) => evKey(ev),
+    ([ev]) => {
+      const li = document.createElement("li");
+      if (knownNewest && ev.time > knownNewest) li.classList.add("new");
+      li.innerHTML =
+        '<span class="ic"></span>' +
+        '<div class="body">' +
+        '<div class="head"><span class="name"></span><span class="branch"></span><span class="proj"></span><span class="time"></span></div>' +
+        '<div class="meta"></div>' +
+        '<div class="msg clamp"></div>' +
+        "</div>";
+      li.querySelector(".proj").addEventListener("click", (e) => {
+        e.stopPropagation(); // chip opens the folder; the row focuses the window
+        post("/api/folder", { index: +li.dataset.index });
+      });
       li.addEventListener("click", () => {
         li.classList.remove("unread"); // optimistic; server marks it too
-        post("/api/open", { index: i });
+        post("/api/open", { index: +li.dataset.index });
       });
-      list.appendChild(li);
-      const overflows = isOpen || msg.scrollHeight > msg.clientHeight + 1;
-      if (overflows) {
-        const btn = document.createElement("button");
-        btn.className = "more-btn" + (isOpen ? " open" : "");
-        btn.innerHTML = "<span></span>" + ICONS.chevron;
-        btn.querySelector("span").textContent = t(isOpen ? "events.less" : "events.more");
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          toggleMsg(msg, btn, key);
-        });
-        li.querySelector(".body").appendChild(btn);
+      return li;
+    },
+    (li, [ev, idx]) => {
+      li.dataset.index = idx;
+      li.classList.toggle("unread", !ev.read);
+      li.classList.add("ev");
+      const key = evKey(ev);
+      const ic = li.querySelector(".ic");
+      const kindCls = "ic " + (ev.kind === "attention" ? "attn" : "done");
+      if (ic.dataset.kind !== ev.kind) {
+        ic.dataset.kind = ev.kind;
+        ic.className = kindCls;
+        ic.innerHTML = ev.kind === "attention" ? ICONS.bellRing : ICONS.check;
       }
-    } else {
-      msg.remove();
-      li.addEventListener("click", () => {
-        li.classList.remove("unread");
-        post("/api/open", { index: i });
-      });
-      list.appendChild(li);
+      setText(li.querySelector(".name"),
+        ev.title || (ev.cwd || "").split(/[\\/]/).pop() || "claude");
+      const when = new Date(ev.time);
+      setText(li.querySelector(".time"),
+        when.getHours().toString().padStart(2, "0") + ":" +
+        when.getMinutes().toString().padStart(2, "0"));
+      const br = li.querySelector(".branch");
+      if (ev.branch) {
+        if (!br.firstChild) br.innerHTML = ICONS.branch + "<span></span>";
+        setText(br.querySelector("span"), ev.branch);
+        br.style.display = "";
+      } else br.style.display = "none";
+      const proj = li.querySelector(".proj");
+      if (!proj.firstChild) proj.innerHTML = ICONS.focus + "<span></span>";
+      setText(proj.querySelector("span"), (ev.cwd || "").split(/[\\/]/).pop() || "");
+      proj.dataset.tip = ev.cwd || "";
+      const meta = li.querySelector(".meta");
+      const bits = [];
+      if (ev.durSec > 0) bits.push(ICONS.clock + "<span>" + fmtDur(ev.durSec) + "</span>");
+      if (ev.model) bits.push("<span>" + shortModel(ev.model) + "</span>");
+      const metaHTML = bits.join('<i class="sep">·</i>');
+      if (meta.dataset.html !== metaHTML) {
+        meta.dataset.html = metaHTML;
+        meta.innerHTML = metaHTML;
+      }
+      meta.style.display = metaHTML ? "" : "none";
+      const msg = li.querySelector(".msg");
+      if (ev.message) {
+        msg.style.display = "";
+        const changed = msg.dataset.txt !== ev.message;
+        if (changed) {
+          msg.dataset.txt = ev.message;
+          msg.textContent = ev.message;
+        }
+        const isOpen = expanded.has(key);
+        msg.classList.toggle("clamp", !isOpen);
+        // (re)evaluate the show-more toggle when content changed
+        let btn = li.querySelector(".more-btn");
+        if (changed || !btn) {
+          const overflows = isOpen || msg.scrollHeight > msg.clientHeight + 1;
+          if (overflows && !btn) {
+            btn = document.createElement("button");
+            btn.className = "more-btn" + (isOpen ? " open" : "");
+            btn.innerHTML = "<span></span>" + ICONS.chevron;
+            btn.querySelector("span").textContent = t(isOpen ? "events.less" : "events.more");
+            btn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              toggleMsg(msg, btn, key);
+            });
+            li.querySelector(".body").appendChild(btn);
+          } else if (!overflows && btn && !isOpen) {
+            btn.remove();
+          }
+        }
+      } else {
+        msg.style.display = "none";
+        const btn = li.querySelector(".more-btn");
+        if (btn) btn.remove();
+      }
     }
-  });
+  );
   if (events.length > 0) knownNewest = events[0].time;
 }
 
