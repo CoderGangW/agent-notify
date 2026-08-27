@@ -1074,6 +1074,7 @@ function tutGo(i) {
   const r = target.getBoundingClientRect();
   const pad = 6;
   const { hole, card } = tutEls;
+  const first = hole.style.display !== "block"; // entering the tour
   hole.style.cssText =
     `display:block;left:${r.left - pad}px;top:${r.top - pad}px;` +
     `width:${r.width + pad * 2}px;height:${r.height + pad * 2}px;`;
@@ -1107,6 +1108,20 @@ function tutGo(i) {
   let y = r.bottom + pad + 10;
   if (y + ch > window.innerHeight - 8) y = r.top - pad - ch - 10;
   card.style.top = Math.max(8, y) + "px";
+  // first frame of the tour eases in instead of popping
+  if (first) {
+    hole.classList.remove("shown");
+    card.classList.remove("shown");
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        hole.classList.add("shown");
+        card.classList.add("shown");
+      })
+    );
+  } else {
+    hole.classList.add("shown");
+    card.classList.add("shown");
+  }
 }
 
 function tutEnd() {
@@ -1114,6 +1129,8 @@ function tutEnd() {
   if (tutEls) {
     tutEls.hole.style.display = "none";
     tutEls.card.style.display = "none";
+    tutEls.hole.classList.remove("shown");
+    tutEls.card.classList.remove("shown");
   }
   try {
     localStorage.setItem("tutorialDone", "1");

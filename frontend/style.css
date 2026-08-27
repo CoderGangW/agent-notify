@@ -626,9 +626,12 @@ footer .foot-actions { display: flex; align-items: center; gap: 2px; }
   box-shadow: 0 0 0 9999px rgba(10, 8, 6, 0.72);
   border: 1.5px solid var(--accent);
   pointer-events: none;
+  opacity: 0;
   transition: left 0.35s cubic-bezier(0.3, 0.9, 0.3, 1), top 0.35s cubic-bezier(0.3, 0.9, 0.3, 1),
-    width 0.35s cubic-bezier(0.3, 0.9, 0.3, 1), height 0.35s cubic-bezier(0.3, 0.9, 0.3, 1);
+    width 0.35s cubic-bezier(0.3, 0.9, 0.3, 1), height 0.35s cubic-bezier(0.3, 0.9, 0.3, 1),
+    opacity 0.5s ease;
 }
+#tut-hole.shown { opacity: 1; }
 #tut-card {
   display: none;
   position: fixed; z-index: 91;
@@ -638,8 +641,12 @@ footer .foot-actions { display: flex; align-items: center; gap: 2px; }
   border-radius: 13px;
   padding: 13px 15px;
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
-  transition: top 0.35s cubic-bezier(0.3, 0.9, 0.3, 1);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: top 0.35s cubic-bezier(0.3, 0.9, 0.3, 1),
+    opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.15);
 }
+#tut-card.shown { opacity: 1; transform: none; }
 #tut-card h3 { font-size: 13px; margin-bottom: 5px; }
 #tut-card p { font-size: 11.5px; line-height: 1.55; color: var(--dim); }
 #tut-card .tut-legend {
