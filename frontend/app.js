@@ -64,6 +64,7 @@ const ICONS = {
   branch: svgWrap('<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>'),
   pin: svgWrap('<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"/>'),
   focus: svgWrap('<path d="M7 7h10v10"/><path d="M7 17 17 7"/>'),
+  help: svgWrap('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>'),
 };
 
 // ---- i18n: dictionaries load from /i18n/<lang>.json (shared with Go) ----
@@ -690,6 +691,7 @@ async function refresh() {
     if (badgeChanged && currentTab) updateInk();
     $("plan-chip").textContent = (st.limits && st.limits.plan) || "";
     setText($("ver"), st.version ? "v" + st.version : "");
+    tutMaybeAutoStart();
     const mute = $("mute-btn");
     const mstate = st.muted ? "off" : "on";
     if (mute.dataset.state !== mstate) {
@@ -746,6 +748,109 @@ $("upd-btn").addEventListener("click", async () => {
   }
 });
 
+
+// ---- onboarding tour: spotlight overlay, first run + help button ----
+const TUT_STEPS = [
+  { sel: "#tabs .seg", key: "s1" },
+  { sel: "#limits-card", key: "s2" },
+  { sel: "#usage-card", key: "s3" },
+  { sel: "#events-card", key: "s4", subtab: "sessions" },
+  { sel: "#events-card", key: "s5", subtab: "events" },
+  { sel: "footer", key: "s6" },
+];
+let tutStep = -1;
+let tutEls = null;
+
+function tutBuild() {
+  const hole = document.createElement("div");
+  hole.id = "tut-hole";
+  const card = document.createElement("div");
+  card.id = "tut-card";
+  card.innerHTML =
+    '<h3></h3><p></p>' +
+    '<div class="row"><span class="dots"></span><span class="btns">' +
+    '<button class="text-btn" id="tut-skip"></button>' +
+    '<button class="text-btn" id="tut-prev"></button>' +
+    '<button class="tut-next" id="tut-next"></button></span></div>';
+  document.body.append(hole, card);
+  card.querySelector("#tut-skip").addEventListener("click", tutEnd);
+  card.querySelector("#tut-prev").addEventListener("click", () => tutGo(tutStep - 1));
+  card.querySelector("#tut-next").addEventListener("click", () => {
+    if (tutStep >= TUT_STEPS.length - 1) tutEnd();
+    else tutGo(tutStep + 1);
+  });
+  return { hole, card };
+}
+
+function tutGo(i) {
+  const step = TUT_STEPS[i];
+  if (!step) return tutEnd();
+  tutStep = i;
+  if (!tutEls) tutEls = tutBuild();
+  // make sure the highlighted region is actually visible
+  if (currentTab !== "claude") {
+    currentTab = "claude";
+    applyTab();
+  }
+  if (step.subtab && subTab !== step.subtab) {
+    subTab = step.subtab;
+    applySubTab();
+  }
+  const target = document.querySelector(step.sel);
+  if (!target) return tutEnd();
+  const r = target.getBoundingClientRect();
+  const pad = 6;
+  const { hole, card } = tutEls;
+  hole.style.cssText =
+    `display:block;left:${r.left - pad}px;top:${r.top - pad}px;` +
+    `width:${r.width + pad * 2}px;height:${r.height + pad * 2}px;`;
+  card.style.display = "block";
+  card.querySelector("h3").textContent = t("tut." + step.key + ".t");
+  card.querySelector("p").textContent = t("tut." + step.key + ".b");
+  card.querySelector(".dots").innerHTML = TUT_STEPS.map(
+    (_, d) => '<i class="' + (d === i ? "on" : "") + '"></i>'
+  ).join("");
+  card.querySelector("#tut-skip").textContent = t("tut.skip");
+  const prev = card.querySelector("#tut-prev");
+  prev.textContent = t("tut.prev");
+  prev.style.visibility = i === 0 ? "hidden" : "visible";
+  card.querySelector("#tut-next").textContent =
+    i === TUT_STEPS.length - 1 ? t("tut.done") : t("tut.next");
+  // place the card above or below the hole, clamped to the window
+  const ch = card.offsetHeight;
+  let y = r.bottom + pad + 10;
+  if (y + ch > window.innerHeight - 8) y = r.top - pad - ch - 10;
+  card.style.top = Math.max(8, y) + "px";
+}
+
+function tutEnd() {
+  tutStep = -1;
+  if (tutEls) {
+    tutEls.hole.style.display = "none";
+    tutEls.card.style.display = "none";
+  }
+  try {
+    localStorage.setItem("tutorialDone", "1");
+  } catch (_) {}
+}
+
+function tutStart() {
+  tutGo(0);
+}
+
+$("help-btn").addEventListener("click", tutStart);
+
+let tutAutoChecked = false;
+function tutMaybeAutoStart() {
+  if (tutAutoChecked) return;
+  tutAutoChecked = true;
+  let done = "1";
+  try {
+    done = localStorage.getItem("tutorialDone") || "";
+  } catch (_) {}
+  if (!done) setTimeout(tutStart, 600); // let the cards animate in first
+}
+
 $("lang-sel").addEventListener("change", (e) => post("/api/lang", { lang: e.target.value }));
 $("mute-btn").addEventListener("click", () => post("/api/mute"));
 $("clear-btn").addEventListener("click", () => post("/api/clear"));
@@ -755,6 +860,7 @@ $("readall-btn").addEventListener("click", () =>
 $("quit-btn").addEventListener("click", () => post("/api/quit"));
 
 $("quit-btn").innerHTML = ICONS.x;
+$("help-btn").innerHTML = ICONS.help;
 $("mute-btn").innerHTML = ICONS.bell;
 $("pin-btn").innerHTML = ICONS.pin;
 applySubTab();

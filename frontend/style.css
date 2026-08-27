@@ -499,3 +499,46 @@ footer .ver { color: var(--dim); font-size: 10px; opacity: 0.7; font-variant-num
   border-radius: 2px 0 0 0;
 }
 #tooltip.show { opacity: 1; transform: none; }
+
+/* ---------- onboarding tour ---------- */
+#tut-hole {
+  display: none;
+  position: fixed; z-index: 90;
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(10, 8, 6, 0.72);
+  border: 1.5px solid var(--accent);
+  pointer-events: none;
+  transition: left 0.35s cubic-bezier(0.3, 0.9, 0.3, 1), top 0.35s cubic-bezier(0.3, 0.9, 0.3, 1),
+    width 0.35s cubic-bezier(0.3, 0.9, 0.3, 1), height 0.35s cubic-bezier(0.3, 0.9, 0.3, 1);
+}
+#tut-card {
+  display: none;
+  position: fixed; z-index: 91;
+  left: 16px; right: 16px;
+  background: var(--card);
+  border: 1px solid var(--card-edge);
+  border-radius: 13px;
+  padding: 13px 15px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+  transition: top 0.35s cubic-bezier(0.3, 0.9, 0.3, 1);
+}
+#tut-card h3 { font-size: 13px; margin-bottom: 5px; }
+#tut-card p { font-size: 11.5px; line-height: 1.55; color: var(--dim); }
+#tut-card .row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 11px;
+}
+#tut-card .dots { display: flex; gap: 4px; }
+#tut-card .dots i {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--card-edge);
+  transition: background 0.2s, transform 0.2s;
+}
+#tut-card .dots i.on { background: var(--accent); transform: scale(1.3); }
+#tut-card .btns { display: flex; gap: 4px; align-items: center; }
+.tut-next {
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 8px; cursor: pointer;
+  font-size: 11px; font-weight: 700; padding: 5px 12px;
+}
+.tut-next:hover { filter: brightness(1.1); }
