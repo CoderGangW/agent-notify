@@ -31,12 +31,7 @@
       <span class="dot" id="live-dot"></span>
     </div>
     <div class="actions" style="--wails-draggable:no-drag">
-      <select id="lang-sel" data-tip="Language">
-        <option value="auto">Auto</option>
-        <option value="en">EN</option>
-        <option value="ko">한국어</option>
-        <option value="zh">中文</option>
-      </select>
+      <button id="settings-btn" class="icon-btn"></button>
       <button id="help-btn" class="icon-btn"></button>
       <button id="mute-btn" class="icon-btn"></button>
       <button id="quit-btn" class="icon-btn"></button>
@@ -89,6 +84,42 @@
     <ul id="events" class="hidden"></ul>
     <div id="empty" class="empty"><span data-i18n="events.empty">아직 이벤트 없음</span><span data-i18n="events.hint">Claude Code 세션이 끝나면 여기 뜸</span></div>
   </section>
+  <div id="settings-panel" class="hidden">
+    <div class="set-head"><h3 data-i18n="set.title">설정</h3></div>
+    <div class="set-row">
+      <span data-i18n="set.lang">언어</span>
+      <select id="lang-sel">
+        <option value="auto">Auto</option>
+        <option value="en">English</option>
+        <option value="ko">한국어</option>
+        <option value="zh">中文</option>
+      </select>
+    </div>
+    <div class="set-row">
+      <span data-i18n="set.tab">기본 탭</span>
+      <select id="set-tab">
+        <option value="claude">Claude</option>
+        <option value="codex">Codex</option>
+      </select>
+    </div>
+    <div class="set-row">
+      <span data-i18n="set.mute">알림 음소거</span>
+      <button class="switch" id="sw-mute"></button>
+    </div>
+    <div class="set-row">
+      <div><span data-i18n="set.ai">AI 요약</span><small data-i18n="set.ai.d"></small></div>
+      <button class="switch" id="sw-ai"></button>
+    </div>
+    <div class="set-row">
+      <div><span data-i18n="set.live">실시간 세션 추적</span><small data-i18n="set.live.d"></small></div>
+      <button class="switch" id="sw-live"></button>
+    </div>
+    <div class="set-row">
+      <div><span data-i18n="set.update">자동 업데이트</span><small data-i18n="set.update.d"></small></div>
+      <button class="switch" id="sw-update"></button>
+    </div>
+  </div>
+
   <footer>
     <span class="ver" id="ver"></span>
     <span class="foot-actions">

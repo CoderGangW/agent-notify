@@ -12,6 +12,8 @@ type config struct {
 	Lang              string `json:"lang,omitempty"`       // "", "auto", "en", "ko", "zh"
 	DefaultTab        string `json:"defaultTab,omitempty"` // "claude" (default) | "codex"
 	DisableAutoUpdate bool   `json:"disableAutoUpdate,omitempty"`
+	DisableAISummary  bool   `json:"disableAISummary,omitempty"`  // skip the haiku one-liner
+	DisableLiveStatus bool   `json:"disableLiveStatus,omitempty"` // skip live session updates
 }
 
 func configPath() string {

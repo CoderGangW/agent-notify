@@ -68,6 +68,13 @@ func runHook() {
 	}
 
 	// Live-status events. Tool events fire constantly and stay minimal;
+	// the whole channel can be switched off in settings.
+	if loadConfig().DisableLiveStatus {
+		switch in.HookEventName {
+		case "PreToolUse", "PostToolUse", "SessionEnd", "UserPromptSubmit":
+			return
+		}
+	}
 	// UserPromptSubmit is once per user message, so it can afford the same
 	// title resolution the notifications use.
 	switch in.HookEventName {
@@ -210,7 +217,8 @@ func runSummarizeNotify() {
 // aiSummarize asks the claude CLI (haiku, the user's existing auth) for a
 // one-line notification body. Empty string on any failure.
 func aiSummarize(request, report string) string {
-	if os.Getenv("CLAUDE_NOTIFY_NO_AI") == "1" || strings.TrimSpace(report) == "" {
+	if os.Getenv("CLAUDE_NOTIFY_NO_AI") == "1" || loadConfig().DisableAISummary ||
+		strings.TrimSpace(report) == "" {
 		return ""
 	}
 	claude, err := exec.LookPath("claude")

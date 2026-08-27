@@ -65,6 +65,7 @@ const ICONS = {
   pin: svgWrap('<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"/>'),
   focus: svgWrap('<path d="M7 7h10v10"/><path d="M7 17 17 7"/>'),
   rotate: svgWrap('<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>'),
+  gear: svgWrap('<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'),
   help: svgWrap('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>'),
 };
 
@@ -95,6 +96,7 @@ function applyI18n() {
   $("quit-btn").dataset.tip = t("tip.quit");
   $("restart-btn").dataset.tip = t("tip.restart");
   $("help-btn").dataset.tip = t("tip.help");
+  $("settings-btn").dataset.tip = t("tip.settings");
 }
 
 
@@ -673,9 +675,7 @@ async function refresh() {
       await loadLang(lang);
       applyI18n();
     }
-    const sel = $("lang-sel");
-    const want = st.langSetting || "auto";
-    if (document.activeElement !== sel && sel.value !== want) sel.value = want;
+    renderSettings(st.settings);
     renderLimits(st.limits || {});
     renderUsage(st.usage || { today: {}, week: {} });
     renderSessions(st.sessions || []);
@@ -706,6 +706,40 @@ async function refresh() {
     $("live-dot").classList.add("off");
   }
 }
+
+// ---- settings panel ----
+let settingsOpen = false;
+function toggleSettings(open) {
+  settingsOpen = open === undefined ? !settingsOpen : open;
+  $("settings-panel").classList.toggle("hidden", !settingsOpen);
+  $("settings-btn").classList.toggle("active", settingsOpen);
+}
+$("settings-btn").addEventListener("click", () => toggleSettings());
+
+function renderSettings(cfg) {
+  if (!cfg) return;
+  const sel = $("lang-sel");
+  if (document.activeElement !== sel) sel.value = cfg.lang || "auto";
+  const tab = $("set-tab");
+  if (document.activeElement !== tab) tab.value = cfg.defaultTab || "claude";
+  $("sw-mute").classList.toggle("on", !!cfg.muted);
+  $("sw-ai").classList.toggle("on", !cfg.disableAISummary);
+  $("sw-live").classList.toggle("on", !cfg.disableLiveStatus);
+  $("sw-update").classList.toggle("on", !cfg.disableAutoUpdate);
+}
+
+function bindSwitch(id, build) {
+  $(id).addEventListener("click", () => {
+    const el = $(id);
+    el.classList.toggle("on");
+    post("/api/settings", build(el.classList.contains("on")));
+  });
+}
+bindSwitch("sw-mute", (on) => ({ muted: on }));
+bindSwitch("sw-ai", (on) => ({ disableAISummary: !on }));
+bindSwitch("sw-live", (on) => ({ disableLiveStatus: !on }));
+bindSwitch("sw-update", (on) => ({ disableAutoUpdate: !on }));
+$("set-tab").addEventListener("change", (e) => post("/api/settings", { defaultTab: e.target.value }));
 
 // ---- update footer ----
 let updState = "idle"; // idle | checking | latest | available | applying | done
@@ -854,7 +888,7 @@ function tutMaybeAutoStart() {
   if (!done) setTimeout(tutStart, 600); // let the cards animate in first
 }
 
-$("lang-sel").addEventListener("change", (e) => post("/api/lang", { lang: e.target.value }));
+$("lang-sel").addEventListener("change", (e) => post("/api/settings", { lang: e.target.value }));
 $("mute-btn").addEventListener("click", () => post("/api/mute"));
 $("clear-btn").addEventListener("click", () => post("/api/clear"));
 $("readall-btn").addEventListener("click", () =>
@@ -868,6 +902,7 @@ $("restart-btn").addEventListener("click", () => {
 
 $("quit-btn").innerHTML = ICONS.x;
 $("help-btn").innerHTML = ICONS.help;
+$("settings-btn").innerHTML = ICONS.gear;
 $("restart-btn").innerHTML = ICONS.rotate;
 $("mute-btn").innerHTML = ICONS.bell;
 $("pin-btn").innerHTML = ICONS.pin;

@@ -221,9 +221,10 @@ func (s *daemonState) assetHandler() http.Handler {
 			LangSetting string         `json:"langSetting"` // raw config value
 			DefaultTab  string         `json:"defaultTab"`
 			Version     string         `json:"version"`
+			Settings    config         `json:"settings"`
 			Usage       usageReport    `json:"usage"`
 			Limits      limitsReport   `json:"limits"`
-		}{Version: version, Events: s.events, Sessions: s.sessionListLocked(),
+		}{Version: version, Settings: cfg, Events: s.events, Sessions: s.sessionListLocked(),
 			Unread: map[string]int{"claude": uc, "codex": ux}, Muted: s.muted,
 			Lang: resolveLang(cfg.Lang), LangSetting: cfg.Lang, DefaultTab: cfg.DefaultTab}
 		s.mu.Unlock()
@@ -403,6 +404,48 @@ func (s *daemonState) assetHandler() http.Handler {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
+	})
+	mux.HandleFunc("/api/settings", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Muted             *bool   `json:"muted"`
+			Lang              *string `json:"lang"`
+			DefaultTab        *string `json:"defaultTab"`
+			DisableAutoUpdate *bool   `json:"disableAutoUpdate"`
+			DisableAISummary  *bool   `json:"disableAISummary"`
+			DisableLiveStatus *bool   `json:"disableLiveStatus"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		c := loadConfig()
+		if req.Muted != nil {
+			c.Muted = *req.Muted
+			s.mu.Lock()
+			s.muted = *req.Muted
+			s.mu.Unlock()
+		}
+		if req.Lang != nil {
+			switch *req.Lang {
+			case "", "auto", "en", "ko", "zh":
+				c.Lang = *req.Lang
+				setLang(resolveLang(*req.Lang))
+			}
+		}
+		if req.DefaultTab != nil && (*req.DefaultTab == "claude" || *req.DefaultTab == "codex") {
+			c.DefaultTab = *req.DefaultTab
+		}
+		if req.DisableAutoUpdate != nil {
+			c.DisableAutoUpdate = *req.DisableAutoUpdate
+		}
+		if req.DisableAISummary != nil {
+			c.DisableAISummary = *req.DisableAISummary
+		}
+		if req.DisableLiveStatus != nil {
+			c.DisableLiveStatus = *req.DisableLiveStatus
+		}
+		saveConfig(c)
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/restart", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
