@@ -15,6 +15,8 @@ var (
 	iconColor []byte
 	//go:embed assets/icon_mac.png
 	iconMac []byte
+	//go:embed assets/logo.png
+	iconLogo []byte // 256px badge, installed as the Linux hicolor app icon
 )
 
 func trayIcon() []byte {

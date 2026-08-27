@@ -89,7 +89,11 @@ Name=claude-notify
 Exec="%s" daemon
 X-GNOME-Autostart-enabled=true
 `, exe)
-		return os.WriteFile(filepath.Join(dir, "claude-notify.desktop"), []byte(content), 0o644)
+		if err := os.WriteFile(filepath.Join(dir, "claude-notify.desktop"), []byte(content), 0o644); err != nil {
+			return err
+		}
+		installLinuxMenuEntry(home, exe)
+		return nil
 	}
 }
 
@@ -114,6 +118,31 @@ func uninstallAutostart() error {
 		if err != nil {
 			return err
 		}
+		_ = os.Remove(filepath.Join(home, ".local", "share", "applications", "claude-notify.desktop"))
+		_ = os.Remove(filepath.Join(home, ".local", "share", "icons", "hicolor", "256x256", "apps", "claude-notify.png"))
 		return os.Remove(filepath.Join(home, ".config", "autostart", "claude-notify.desktop"))
 	}
+}
+
+// installLinuxMenuEntry registers the app-menu launcher and hicolor icon;
+// best-effort, a headless box just skips it.
+func installLinuxMenuEntry(home, exe string) {
+	iconDir := filepath.Join(home, ".local", "share", "icons", "hicolor", "256x256", "apps")
+	if err := os.MkdirAll(iconDir, 0o755); err == nil {
+		_ = os.WriteFile(filepath.Join(iconDir, "claude-notify.png"), iconLogo, 0o644)
+	}
+	appDir := filepath.Join(home, ".local", "share", "applications")
+	if err := os.MkdirAll(appDir, 0o755); err != nil {
+		return
+	}
+	content := fmt.Sprintf(`[Desktop Entry]
+Type=Application
+Name=claude-notify
+Comment=Claude Code session notifications
+Exec="%s" daemon
+Icon=claude-notify
+Terminal=false
+Categories=Utility;
+`, exe)
+	_ = os.WriteFile(filepath.Join(appDir, "claude-notify.desktop"), []byte(content), 0o644)
 }
