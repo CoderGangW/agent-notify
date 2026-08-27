@@ -1,7 +1,9 @@
 {
   "RT_GROUP_ICON": {
     "APP": {
-      "0000": ["assets/appicon.ico"]
+      "0000": [
+        "appicon-256.png"
+      ]
     }
   },
   "RT_VERSION": {
@@ -15,7 +17,7 @@
           "0409": {
             "ProductName": "agent-notify",
             "FileDescription": "Coding-agent session notifications",
-            "LegalCopyright": "(c) CoderGangW — Source-Available ND"
+            "LegalCopyright": "(c) CoderGangW \u2014 Source-Available ND"
           }
         }
       }
