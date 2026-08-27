@@ -488,6 +488,12 @@ func focusTarget(activate, tmuxSock, tmuxPane, cwd string) {
 		}
 	}
 	if activate != "" && runtime.GOOS == "darwin" {
+		// VSCode-family apps focus the window that already has the folder
+		// open when handed its path — window-level precision for free.
+		if cwd != "" && ideBundles[activate] {
+			_ = exec.Command("open", "-b", activate, cwd).Start()
+			return
+		}
 		_ = exec.Command("open", "-b", activate).Start()
 		return
 	}
@@ -495,6 +501,16 @@ func focusTarget(activate, tmuxSock, tmuxPane, cwd string) {
 		openFolder(cwd)
 	}
 }
+
+// ideBundles is the reverse view of ideBundleID: bundle ids that accept a
+// folder path for window targeting.
+var ideBundles = func() map[string]bool {
+	m := map[string]bool{}
+	for _, id := range ideBundleID {
+		m[id] = true
+	}
+	return m
+}()
 
 func openFolder(path string) {
 	var cmd *exec.Cmd
