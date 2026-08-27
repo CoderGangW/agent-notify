@@ -14,7 +14,7 @@ permissions:
 
 # macOS artifacts are built and signed locally with build/release-macos.sh
 # (the signing identity lives on the maintainer's Mac). CI covers Linux
-# (cgo + gtk3/webkit2gtk) and Windows (pure Go, icon via go-winres,
+# (cgo + gtk4/webkitgtk-6.0) and Windows (pure Go, icon via go-winres,
 # windowsgui subsystem so no console window pops up).
 jobs:
   build:
@@ -41,7 +41,7 @@ jobs:
         if: matrix.goos == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
       - name: Embed Windows icon resource
         if: matrix.goos == 'windows'
         shell: bash
