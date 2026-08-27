@@ -1130,11 +1130,17 @@ function tutGo(i) {
 function tutEnd() {
   tutStep = -1;
   if (tutEls) {
-    tutEls.block.style.display = "none";
-    tutEls.hole.style.display = "none";
-    tutEls.card.style.display = "none";
-    tutEls.hole.classList.remove("shown");
-    tutEls.card.classList.remove("shown");
+    const { block, hole, card } = tutEls;
+    // ease out (the shown class carries the opacity transition), then
+    // actually hide once the fade has finished
+    hole.classList.remove("shown");
+    card.classList.remove("shown");
+    setTimeout(() => {
+      if (tutStep !== -1) return; // a new tour started meanwhile
+      block.style.display = "none";
+      hole.style.display = "none";
+      card.style.display = "none";
+    }, 520);
   }
   try {
     localStorage.setItem("tutorialDone", "1");
