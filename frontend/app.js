@@ -14,6 +14,7 @@ const ICONS = {
   check: svgWrap('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'),
   x: svgWrap('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
   chevron: svgWrap('<path d="m6 9 6 6 6-6"/>'),
+  folder: svgWrap('<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>'),
 };
 
 // ---- i18n ----
@@ -40,6 +41,7 @@ const I18N = {
     "tip.mute": "mute/unmute notifications",
     "tip.quit": "quit",
     "tip.open": "open",
+    "events.open": "Open folder",
     "events.more": "Show more",
     "events.less": "Show less",
     reset: (d, h, m) =>
@@ -67,6 +69,7 @@ const I18N = {
     "tip.mute": "알림 끄기/켜기",
     "tip.quit": "종료",
     "tip.open": "열기",
+    "events.open": "폴더 열기",
     "events.more": "더보기",
     "events.less": "접기",
     reset: (d, h, m) =>
@@ -94,6 +97,7 @@ const I18N = {
     "tip.mute": "开/关通知",
     "tip.quit": "退出",
     "tip.open": "打开",
+    "events.open": "打开文件夹",
     "events.more": "展开",
     "events.less": "收起",
     reset: (d, h, m) =>
@@ -334,7 +338,6 @@ function renderEvents(events, done) {
     const key = evKey(ev);
     const li = document.createElement("li");
     li.className = "ev" + (knownNewest && ev.time > knownNewest ? " new" : "");
-    li.title = t("tip.open") + " " + ev.cwd;
     const when = new Date(ev.time);
     li.innerHTML =
       '<span class="ic"></span>' +
@@ -352,7 +355,10 @@ function renderEvents(events, done) {
       when.getHours().toString().padStart(2, "0") +
       ":" +
       when.getMinutes().toString().padStart(2, "0");
-    li.querySelector(".proj").textContent = ev.cwd || "";
+    const proj = li.querySelector(".proj");
+    proj.innerHTML = ICONS.folder + "<span></span>";
+    proj.querySelector("span").textContent = t("events.open");
+    proj.title = ev.cwd || "";
     const msg = li.querySelector(".msg");
     if (ev.message) {
       msg.textContent = ev.message;
