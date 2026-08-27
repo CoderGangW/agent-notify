@@ -317,13 +317,7 @@ func (s *daemonState) assetHandler() http.Handler {
 		}
 		s.mu.Unlock()
 		s.refreshBadge()
-		// Prefer focusing the window the session ran in (IDE or terminal);
-		// fall back to opening the project folder.
-		if ev.Activate != "" && runtime.GOOS == "darwin" {
-			_ = exec.Command("open", "-b", ev.Activate).Start()
-		} else if ev.CWD != "" {
-			openFolder(ev.CWD)
-		}
+		focusTarget(ev.Activate, ev.TmuxSock, ev.TmuxPane, ev.CWD)
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/folder", func(w http.ResponseWriter, r *http.Request) {
@@ -366,11 +360,7 @@ func (s *daemonState) assetHandler() http.Handler {
 			info = *p
 		}
 		s.mu.Unlock()
-		if info.Activate != "" && runtime.GOOS == "darwin" {
-			_ = exec.Command("open", "-b", info.Activate).Start()
-		} else if info.CWD != "" {
-			openFolder(info.CWD)
-		}
+		focusTarget(info.Activate, info.TmuxSock, info.TmuxPane, info.CWD)
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/update-check", func(w http.ResponseWriter, r *http.Request) {
@@ -477,6 +467,33 @@ func (s *daemonState) assetHandler() http.Handler {
 		go s.app.Quit()
 	})
 	return mux
+}
+
+// focusTarget jumps to a session: select its exact tmux pane first (when
+// it ran inside tmux), then bring the hosting app forward; with neither,
+// open the project folder.
+func focusTarget(activate, tmuxSock, tmuxPane, cwd string) {
+	if tmuxPane != "" {
+		if tmux, err := exec.LookPath("tmux"); err == nil {
+			args := []string{}
+			if tmuxSock != "" {
+				args = []string{"-S", tmuxSock}
+			}
+			// window and pane selection inside the session, then point the
+			// attached client at that session (ignore failures — a detached
+			// tmux still gets its state set for the next attach)
+			_ = exec.Command(tmux, append(args, "select-window", "-t", tmuxPane)...).Run()
+			_ = exec.Command(tmux, append(args, "select-pane", "-t", tmuxPane)...).Run()
+			_ = exec.Command(tmux, append(args, "switch-client", "-t", tmuxPane)...).Run()
+		}
+	}
+	if activate != "" && runtime.GOOS == "darwin" {
+		_ = exec.Command("open", "-b", activate).Start()
+		return
+	}
+	if cwd != "" {
+		openFolder(cwd)
+	}
 }
 
 func openFolder(path string) {

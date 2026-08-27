@@ -22,6 +22,8 @@ type sessionUpdate struct {
 	Title     string `json:"title"`
 	Branch    string `json:"branch"`
 	Model     string `json:"model"`
+	TmuxSock  string `json:"tmuxSock"`
+	TmuxPane  string `json:"tmuxPane"`
 }
 
 // sessionInfo is the daemon-side state exposed to the window.
@@ -36,6 +38,8 @@ type sessionInfo struct {
 	Branch    string    `json:"branch"`
 	Model     string    `json:"model"`
 	Activate  string    `json:"activate"`
+	TmuxSock  string    `json:"tmuxSock"`
+	TmuxPane  string    `json:"tmuxPane"`
 	TurnStart time.Time `json:"turnStart"` // start of the current turn
 	LastSeen  time.Time `json:"lastSeen"`
 }
@@ -78,6 +82,9 @@ func (s *daemonState) applySessionUpdate(u sessionUpdate) {
 	}
 	if u.Model != "" {
 		info.Model = u.Model
+	}
+	if u.TmuxPane != "" {
+		info.TmuxSock, info.TmuxPane = u.TmuxSock, u.TmuxPane
 	}
 	switch u.Kind {
 	case "prompt":

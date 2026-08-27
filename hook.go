@@ -66,6 +66,7 @@ func runHook() {
 	if runtime.GOOS == "darwin" {
 		hostBundle = os.Getenv("__CFBundleIdentifier")
 	}
+	tmuxSock, tmuxPane := tmuxContext()
 
 	// Live-status events. Tool events fire constantly and stay minimal;
 	// the whole channel can be switched off in settings.
@@ -102,6 +103,7 @@ func runHook() {
 			SessionID: in.SessionID, CWD: in.CWD, Kind: "prompt",
 			Prompt: cleanPrompt(in.Prompt), Activate: hostBundle,
 			Title: pTitle, Branch: pInfo.Branch, Model: pInfo.Model,
+			TmuxSock: tmuxSock, TmuxPane: tmuxPane,
 		})
 		return
 	}
@@ -137,6 +139,8 @@ func runHook() {
 		DurSec:    info.DurationSec,
 		Title:     title,
 		Activate:  activate,
+		TmuxSock:  tmuxSock,
+		TmuxPane:  tmuxPane,
 		Message:   in.Message, // Notification events carry their own message
 		Time:      time.Now(),
 	}
@@ -149,6 +153,7 @@ func runHook() {
 	postSession(sessionUpdate{
 		SessionID: in.SessionID, CWD: in.CWD, Kind: sKind,
 		Activate: activate, Title: title, Branch: info.Branch, Model: info.Model,
+		TmuxSock: tmuxSock, TmuxPane: tmuxPane,
 	})
 
 	if kind == "done" && ev.Message == "" {
@@ -247,6 +252,17 @@ func aiSummarize(request, report string) string {
 		return ""
 	}
 	return condense(string(out), 200)
+}
+
+// tmuxContext returns the tmux socket path and pane id when running
+// inside tmux ($TMUX = "socket,pid,session"; $TMUX_PANE = "%N").
+func tmuxContext() (sock, pane string) {
+	env := os.Getenv("TMUX")
+	if env == "" {
+		return "", ""
+	}
+	sock = strings.SplitN(env, ",", 2)[0]
+	return sock, os.Getenv("TMUX_PANE")
 }
 
 // cleanPrompt drops injected context blocks (<ide_opened_file>…,
