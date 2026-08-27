@@ -13,6 +13,7 @@ const ICONS = {
   bellRing: svgWrap('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/><path d="M22 8c0-2.3-.8-4.3-2-6"/>'),
   check: svgWrap('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'),
   x: svgWrap('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+  chevron: svgWrap('<path d="m6 9 6 6 6-6"/>'),
 };
 
 // ---- i18n ----
@@ -39,6 +40,8 @@ const I18N = {
     "tip.mute": "mute/unmute notifications",
     "tip.quit": "quit",
     "tip.open": "open",
+    "events.more": "Show more",
+    "events.less": "Show less",
     reset: (d, h, m) =>
       d > 0 ? `resets in ${d}d ${h}h` : h > 0 ? `resets in ${h}h ${m}m` : `resets in ${m}m`,
   },
@@ -64,6 +67,8 @@ const I18N = {
     "tip.mute": "알림 끄기/켜기",
     "tip.quit": "종료",
     "tip.open": "열기",
+    "events.more": "더보기",
+    "events.less": "접기",
     reset: (d, h, m) =>
       d > 0 ? `${d}일 ${h}h 후 리셋` : h > 0 ? `${h}h ${m}m 후 리셋` : `${m}m 후 리셋`,
   },
@@ -89,6 +94,8 @@ const I18N = {
     "tip.mute": "开/关通知",
     "tip.quit": "退出",
     "tip.open": "打开",
+    "events.more": "展开",
+    "events.less": "收起",
     reset: (d, h, m) =>
       d > 0 ? `${d}天${h}h后重置` : h > 0 ? `${h}h ${m}m后重置` : `${m}m后重置`,
   },
@@ -271,6 +278,49 @@ function renderUsage(u) {
 }
 
 let knownNewest = null; // Time of newest event we've already rendered
+const expanded = new Set(); // event keys the user opened; survives re-renders
+
+const evKey = (ev) => (ev.session_id || "") + "|" + ev.time;
+
+function toggleMsg(msg, btn, key) {
+  const line = parseFloat(getComputedStyle(msg).lineHeight);
+  const collapsedPx = Math.round(line * 2);
+  if (expanded.has(key)) {
+    // collapse: animate current height down to two lines, then re-clamp
+    expanded.delete(key);
+    btn.classList.remove("open");
+    btn.querySelector("span").textContent = t("events.more");
+    msg.style.maxHeight = msg.scrollHeight + "px";
+    void msg.offsetHeight;
+    msg.style.maxHeight = collapsedPx + "px";
+    msg.addEventListener(
+      "transitionend",
+      () => {
+        if (!expanded.has(key)) {
+          msg.classList.add("clamp");
+          msg.style.maxHeight = "";
+        }
+      },
+      { once: true }
+    );
+  } else {
+    // expand: unclamp, animate from two lines to full height
+    expanded.add(key);
+    btn.classList.add("open");
+    btn.querySelector("span").textContent = t("events.less");
+    msg.classList.remove("clamp");
+    msg.style.maxHeight = collapsedPx + "px";
+    void msg.offsetHeight;
+    msg.style.maxHeight = msg.scrollHeight + "px";
+    msg.addEventListener(
+      "transitionend",
+      () => {
+        if (expanded.has(key)) msg.style.maxHeight = "";
+      },
+      { once: true }
+    );
+  }
+}
 
 function renderEvents(events, done) {
   $("done-badge").textContent = done > 0 ? String(done) : "";
@@ -281,6 +331,7 @@ function renderEvents(events, done) {
 
   list.innerHTML = "";
   events.forEach((ev, i) => {
+    const key = evKey(ev);
     const li = document.createElement("li");
     li.className = "ev" + (knownNewest && ev.time > knownNewest ? " new" : "");
     li.title = t("tip.open") + " " + ev.cwd;
@@ -303,10 +354,30 @@ function renderEvents(events, done) {
       when.getMinutes().toString().padStart(2, "0");
     li.querySelector(".proj").textContent = ev.cwd || "";
     const msg = li.querySelector(".msg");
-    if (ev.message) msg.textContent = ev.message;
-    else msg.remove();
-    li.addEventListener("click", () => post("/api/open", { index: i }));
-    list.appendChild(li);
+    if (ev.message) {
+      msg.textContent = ev.message;
+      const isOpen = expanded.has(key);
+      if (!isOpen) msg.classList.add("clamp");
+      // Overflow check needs layout: append first, measure after.
+      li.addEventListener("click", () => post("/api/open", { index: i }));
+      list.appendChild(li);
+      const overflows = isOpen || msg.scrollHeight > msg.clientHeight + 1;
+      if (overflows) {
+        const btn = document.createElement("button");
+        btn.className = "more-btn" + (isOpen ? " open" : "");
+        btn.innerHTML = "<span></span>" + ICONS.chevron;
+        btn.querySelector("span").textContent = t(isOpen ? "events.less" : "events.more");
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggleMsg(msg, btn, key);
+        });
+        li.querySelector(".body").appendChild(btn);
+      }
+    } else {
+      msg.remove();
+      li.addEventListener("click", () => post("/api/open", { index: i }));
+      list.appendChild(li);
+    }
   });
   if (events.length > 0) knownNewest = events[0].time;
 }
