@@ -1,15 +1,15 @@
 <div align="center">
 
-<img src="../assets/logo.png" width="96" alt="claude-notify 종 로고"/>
+<img src="../assets/logo.png" width="96" alt="claude-notify 로고"/>
 
 <h1>claude-notify</h1>
 
-<p><b>끝난 Claude Code 세션, 놓치지 않기.</b></p>
+<p><b>끝난 Claude Code 세션, 다시는 놓치지 마세요.</b></p>
 
 <p>
-  <a href="https://github.com/CoderGangW/claude-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/claude-notify?color=d97757" alt="latest release"/></a>
+  <a href="https://github.com/CoderGangW/claude-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/claude-notify?color=8a2be2" alt="latest release"/></a>
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="platforms"/>
-  <img src="https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white" alt="Go"/>
+  <img src="https://img.shields.io/badge/Go-Wails%20v3-00ADD8?logo=go&logoColor=white" alt="Go + Wails"/>
   <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"/></a>
 </p>
 
@@ -19,30 +19,40 @@
 
 </div>
 
-Claude Code 세션 여러 개를 돌릴 때 **어느 작업이 끝났는지** 바로 알려주는 크로스플랫폼(macOS / Windows / Linux) 트레이 데몬.
+여러 Claude Code 세션을 동시에 돌릴 때 **어느 세션이 방금 끝났는지** 알려주는 크로스플랫폼(macOS / Windows / Linux) 트레이 앱 — 세션·토큰 사용량·플랜 한도 대시보드 포함.
 
-터미널을 일일이 돌아다니며 확인할 필요 없이:
+## 기능
 
-- ✅ 작업 완료(Stop) / 🔔 입력 필요(Notification) 시 **OS 네이티브 알림**
-- 알림 제목 = **세션 제목** (VSCode 확장이 생성한 제목 포함), 부제 = **프로젝트 경로**, 내용 = **AI 한 줄 요약** (`claude -p --model haiku`, 기존 인증 그대로 사용 · 실패 시 마지막 응답 발췌로 폴백)
-- macOS에서 `terminal-notifier` 설치 시 **알림 클릭하면 해당 세션의 IDE로 포커스** (VSCode/Cursor/Windsurf 자동 감지)
-- 트레이 메뉴에 최근 이벤트 목록, 클릭하면 해당 프로젝트 폴더 열기
-- macOS 메뉴바에 완료된 작업 수 뱃지
+**알림**
+- ✅ 작업 완료(Stop) / 🔔 입력 필요(Notification) 시 네이티브 OS 알림
+- 제목 = **세션 제목**(VSCode 익스텐션이 생성한 제목 포함), 본문 = **한 줄 AI 요약**(`claude -p --model haiku`, 기존 인증 사용 · 실패 시 마지막 응답 발췌)
+- macOS에서 알림 클릭 시(`terminal-notifier` 설치 기준) **세션이 돌던 창으로 포커스** — IDE(VSCode / Cursor / Windsurf) 또는 터미널 자동 감지
 
-## 동작 원리
+**대시보드 창** — 트레이 아이콘 클릭
+- 최근 세션 이벤트: 상태, 제목, AI 요약, 클릭 한 번으로 해당 IDE/터미널 포커스
+- **토큰 사용량** — `~/.claude/projects` 트랜스크립트 로컬 합산 (오늘 / 최근 7일 / 모델별), 중복 제거, 오도미터 숫자 애니메이션
+- **플랜 한도 게이지** — `/usage` 명령이 보여주는 5시간/주간 사용률 + 리셋 카운트다운
+- UI 언어: English / 한국어 / 简体中文 (자동 감지, 창에서 변경 가능)
+
+**Codex도 지원**
+- `claude-notify install-codex` 한 번이면 [Codex CLI](https://github.com/openai/codex)의 `notify` hook으로 같은 알림을 받음
+
+## 동작 방식
 
 ```
-Claude Code ──(Stop / Notification hook)──▶ claude-notify hook
-                                                │  POST localhost:49517
-                                                ▼
-                                        트레이 데몬 ──▶ OS 알림 + 이벤트 목록
+Claude Code ──(Stop / Notification hook)──▶ claude-notify hook ─┐
+Codex CLI  ──(notify)──▶ claude-notify codex-hook ──────────────┤ POST localhost:49517
+                                                                ▼
+                                            트레이 데몬 ──▶ OS 알림
+                                                 │
+                                                 └──▶ 대시보드 창 (세션 · 사용량 · 한도)
 ```
 
-데몬이 꺼져 있으면 hook이 OS 알림을 직접 보내는 폴백으로 동작하므로, 데몬 없이 hook만 등록해도 알림 자체는 작동한다.
+데몬이 꺼져 있으면 hook이 직접 OS 알림을 보내는 방식으로 폴백 — hook만 설치돼 있어도 알림은 계속 옵니다.
 
 ## 설치
 
-한 줄 설치 — 바이너리 다운로드 + Claude Code hook 등록 + 로그인 자동 시작까지 전부:
+한 줄 — 바이너리 다운로드, Claude Code hook 등록, 로그인 자동 시작까지:
 
 ```sh
 # macOS / Linux
@@ -54,49 +64,52 @@ curl -fsSL https://raw.githubusercontent.com/CoderGangW/claude-notify/main/insta
 irm https://raw.githubusercontent.com/CoderGangW/claude-notify/main/install.ps1 | iex
 ```
 
-Go 있으면:
+Go가 설치돼 있다면:
 
 ```sh
 go install github.com/CoderGangW/claude-notify@latest
-claude-notify install   # hook 등록 + 자동 시작 등록 + 데몬 시작
+claude-notify install   # hook 등록 + 자동 시작 + 데몬 시작
 ```
 
-소스 빌드:
-
-```sh
-git clone https://github.com/CoderGangW/claude-notify
-cd claude-notify
-go build -o claude-notify .
-```
+macOS는 릴리즈 페이지의 **claude-notify.app**(서명됨, 유니버설)을 받아 더블클릭으로 실행할 수도 있습니다.
 
 ## 명령어
 
 | 명령 | 설명 |
 |---|---|
 | `claude-notify` | 트레이 데몬 실행 (기본) |
-| `claude-notify install` | Stop/Notification hook 등록 + 로그인 자동 시작 등록(LaunchAgent / XDG autostart / 레지스트리) + 데몬 시작 |
-| `claude-notify uninstall` | hook과 자동 시작 등록 제거 |
-| `claude-notify hook` | Claude Code가 호출하는 hook 엔드포인트 (직접 실행할 일 없음) |
-| `claude-notify peek <transcript.jsonl> [session-id]` | 해당 세션에서 뽑히는 제목/요약 소스 디버그 출력 |
-
-## 아이콘 교체
-
-트레이 아이콘은 빌드 시 임베드됨. `assets/icon.png`(Windows/Linux, 컬러), `assets/icon_mac.png`(macOS 메뉴바, 단색 템플릿)를 원하는 32×32 PNG로 교체 후 `go build`.
+| `claude-notify install` | 바이너리를 고정 경로에 복사, Stop/Notification hook 등록, 자동 시작, 데몬 시작 |
+| `claude-notify install-codex` | `~/.codex/config.toml`에 Codex CLI `notify` hook 등록 |
+| `claude-notify uninstall` | hook과 자동 시작 제거 |
+| `claude-notify stats` | 디버그: 창에 표시되는 사용량 + 한도 JSON 출력 |
+| `claude-notify hook` / `codex-hook` | Claude Code / Codex가 호출하는 hook 엔드포인트 (직접 실행 X) |
+| `claude-notify peek <transcript.jsonl> [session-id]` | 디버그: 세션의 제목/요약 소스 확인 |
 
 ## 플랫폼 참고
 
-- **macOS**: `brew install terminal-notifier` 강력 추천 — 클릭 시 IDE 포커스 + 경로 부제 지원. 최초 알림 시 시스템 설정 → 알림에서 terminal-notifier 허용 필요. 없으면 `osascript` 폴백 (발신 앱 "Script Editor"로 표시, 클릭 동작 없음). 알림 발신자명은 terminal-notifier로 표시됨 (자체 발신자명은 .app 번들 필요 — 로드맵).
-- **AI 요약**: `claude` CLI가 PATH에 있으면 자동 사용 (요약 시간만큼 알림이 몇 초 늦게 옴). 끄려면 환경변수 `CLAUDE_NOTIFY_NO_AI=1`. 요약용 하위 세션의 hook 재귀는 `CLAUDE_NOTIFY_SUPPRESS` 가드로 차단됨.
-- **Linux**: 트레이에 `libayatana-appindicator`, 알림에 `notify-send`(libnotify) 필요.
-- **Windows**: 토스트 알림 사용. 별도 의존성 없음.
+- **macOS**: 클릭-포커스를 위해 `brew install terminal-notifier` 강력 권장. 창 UI는 네이티브(Wails v3 / WebKit). 로컬 빌드는 `build/release-macos.sh`로 패키징·서명 (번들 ID `com.codergangw.claude-notify` 고정).
+- **Linux**: 창 UI는 `libgtk-3` + `libwebkit2gtk-4.1` 필요; 트레이는 `libayatana-appindicator`, 알림은 `notify-send`. 없어도 hook 단독 알림은 동작. 설치 시 앱 메뉴 런처 + 아이콘 등록.
+- **Windows**: 토스트 알림, 추가 의존성 없음. exe 실행 시 콘솔창 안 뜸.
+- **AI 요약**: PATH에 `claude` CLI가 있으면 자동 사용. `CLAUDE_NOTIFY_NO_AI=1`로 비활성화.
+- **플랜 한도**: `/usage` 명령과 같은 비공식 엔드포인트를 기존 Claude Code 인증으로 읽기 전용 조회 (토큰 갱신/수정 안 함). 깨져도 앱 나머지는 정상 동작.
+
+## 커스텀 아이콘
+
+아이콘은 `tools/genicon`이 벡터 지오메트리에서 생성 (트레이용 PNG, macOS 번들용 `.icns`, Windows용 멀티사이즈 `.ico`) 후 빌드 타임에 임베드:
+
+```sh
+go run ./tools/genicon assets && go build
+```
 
 ## 로드맵
 
-- [x] 알림 클릭 시 해당 IDE 포커스 (macOS + terminal-notifier)
-- [ ] 자체 .app 번들 + UNUserNotificationCenter — 알림 발신자명/아이콘을 claude-notify로
-- [ ] localhost 대시보드 (진행 중 세션 상태 한눈에)
-- [ ] 원격 머신 세션 이벤트 수집
+- [x] 알림/이벤트 클릭으로 세션의 IDE 또는 터미널 포커스
+- [x] 대시보드 창: 세션, 토큰 사용량, 플랜 한도
+- [x] Codex CLI 지원
+- [ ] Webhook (ntfy / Slack / Telegram / Discord) — 자리 비웠을 때 폰 알림
+- [ ] 실시간 세션 상태 (PreToolUse/PostToolUse: 실행 중인 도구, 경과 시간)
+- [ ] 원격 머신 이벤트 수집
 
-## License
+## 라이선스
 
 MIT

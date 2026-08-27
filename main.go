@@ -24,6 +24,10 @@ func main() {
 		runSummarizeNotify()
 	case "install":
 		runInstall()
+	case "install-codex":
+		runInstallCodex()
+	case "codex-hook": // called by Codex CLI's notify setting
+		runCodexHook()
 	case "uninstall":
 		runUninstall()
 	case "peek": // debug: show what a transcript resolves to
@@ -45,7 +49,7 @@ func main() {
 	case "version", "--version", "-v":
 		fmt.Println("claude-notify " + version)
 	default:
-		fmt.Fprintln(os.Stderr, "usage: claude-notify [daemon|hook|install|uninstall|version]")
+		fmt.Fprintln(os.Stderr, "usage: claude-notify [daemon|hook|install|install-codex|uninstall|stats|version]")
 		os.Exit(2)
 	}
 }
