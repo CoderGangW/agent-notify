@@ -11,10 +11,10 @@ import (
 )
 
 // Codex CLI integration: ~/.codex/config.toml `notify` runs a program with
-// one JSON argument per event. `claude-notify codex-hook` adapts that to a
+// one JSON argument per event. `agent-notify codex-hook` adapts that to a
 // daemon event, so Codex turns land in the same tray/window/notifications.
 
-// runCodexHook is invoked by Codex as `claude-notify codex-hook <json>`.
+// runCodexHook is invoked by Codex as `agent-notify codex-hook <json>`.
 func runCodexHook() {
 	defer os.Exit(0)
 	if len(os.Args) < 3 {
@@ -74,6 +74,21 @@ func runInstallCodex() {
 	path := filepath.Join(home, ".codex", "config.toml")
 	data, _ := os.ReadFile(path)
 	if strings.Contains(string(data), "notify") {
+		if strings.Contains(string(data), "claude-notify") || strings.Contains(string(data), "agent-notify") {
+			// our own entry from an older binary path/name: repoint it
+			lines := strings.Split(string(data), "\n")
+			for i, l := range lines {
+				if strings.HasPrefix(strings.TrimSpace(l), "notify") {
+					lines[i] = line
+				}
+			}
+			if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			fmt.Printf(T("codex.installed")+"\n", path)
+			return
+		}
 		fmt.Printf(T("codex.already")+"\n", path)
 		fmt.Println("  " + line)
 		return

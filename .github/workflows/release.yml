@@ -48,7 +48,7 @@ jobs:
             ext=".exe" ; cgo=0 ; flags="-s -w -H=windowsgui"
           fi
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=$cgo \
-            go build -trimpath -ldflags="$flags" -o "claude-notify-${{ matrix.goos }}-${{ matrix.goarch }}$ext" .
+            go build -trimpath -ldflags="$flags" -o "agent-notify-${{ matrix.goos }}-${{ matrix.goarch }}$ext" .
       - uses: softprops/action-gh-release@v2
         with:
-          files: claude-notify-${{ matrix.goos }}-${{ matrix.goarch }}*
+          files: agent-notify-${{ matrix.goos }}-${{ matrix.goarch }}*

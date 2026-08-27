@@ -1,4 +1,4 @@
-module github.com/CoderGangW/claude-notify
+module github.com/CoderGangW/agent-notify
 
 go 1.27.0
 

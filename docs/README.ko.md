@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="../assets/logo.png" width="96" alt="claude-notify 로고"/>
+<img src="../assets/logo.png" width="96" alt="agent-notify 로고"/>
 
-<h1>claude-notify</h1>
+<h1>agent-notify</h1>
 
 <p><b>끝난 Claude Code 세션, 다시는 놓치지 마세요.</b></p>
 
 <p>
-  <a href="https://github.com/CoderGangW/claude-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/claude-notify?color=8a2be2" alt="latest release"/></a>
+  <a href="https://github.com/CoderGangW/agent-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/agent-notify?color=8a2be2" alt="latest release"/></a>
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="platforms"/>
   <img src="https://img.shields.io/badge/Go-Wails%20v3-00ADD8?logo=go&logoColor=white" alt="Go + Wails"/>
   <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"/></a>
@@ -35,13 +35,13 @@
 - UI 언어: English / 한국어 / 简体中文 (자동 감지, 창에서 변경 가능)
 
 **Codex도 지원**
-- `claude-notify install-codex` 한 번이면 [Codex CLI](https://github.com/openai/codex)의 `notify` hook으로 같은 알림을 받음
+- `agent-notify install-codex` 한 번이면 [Codex CLI](https://github.com/openai/codex)의 `notify` hook으로 같은 알림을 받음
 
 ## 동작 방식
 
 ```
-Claude Code ──(Stop / Notification hook)──▶ claude-notify hook ─┐
-Codex CLI  ──(notify)──▶ claude-notify codex-hook ──────────────┤ POST localhost:49517
+Claude Code ──(Stop / Notification hook)──▶ agent-notify hook ─┐
+Codex CLI  ──(notify)──▶ agent-notify codex-hook ──────────────┤ POST localhost:49517
                                                                 ▼
                                             트레이 데몬 ──▶ OS 알림
                                                  │
@@ -56,34 +56,34 @@ Codex CLI  ──(notify)──▶ claude-notify codex-hook ──────�
 
 ```sh
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/CoderGangW/claude-notify/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/CoderGangW/agent-notify/main/install.sh | sh
 ```
 
 ```powershell
 # Windows
-irm https://raw.githubusercontent.com/CoderGangW/claude-notify/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/CoderGangW/agent-notify/main/install.ps1 | iex
 ```
 
 Go가 설치돼 있다면:
 
 ```sh
-go install github.com/CoderGangW/claude-notify@latest
-claude-notify install   # hook 등록 + 자동 시작 + 데몬 시작
+go install github.com/CoderGangW/agent-notify@latest
+agent-notify install   # hook 등록 + 자동 시작 + 데몬 시작
 ```
 
-macOS는 릴리즈 페이지의 **claude-notify.app**(서명됨, 유니버설)을 받아 더블클릭으로 실행할 수도 있습니다.
+macOS는 릴리즈 페이지의 **agent-notify.app**(서명됨, 유니버설)을 받아 더블클릭으로 실행할 수도 있습니다.
 
 ## 명령어
 
 | 명령 | 설명 |
 |---|---|
-| `claude-notify` | 트레이 데몬 실행 (기본) |
-| `claude-notify install` | 바이너리를 고정 경로에 복사, Stop/Notification hook 등록, 자동 시작, 데몬 시작 |
-| `claude-notify install-codex` | `~/.codex/config.toml`에 Codex CLI `notify` hook 등록 |
-| `claude-notify uninstall` | hook과 자동 시작 제거 |
-| `claude-notify stats` | 디버그: 창에 표시되는 사용량 + 한도 JSON 출력 |
-| `claude-notify hook` / `codex-hook` | Claude Code / Codex가 호출하는 hook 엔드포인트 (직접 실행 X) |
-| `claude-notify peek <transcript.jsonl> [session-id]` | 디버그: 세션의 제목/요약 소스 확인 |
+| `agent-notify` | 트레이 데몬 실행 (기본) |
+| `agent-notify install` | 바이너리를 고정 경로에 복사, Stop/Notification hook 등록, 자동 시작, 데몬 시작 |
+| `agent-notify install-codex` | `~/.codex/config.toml`에 Codex CLI `notify` hook 등록 |
+| `agent-notify uninstall` | hook과 자동 시작 제거 |
+| `agent-notify stats` | 디버그: 창에 표시되는 사용량 + 한도 JSON 출력 |
+| `agent-notify hook` / `codex-hook` | Claude Code / Codex가 호출하는 hook 엔드포인트 (직접 실행 X) |
+| `agent-notify peek <transcript.jsonl> [session-id]` | 디버그: 세션의 제목/요약 소스 확인 |
 
 ## 플랫폼 참고
 

@@ -71,7 +71,7 @@ func installAutostart(exe string) error {
 	case "windows":
 		return exec.Command("reg", "add",
 			`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
-			"/v", "claude-notify", "/t", "REG_SZ",
+			"/v", "agent-notify", "/t", "REG_SZ",
 			"/d", fmt.Sprintf(`"%s" daemon`, exe), "/f").Run()
 
 	default: // Linux desktop environments honor XDG autostart
@@ -85,11 +85,11 @@ func installAutostart(exe string) error {
 		}
 		content := fmt.Sprintf(`[Desktop Entry]
 Type=Application
-Name=claude-notify
+Name=agent-notify
 Exec="%s" daemon
 X-GNOME-Autostart-enabled=true
 `, exe)
-		if err := os.WriteFile(filepath.Join(dir, "claude-notify.desktop"), []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "agent-notify.desktop"), []byte(content), 0o644); err != nil {
 			return err
 		}
 		installLinuxMenuEntry(home, exe)
@@ -111,16 +111,16 @@ func uninstallAutostart() error {
 	case "windows":
 		return exec.Command("reg", "delete",
 			`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
-			"/v", "claude-notify", "/f").Run()
+			"/v", "agent-notify", "/f").Run()
 
 	default:
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return err
 		}
-		_ = os.Remove(filepath.Join(home, ".local", "share", "applications", "claude-notify.desktop"))
-		_ = os.Remove(filepath.Join(home, ".local", "share", "icons", "hicolor", "256x256", "apps", "claude-notify.png"))
-		return os.Remove(filepath.Join(home, ".config", "autostart", "claude-notify.desktop"))
+		_ = os.Remove(filepath.Join(home, ".local", "share", "applications", "agent-notify.desktop"))
+		_ = os.Remove(filepath.Join(home, ".local", "share", "icons", "hicolor", "256x256", "apps", "agent-notify.png"))
+		return os.Remove(filepath.Join(home, ".config", "autostart", "agent-notify.desktop"))
 	}
 }
 
@@ -129,7 +129,7 @@ func uninstallAutostart() error {
 func installLinuxMenuEntry(home, exe string) {
 	iconDir := filepath.Join(home, ".local", "share", "icons", "hicolor", "256x256", "apps")
 	if err := os.MkdirAll(iconDir, 0o755); err == nil {
-		_ = os.WriteFile(filepath.Join(iconDir, "claude-notify.png"), iconLogo, 0o644)
+		_ = os.WriteFile(filepath.Join(iconDir, "agent-notify.png"), iconLogo, 0o644)
 	}
 	appDir := filepath.Join(home, ".local", "share", "applications")
 	if err := os.MkdirAll(appDir, 0o755); err != nil {
@@ -137,12 +137,12 @@ func installLinuxMenuEntry(home, exe string) {
 	}
 	content := fmt.Sprintf(`[Desktop Entry]
 Type=Application
-Name=claude-notify
-Comment=Claude Code session notifications
+Name=agent-notify
+Comment=Coding-agent session notifications
 Exec="%s" daemon
-Icon=claude-notify
+Icon=agent-notify
 Terminal=false
 Categories=Utility;
 `, exe)
-	_ = os.WriteFile(filepath.Join(appDir, "claude-notify.desktop"), []byte(content), 0o644)
+	_ = os.WriteFile(filepath.Join(appDir, "agent-notify.desktop"), []byte(content), 0o644)
 }

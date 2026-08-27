@@ -1,4 +1,4 @@
-// Generates claude-notify icons: the Lucide bell outline with a ">-"
+// Generates agent-notify icons: the Lucide bell outline with a ">-"
 // prompt glyph inside the dome, drawn as consistent-weight line art on a
 // squircle badge (color) or bare (macOS template).
 //

@@ -13,8 +13,8 @@
         },
         "info": {
           "0409": {
-            "ProductName": "claude-notify",
-            "FileDescription": "Claude Code session notifications",
+            "ProductName": "agent-notify",
+            "FileDescription": "Coding-agent session notifications",
             "LegalCopyright": "MIT"
           }
         }

@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="../assets/logo.png" width="96" alt="claude-notify 徽标"/>
+<img src="../assets/logo.png" width="96" alt="agent-notify 徽标"/>
 
-<h1>claude-notify</h1>
+<h1>agent-notify</h1>
 
 <p><b>不再错过任何一个完成的 Claude Code 会话。</b></p>
 
 <p>
-  <a href="https://github.com/CoderGangW/claude-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/claude-notify?color=8a2be2" alt="latest release"/></a>
+  <a href="https://github.com/CoderGangW/agent-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/agent-notify?color=8a2be2" alt="latest release"/></a>
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="platforms"/>
   <img src="https://img.shields.io/badge/Go-Wails%20v3-00ADD8?logo=go&logoColor=white" alt="Go + Wails"/>
   <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"/></a>
@@ -35,13 +35,13 @@
 - 界面语言：English / 한국어 / 简体中文（自动检测，可在窗口内切换）
 
 **同样支持 Codex**
-- `claude-notify install-codex` 一条命令，通过 [Codex CLI](https://github.com/openai/codex) 的 `notify` 钩子接入同样的通知
+- `agent-notify install-codex` 一条命令，通过 [Codex CLI](https://github.com/openai/codex) 的 `notify` 钩子接入同样的通知
 
 ## 工作原理
 
 ```
-Claude Code ──(Stop / Notification hook)──▶ claude-notify hook ─┐
-Codex CLI  ──(notify)──▶ claude-notify codex-hook ──────────────┤ POST localhost:49517
+Claude Code ──(Stop / Notification hook)──▶ agent-notify hook ─┐
+Codex CLI  ──(notify)──▶ agent-notify codex-hook ──────────────┤ POST localhost:49517
                                                                 ▼
                                             托盘守护进程 ──▶ 系统通知
                                                  │
@@ -56,34 +56,34 @@ Codex CLI  ──(notify)──▶ claude-notify codex-hook ──────�
 
 ```sh
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/CoderGangW/claude-notify/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/CoderGangW/agent-notify/main/install.sh | sh
 ```
 
 ```powershell
 # Windows
-irm https://raw.githubusercontent.com/CoderGangW/claude-notify/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/CoderGangW/agent-notify/main/install.ps1 | iex
 ```
 
 已安装 Go：
 
 ```sh
-go install github.com/CoderGangW/claude-notify@latest
-claude-notify install   # 注册钩子 + 自启 + 启动守护进程
+go install github.com/CoderGangW/agent-notify@latest
+agent-notify install   # 注册钩子 + 自启 + 启动守护进程
 ```
 
-macOS 也可从发布页下载 **claude-notify.app**（已签名、通用二进制），双击运行。
+macOS 也可从发布页下载 **agent-notify.app**（已签名、通用二进制），双击运行。
 
 ## 命令
 
 | 命令 | 说明 |
 |---|---|
-| `claude-notify` | 运行托盘守护进程（默认） |
-| `claude-notify install` | 复制二进制到固定路径、注册 Stop/Notification 钩子、开机自启、启动守护进程 |
-| `claude-notify install-codex` | 在 `~/.codex/config.toml` 注册 Codex CLI `notify` 钩子 |
-| `claude-notify uninstall` | 移除钩子与自启 |
-| `claude-notify stats` | 调试：输出窗口所示的用量 + 限额 JSON |
-| `claude-notify hook` / `codex-hook` | 由 Claude Code / Codex 调用的钩子端点（勿手动运行） |
-| `claude-notify peek <transcript.jsonl> [session-id]` | 调试：查看会话标题/摘要来源 |
+| `agent-notify` | 运行托盘守护进程（默认） |
+| `agent-notify install` | 复制二进制到固定路径、注册 Stop/Notification 钩子、开机自启、启动守护进程 |
+| `agent-notify install-codex` | 在 `~/.codex/config.toml` 注册 Codex CLI `notify` 钩子 |
+| `agent-notify uninstall` | 移除钩子与自启 |
+| `agent-notify stats` | 调试：输出窗口所示的用量 + 限额 JSON |
+| `agent-notify hook` / `codex-hook` | 由 Claude Code / Codex 调用的钩子端点（勿手动运行） |
+| `agent-notify peek <transcript.jsonl> [session-id]` | 调试：查看会话标题/摘要来源 |
 
 ## 平台说明
 

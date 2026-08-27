@@ -2,6 +2,46 @@
 
 const $ = (id) => document.getElementById(id);
 
+// ---- custom tooltip: near-instant, animated, viewport-clamped ----
+const tipEl = document.createElement("div");
+tipEl.id = "tooltip";
+document.addEventListener("DOMContentLoaded", () => document.body.appendChild(tipEl));
+let tipTimer = null;
+let tipTarget = null;
+
+function showTip(target) {
+  const txt = target.dataset.tip;
+  if (!txt) return;
+  tipEl.textContent = txt;
+  tipEl.classList.add("show");
+  const r = target.getBoundingClientRect();
+  const tw = tipEl.offsetWidth;
+  const th = tipEl.offsetHeight;
+  let x = r.left + r.width / 2 - tw / 2;
+  x = Math.max(6, Math.min(x, window.innerWidth - tw - 6));
+  let y = r.top - th - 7;
+  tipEl.classList.toggle("below", y < 4);
+  if (y < 4) y = r.bottom + 7;
+  tipEl.style.left = x + "px";
+  tipEl.style.top = y + "px";
+}
+
+document.addEventListener("mouseover", (e) => {
+  const target = e.target.closest("[data-tip]");
+  if (target === tipTarget) return;
+  tipTarget = target;
+  clearTimeout(tipTimer);
+  if (!target) {
+    tipEl.classList.remove("show");
+    return;
+  }
+  tipTimer = setTimeout(() => showTip(target), 150);
+});
+document.addEventListener("mousedown", () => {
+  clearTimeout(tipTimer);
+  tipEl.classList.remove("show");
+});
+
 
 // ---- Lucide-style stroke icons (24x24, MIT) ----
 const svgWrap = (inner) =>
@@ -114,9 +154,9 @@ function applyI18n() {
   for (const el of document.querySelectorAll("[data-i18n]")) {
     el.textContent = t(el.dataset.i18n);
   }
-  $("live-dot").title = t("tip.connected");
-  $("mute-btn").title = t("tip.mute");
-  $("quit-btn").title = t("tip.quit");
+  $("live-dot").dataset.tip = t("tip.connected");
+  $("mute-btn").dataset.tip = t("tip.mute");
+  $("quit-btn").dataset.tip = t("tip.quit");
 }
 
 
@@ -285,7 +325,7 @@ function applyTab() {
   }
   const pin = $("pin-btn");
   pin.classList.toggle("pinned", currentTab === defaultTab);
-  pin.title = t("tip.pin");
+  pin.dataset.tip = t("tip.pin");
   if (lastState) renderEvents(lastState.events || [], lastState.done || 0);
 }
 
@@ -379,7 +419,7 @@ function renderEvents(events, done) {
     proj.innerHTML = ICONS.focus + "<span></span>";
     proj.querySelector("span").textContent =
       (ev.cwd || "").split(/[\\/]/).pop() || "claude";
-    proj.title = ev.cwd || "";
+    proj.dataset.tip = ev.cwd || "";
     const msg = li.querySelector(".msg");
     if (ev.message) {
       msg.textContent = ev.message;

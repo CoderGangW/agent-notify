@@ -1,4 +1,4 @@
-// claude-notify: cross-platform tray daemon that surfaces Claude Code
+// agent-notify: cross-platform tray daemon that surfaces Claude Code
 // task-completion and attention events as native OS notifications.
 package main
 
@@ -32,7 +32,7 @@ func main() {
 		runUninstall()
 	case "peek": // debug: show what a transcript resolves to
 		if len(os.Args) < 3 {
-			fmt.Fprintln(os.Stderr, "usage: claude-notify peek <transcript.jsonl>")
+			fmt.Fprintln(os.Stderr, "usage: agent-notify peek <transcript.jsonl>")
 			os.Exit(2)
 		}
 		info := transcriptInfo(os.Args[2])
@@ -47,9 +47,9 @@ func main() {
 		_ = enc.Encode(usage.report())
 		_ = enc.Encode(limits.report())
 	case "version", "--version", "-v":
-		fmt.Println("claude-notify " + version)
+		fmt.Println("agent-notify " + version)
 	default:
-		fmt.Fprintln(os.Stderr, "usage: claude-notify [daemon|hook|install|install-codex|uninstall|stats|version]")
+		fmt.Fprintln(os.Stderr, "usage: agent-notify [daemon|hook|install|install-codex|uninstall|stats|version]")
 		os.Exit(2)
 	}
 }

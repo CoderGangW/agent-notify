@@ -39,7 +39,7 @@ func deliverNotification(ev Event) {
 		}
 	}
 
-	beeep.AppName = "claude-notify"
+	beeep.AppName = "agent-notify"
 	if subtitle != "" {
 		body = subtitle + " — " + body
 	}

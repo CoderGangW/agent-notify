@@ -37,8 +37,8 @@ func runDaemon() {
 	s := &daemonState{muted: loadConfig().Muted}
 
 	app := application.New(application.Options{
-		Name:        "claude-notify",
-		Description: "Claude Code session notifications",
+		Name:        "agent-notify",
+		Description: "Coding-agent session notifications",
 		Mac: application.MacOptions{
 			ActivationPolicy: application.ActivationPolicyAccessory,
 		},
@@ -53,11 +53,11 @@ func runDaemon() {
 	} else {
 		tray.SetIcon(trayIcon())
 	}
-	tray.SetTooltip("claude-notify")
+	tray.SetTooltip("agent-notify")
 
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:            "claude-notify",
-		Title:           "claude-notify",
+		Name:            "agent-notify",
+		Title:           "agent-notify",
 		Width:           400,
 		Height:          600,
 		Frameless:       true,

@@ -19,13 +19,13 @@ rm -rf dist && mkdir -p dist
 echo "version $VERSION · signing as: $IDENTITY"
 
 export MACOSX_DEPLOYMENT_TARGET=13.0
-CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/claude-notify-darwin-arm64 .
-CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/claude-notify-darwin-amd64 .
+CGO_ENABLED=1 GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/agent-notify-darwin-arm64 .
+CGO_ENABLED=1 GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/agent-notify-darwin-amd64 .
 
-APP="dist/claude-notify.app"
+APP="dist/agent-notify.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-lipo -create dist/claude-notify-darwin-arm64 dist/claude-notify-darwin-amd64 \
-  -output "$APP/Contents/MacOS/claude-notify"
+lipo -create dist/agent-notify-darwin-arm64 dist/agent-notify-darwin-amd64 \
+  -output "$APP/Contents/MacOS/agent-notify"
 cp assets/appicon.icns "$APP/Contents/Resources/appicon.icns"
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -33,9 +33,9 @@ cat > "$APP/Contents/Info.plist" <<EOF
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
-	<key>CFBundleName</key><string>claude-notify</string>
-	<key>CFBundleDisplayName</key><string>claude-notify</string>
-	<key>CFBundleExecutable</key><string>claude-notify</string>
+	<key>CFBundleName</key><string>agent-notify</string>
+	<key>CFBundleDisplayName</key><string>agent-notify</string>
+	<key>CFBundleExecutable</key><string>agent-notify</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>$VERSION</string>
 	<key>CFBundleVersion</key><string>$VERSION</string>
@@ -51,13 +51,13 @@ plutil -lint "$APP/Contents/Info.plist"
 codesign --force --deep --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
 codesign --verify --strict "$APP" && echo "codesign OK"
 
-(cd dist && zip -qry "claude-notify-macos-universal.app.zip" claude-notify.app)
+(cd dist && zip -qry "agent-notify-macos-universal.app.zip" agent-notify.app)
 ls -la dist/
 
 if [ -n "$1" ]; then
   gh release upload "$1" \
-    dist/claude-notify-darwin-arm64 \
-    dist/claude-notify-darwin-amd64 \
-    dist/claude-notify-macos-universal.app.zip --clobber
+    dist/agent-notify-darwin-arm64 \
+    dist/agent-notify-darwin-amd64 \
+    dist/agent-notify-macos-universal.app.zip --clobber
   echo "uploaded to release $1"
 fi

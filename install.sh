@@ -1,11 +1,11 @@
 #!/bin/sh
-# claude-notify installer (macOS / Linux)
-#   curl -fsSL https://raw.githubusercontent.com/CoderGangW/claude-notify/main/install.sh | sh
+# agent-notify installer (macOS / Linux)
+#   curl -fsSL https://raw.githubusercontent.com/CoderGangW/agent-notify/main/install.sh | sh
 # Downloads the latest release binary, then registers the Claude Code
-# hooks and login autostart via `claude-notify install`.
+# hooks and login autostart via `agent-notify install`.
 set -e
 
-REPO="CoderGangW/claude-notify"
+REPO="CoderGangW/agent-notify"
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
@@ -22,14 +22,14 @@ esac
 BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 mkdir -p "$BIN_DIR"
 
-URL="https://github.com/$REPO/releases/latest/download/claude-notify-$OS-$ARCH"
+URL="https://github.com/$REPO/releases/latest/download/agent-notify-$OS-$ARCH"
 echo "downloading $URL"
-curl -fsSL "$URL" -o "$BIN_DIR/claude-notify"
-chmod +x "$BIN_DIR/claude-notify"
+curl -fsSL "$URL" -o "$BIN_DIR/agent-notify"
+chmod +x "$BIN_DIR/agent-notify"
 
-"$BIN_DIR/claude-notify" install
+"$BIN_DIR/agent-notify" install
 
-echo "installed: $BIN_DIR/claude-notify"
+echo "installed: $BIN_DIR/agent-notify"
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *) echo "note: add $BIN_DIR to your PATH" ;;

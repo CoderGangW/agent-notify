@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="assets/logo.png" width="96" alt="claude-notify logo"/>
+<img src="assets/logo.png" width="96" alt="agent-notify logo"/>
 
-<h1>claude-notify</h1>
+<h1>agent-notify</h1>
 
 <p><b>Never miss a finished Claude Code session.</b></p>
 
 <p>
-  <a href="https://github.com/CoderGangW/claude-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/claude-notify?color=8a2be2" alt="latest release"/></a>
+  <a href="https://github.com/CoderGangW/agent-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/agent-notify?color=8a2be2" alt="latest release"/></a>
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="platforms"/>
   <img src="https://img.shields.io/badge/Go-Wails%20v3-00ADD8?logo=go&logoColor=white" alt="Go + Wails"/>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"/></a>
@@ -35,13 +35,13 @@ A cross-platform (macOS / Windows / Linux) tray app that tells you **which Claud
 - UI in English / 한국어 / 简体中文 (auto-detected, switchable in the window)
 
 **Codex too**
-- `claude-notify install-codex` wires the same notifications into the [Codex CLI](https://github.com/openai/codex) via its `notify` hook
+- `agent-notify install-codex` wires the same notifications into the [Codex CLI](https://github.com/openai/codex) via its `notify` hook
 
 ## How it works
 
 ```
-Claude Code ──(Stop / Notification hook)──▶ claude-notify hook ─┐
-Codex CLI  ──(notify)──▶ claude-notify codex-hook ──────────────┤ POST localhost:49517
+Claude Code ──(Stop / Notification hook)──▶ agent-notify hook ─┐
+Codex CLI  ──(notify)──▶ agent-notify codex-hook ──────────────┤ POST localhost:49517
                                                                 ▼
                                             tray daemon ──▶ OS notification
                                                  │
@@ -56,34 +56,34 @@ One line — downloads the binary, registers the Claude Code hooks, and sets up 
 
 ```sh
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/CoderGangW/claude-notify/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/CoderGangW/agent-notify/main/install.sh | sh
 ```
 
 ```powershell
 # Windows
-irm https://raw.githubusercontent.com/CoderGangW/claude-notify/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/CoderGangW/agent-notify/main/install.ps1 | iex
 ```
 
 With Go installed:
 
 ```sh
-go install github.com/CoderGangW/claude-notify@latest
-claude-notify install   # register hooks + autostart + start the daemon
+go install github.com/CoderGangW/agent-notify@latest
+agent-notify install   # register hooks + autostart + start the daemon
 ```
 
-macOS users can also grab **claude-notify.app** (signed, universal) from the releases page — double-click to run, then `claude-notify install` from the app menu isn't needed if you already ran the installer.
+macOS users can also grab **agent-notify.app** (signed, universal) from the releases page — double-click to run, then `agent-notify install` from the app menu isn't needed if you already ran the installer.
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `claude-notify` | Run the tray daemon (default) |
-| `claude-notify install` | Copy the binary to a stable path, register Stop/Notification hooks, login autostart, start the daemon |
-| `claude-notify install-codex` | Register the Codex CLI `notify` hook in `~/.codex/config.toml` |
-| `claude-notify uninstall` | Remove hooks and autostart |
-| `claude-notify stats` | Debug: dump the usage + limits JSON the window shows |
-| `claude-notify hook` / `codex-hook` | Hook endpoints called by Claude Code / Codex (never run manually) |
-| `claude-notify peek <transcript.jsonl> [session-id]` | Debug: print the title/summary sources resolved for a session |
+| `agent-notify` | Run the tray daemon (default) |
+| `agent-notify install` | Copy the binary to a stable path, register Stop/Notification hooks, login autostart, start the daemon |
+| `agent-notify install-codex` | Register the Codex CLI `notify` hook in `~/.codex/config.toml` |
+| `agent-notify uninstall` | Remove hooks and autostart |
+| `agent-notify stats` | Debug: dump the usage + limits JSON the window shows |
+| `agent-notify hook` / `codex-hook` | Hook endpoints called by Claude Code / Codex (never run manually) |
+| `agent-notify peek <transcript.jsonl> [session-id]` | Debug: print the title/summary sources resolved for a session |
 
 ## Platform notes
 

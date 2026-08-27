@@ -51,7 +51,8 @@ func saveSettings(path string, settings map[string]any) {
 
 // isOurCommand reports whether a hook command string belongs to claude-notify.
 func isOurCommand(cmd string) bool {
-	return strings.Contains(cmd, "claude-notify") && strings.HasSuffix(strings.TrimSpace(cmd), " hook")
+	return (strings.Contains(cmd, "agent-notify") || strings.Contains(cmd, "claude-notify")) &&
+		strings.HasSuffix(strings.TrimSpace(cmd), " hook")
 }
 
 func hookEntries(hooks map[string]any, event string) []any {
@@ -70,7 +71,7 @@ func installBinary(exe string) string {
 		return exe
 	}
 	if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" && filepath.Separator == '\\' {
-		dir = filepath.Join(localAppData, "claude-notify")
+		dir = filepath.Join(localAppData, "agent-notify")
 	} else {
 		dir = filepath.Join(home, ".local", "bin")
 	}
@@ -95,6 +96,9 @@ func installBinary(exe string) string {
 		return exe
 	}
 	fmt.Printf(T("install.binary")+"\n", dest)
+	// drop the pre-rename binary so stale copies don't linger
+	_ = os.Remove(filepath.Join(dir, "claude-notify"))
+	_ = os.Remove(filepath.Join(dir, "claude-notify.exe"))
 	return dest
 }
 

@@ -32,7 +32,7 @@ type asyncPayload struct {
 	Report  string `json:"report"`
 }
 
-// runHook is invoked by Claude Code as `claude-notify hook`. It must be
+// runHook is invoked by Claude Code as `agent-notify hook`. It must be
 // fast and must always exit 0 so it never blocks or fails the session.
 // AI summarization is handed to a detached child process.
 func runHook() {
