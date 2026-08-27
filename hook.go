@@ -165,7 +165,14 @@ func aiSummarize(request, report string) string {
 		return ""
 	}
 
-	prompt := "Below are the last request and final report of a coding-agent session. Output a one-sentence summary (max 80 chars) for a desktop notification body, focused on what was completed or changed. Output nothing but the summary sentence. Write it in the same language as the report.\n\n[request]\n" +
+	// The summary language follows the app's UI language setting.
+	langName := map[string]string{
+		"en": "English",
+		"ko": "Korean",
+		"zh": "Simplified Chinese",
+	}[resolveLang(loadConfig().Lang)]
+
+	prompt := "Below are the last request and final report of a coding-agent session. Output a one-sentence summary (max 80 chars) for a desktop notification body, focused on what was completed or changed. Output nothing but the summary sentence. Write the summary in " + langName + ".\n\n[request]\n" +
 		request + "\n\n[report]\n" + report
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
