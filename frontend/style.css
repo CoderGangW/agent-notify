@@ -295,7 +295,13 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
   transition: color 0.2s, border-color 0.2s;
 }
 .subtab.active { color: var(--text); border-color: var(--accent); }
-.sess .ic.spin svg { animation: rot 1.1s linear infinite; }
+.sess .ic.spin svg {
+  animation: rot 1.1s linear infinite;
+  /* WebKit resolves svg transform-origin against the path bbox without
+     these — the 3/4-circle loader then orbits instead of spinning */
+  transform-box: border-box;
+  transform-origin: center;
+}
 @keyframes rot { to { transform: rotate(360deg); } }
 .sess .ic.work { color: var(--accent); }
 .sess .ic.tool { color: var(--warn); }
