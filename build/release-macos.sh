@@ -12,7 +12,17 @@ cd "$(dirname "$0")/.."
 
 BUNDLE_ID="com.codergangw.claude-notify" # fixed — never change, TCC/launchd identity hangs off it
 VERSION=$(sed -n 's/^const version = "\(.*\)"/\1/p' main.go)
-IDENTITY=${CODESIGN_IDENTITY:-$(security find-identity -v -p codesigning | sed -n '1s/.*"\(.*\)"/\1/p')}
+# Identity priority (ulio-style): explicit override > Developer ID >
+# Apple Development. A real identity keeps the designated requirement —
+# and therefore TCC grants — stable across releases.
+IDENTITY="${CODESIGN_IDENTITY:-}"
+if [ -z "$IDENTITY" ]; then
+  IDS=$(security find-identity -v -p codesigning 2>/dev/null)
+  for KIND in "Developer ID Application" "Apple Development"; do
+    HIT=$(printf '%s\n' "$IDS" | sed -n "s/.*\"\($KIND[^\"]*\)\".*/\1/p" | head -1)
+    if [ -n "$HIT" ]; then IDENTITY="$HIT"; break; fi
+  done
+fi
 [ -n "$IDENTITY" ] || { echo "no codesigning identity found" >&2; exit 1; }
 
 rm -rf dist && mkdir -p dist
@@ -52,10 +62,10 @@ plutil -lint "$APP/Contents/Info.plist"
 # Apple Development identity only runs on this machine's dev profile.
 case "$IDENTITY" in
   "Developer ID Application"*)
-    codesign --force --deep --options runtime --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
+    codesign --force --deep --timestamp --options runtime --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
     ;;
   *)
-    codesign --force --deep --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
+    codesign --force --deep --timestamp --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
     echo "note: '$IDENTITY' is not a Developer ID cert — other Macs will need"
     echo "      right-click→Open or 'xattr -cr agent-notify.app' on first run."
     ;;
