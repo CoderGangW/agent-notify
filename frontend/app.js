@@ -64,6 +64,7 @@ const ICONS = {
   branch: svgWrap('<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>'),
   pin: svgWrap('<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"/>'),
   focus: svgWrap('<path d="M7 7h10v10"/><path d="M7 17 17 7"/>'),
+  rotate: svgWrap('<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>'),
   help: svgWrap('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>'),
 };
 
@@ -92,6 +93,7 @@ function applyI18n() {
   $("live-dot").dataset.tip = t("tip.connected");
   $("mute-btn").dataset.tip = t("tip.mute");
   $("quit-btn").dataset.tip = t("tip.quit");
+  $("restart-btn").dataset.tip = t("tip.restart");
 }
 
 
@@ -858,9 +860,14 @@ $("readall-btn").addEventListener("click", () =>
   post("/api/read-all", { source: currentTab || "claude" })
 );
 $("quit-btn").addEventListener("click", () => post("/api/quit"));
+$("restart-btn").addEventListener("click", () => {
+  fetch("/api/restart", { method: "POST" }).catch(() => {});
+  $("live-dot").classList.add("off"); // window dies with the daemon; dot for the beat before it does
+});
 
 $("quit-btn").innerHTML = ICONS.x;
 $("help-btn").innerHTML = ICONS.help;
+$("restart-btn").innerHTML = ICONS.rotate;
 $("mute-btn").innerHTML = ICONS.bell;
 $("pin-btn").innerHTML = ICONS.pin;
 applySubTab();

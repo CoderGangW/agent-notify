@@ -42,6 +42,7 @@
   "tip.open": "open",
   "tip.pin": "Make this tab the default",
   "tip.quit": "quit",
+  "tip.restart": "Restart daemon",
   "tut.done": "Get started",
   "tut.next": "Next",
   "tut.prev": "Back",

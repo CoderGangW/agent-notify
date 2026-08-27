@@ -404,6 +404,24 @@ func (s *daemonState) assetHandler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	})
+	mux.HandleFunc("/api/restart", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		go func() {
+			time.Sleep(400 * time.Millisecond) // let the response flush
+			if runtime.GOOS == "darwin" && os.Getppid() == 1 {
+				os.Exit(1) // launchd KeepAlive respawns us
+			}
+			// unmanaged: hand off to a detached replacement, then quit;
+			// its listen-retry loop waits for this port to free up
+			if bin := installDest(); bin != "" {
+				cmd := exec.Command(bin, "daemon")
+				if err := cmd.Start(); err == nil {
+					_ = cmd.Process.Release()
+				}
+			}
+			os.Exit(0)
+		}()
+	})
 	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		go s.app.Quit()

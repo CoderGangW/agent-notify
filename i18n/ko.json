@@ -42,6 +42,7 @@
   "tip.open": "열기",
   "tip.pin": "이 탭을 기본값으로",
   "tip.quit": "종료",
+  "tip.restart": "데몬 재시작",
   "tut.done": "시작하기",
   "tut.next": "다음",
   "tut.prev": "이전",

@@ -42,6 +42,7 @@
   "tip.open": "打开",
   "tip.pin": "将此标签设为默认",
   "tip.quit": "退出",
+  "tip.restart": "重启守护进程",
   "tut.done": "开始使用",
   "tut.next": "下一步",
   "tut.prev": "上一步",

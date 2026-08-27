@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -257,8 +258,42 @@ func deliver(ev Event) {
 	if postToDaemon(ev) {
 		return
 	}
-	// Daemon not running: degrade to a direct OS notification.
+	// Daemon not running: degrade to a direct OS notification, and try to
+	// bring the daemon back for the next event.
 	deliverNotification(ev)
+	reviveDaemon()
+}
+
+// reviveDaemon restarts a dead daemon, at most once per 5 minutes (the
+// stamp throttle keeps a burst of hooks from spawn-storming).
+func reviveDaemon() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	stamp := filepath.Join(home, ".claude-notify", "revive.stamp")
+	if st, err := os.Stat(stamp); err == nil && time.Since(st.ModTime()) < 5*time.Minute {
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(stamp), 0o755)
+	_ = os.WriteFile(stamp, []byte(time.Now().Format(time.RFC3339)), 0o644)
+
+	if runtime.GOOS == "darwin" {
+		// kickstart revives the launchd job whether it crashed or was quit
+		if exec.Command("launchctl", "kickstart",
+			fmt.Sprintf("gui/%d/%s", os.Getuid(), launchdLabel)).Run() == nil {
+			return
+		}
+	}
+	// no launchd job (or not macOS): spawn the installed daemon detached
+	bin := installDest()
+	if bin == "" {
+		return
+	}
+	cmd := exec.Command(bin, "daemon")
+	if err := cmd.Start(); err == nil {
+		_ = cmd.Process.Release()
+	}
 }
 
 // postSession best-effort delivers a live-status update; no daemon, no problem.
