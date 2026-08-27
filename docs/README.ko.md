@@ -34,7 +34,7 @@
 **알림**
 - ✅ 작업 완료(Stop) / 🔔 입력 필요(Notification) 시 네이티브 OS 알림
 - 제목 = **세션 제목**(VSCode 익스텐션이 생성한 제목 포함), 본문 = **한 줄 AI 요약**(`claude -p --model haiku`, 기존 인증 사용 · 실패 시 마지막 응답 발췌)
-- macOS에서 알림 클릭 시(`terminal-notifier` 설치 기준) **세션이 돌던 창으로 포커스** — IDE(VSCode / Cursor / Windsurf) 또는 터미널 자동 감지
+- macOS 알림은 앱이 직접 발송(자체 아이콘, 의존성 없음), 클릭하면 **세션이 돌던 바로 그 창으로 포커스** — IDE(VSCode / Cursor / Windsurf), 터미널 탭, 멀티플렉서 팬 자동 감지
 
 **대시보드 창** — 트레이 아이콘 클릭
 - 최근 세션 이벤트: 상태, 제목, AI 요약, 클릭 한 번으로 해당 IDE/터미널 포커스
@@ -113,7 +113,7 @@ macOS는 릴리즈 페이지의 **agent-notify.app**(서명됨, 유니버설)을
 
 ## 플랫폼 참고
 
-- **macOS**: 클릭-포커스를 위해 `brew install terminal-notifier` 강력 권장. 창 UI는 네이티브(Wails v3 / WebKit). 로컬 빌드는 `build/release-macos.sh`로 패키징·서명 (번들 ID `com.codergangw.claude-notify` 고정).
+- **macOS**: 알림은 네이티브(UNUserNotificationCenter) — 별도 도구 불필요. `terminal-notifier`는 데몬이 죽어있을 때의 폴백으로만 사용. 창 UI는 네이티브(Wails v3 / WebKit). 로컬 빌드는 `build/release-macos.sh`로 패키징·서명 (번들 ID `com.codergangw.claude-notify` 고정).
 - **Linux**: 창 UI는 `libgtk-3` + `libwebkit2gtk-4.1` 필요; 트레이는 `libayatana-appindicator`, 알림은 `notify-send`. 없어도 hook 단독 알림은 동작. 설치 시 앱 메뉴 런처 + 아이콘 등록.
 - **Windows**: 토스트 알림, 추가 의존성 없음. exe 실행 시 콘솔창 안 뜸.
 - **AI 요약**: PATH에 `claude` CLI가 있으면 자동 사용. `CLAUDE_NOTIFY_NO_AI=1`로 비활성화.

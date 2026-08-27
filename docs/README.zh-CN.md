@@ -34,7 +34,7 @@
 **通知**
 - ✅ 任务完成（Stop）/ 🔔 需要输入（Notification）时发送原生系统通知
 - 标题 = **会话标题**（含 VSCode 扩展生成的标题），正文 = **一句话 AI 摘要**（`claude -p --model haiku`，使用现有认证 · 失败时回退为最后回复的摘录）
-- macOS 上点击通知（需 `terminal-notifier`）**聚焦会话所在窗口** — 自动识别 IDE（VSCode / Cursor / Windsurf）或终端
+- macOS 通知由应用原生发送（自带图标，无需依赖），点击即**聚焦会话所在的那个窗口** — 自动识别 IDE（VSCode / Cursor / Windsurf）、终端标签页或多路复用器面板
 
 **仪表盘窗口** — 点击托盘图标
 - 最近会话事件：状态、标题、AI 摘要，一键聚焦回会话的 IDE/终端
@@ -113,7 +113,7 @@ macOS 也可从发布页下载 **agent-notify.app**（已签名、通用二进�
 
 ## 平台说明
 
-- **macOS**：强烈建议 `brew install terminal-notifier` 以支持点击聚焦。窗口 UI 为原生（Wails v3 / WebKit）。本地构建用 `build/release-macos.sh` 打包签名（bundle id 固定为 `com.codergangw.claude-notify`）。
+- **macOS**：通知为原生（UNUserNotificationCenter），无需额外工具；`terminal-notifier` 仅在守护进程未运行时作为回退。窗口 UI 为原生（Wails v3 / WebKit）。本地构建用 `build/release-macos.sh` 打包签名（bundle id 固定为 `com.codergangw.claude-notify`）。
 - **Linux**：窗口 UI 需要发行版的 `libgtk-3` + `libwebkit2gtk-4.1`；托盘需要 `libayatana-appindicator`，通知需要 `notify-send`。缺少它们时仅钩子通知仍可用。安装时注册应用菜单启动器和图标。
 - **Windows**：toast 通知，无额外依赖。exe 运行不弹控制台窗口。
 - **AI 摘要**：PATH 中有 `claude` CLI 时自动启用。设 `CLAUDE_NOTIFY_NO_AI=1` 可禁用。
