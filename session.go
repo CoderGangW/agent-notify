@@ -84,7 +84,7 @@ func (s *daemonState) applySessionUpdate(u sessionUpdate) {
 		info.State = "working"
 		info.Tool = ""
 		info.TurnStart = now
-		info.Task = condense(u.Prompt, 90)
+		info.Task = condense(u.Prompt, 500)
 	case "pretool":
 		info.State = "tool"
 		info.Tool = u.Tool

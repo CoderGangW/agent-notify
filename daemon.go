@@ -25,12 +25,13 @@ var frontendFS embed.FS
 const maxEvents = 50
 
 type daemonState struct {
-	mu       sync.Mutex
-	events   []Event // newest first
-	sessions map[string]*sessionInfo
-	muted    bool // suppress native notifications; events still listed
-	app      *application.App
-	tray     *application.SystemTray
+	mu            sync.Mutex
+	events        []Event // newest first
+	sessions      map[string]*sessionInfo
+	muted         bool // suppress native notifications; events still listed
+	pendingUpdate releaseInfo
+	app           *application.App
+	tray          *application.SystemTray
 }
 
 func evSource(ev Event) string {
@@ -219,9 +220,10 @@ func (s *daemonState) assetHandler() http.Handler {
 			Lang        string         `json:"lang"`        // resolved UI language
 			LangSetting string         `json:"langSetting"` // raw config value
 			DefaultTab  string         `json:"defaultTab"`
+			Version     string         `json:"version"`
 			Usage       usageReport    `json:"usage"`
 			Limits      limitsReport   `json:"limits"`
-		}{Events: s.events, Sessions: s.sessionListLocked(),
+		}{Version: version, Events: s.events, Sessions: s.sessionListLocked(),
 			Unread: map[string]int{"claude": uc, "codex": ux}, Muted: s.muted,
 			Lang: resolveLang(cfg.Lang), LangSetting: cfg.Lang, DefaultTab: cfg.DefaultTab}
 		s.mu.Unlock()
@@ -369,6 +371,38 @@ func (s *daemonState) assetHandler() http.Handler {
 			openFolder(info.CWD)
 		}
 		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/update-check", func(w http.ResponseWriter, r *http.Request) {
+		info, err := checkUpdate()
+		resp := map[string]any{"current": version, "latest": info.Latest, "available": info.Available}
+		if err != nil {
+			resp["error"] = err.Error()
+		}
+		s.mu.Lock()
+		s.pendingUpdate = info
+		s.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+	mux.HandleFunc("/api/update-apply", func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		info := s.pendingUpdate
+		s.mu.Unlock()
+		if !info.Available {
+			var err error
+			info, err = checkUpdate()
+			if err != nil || !info.Available {
+				http.Error(w, "no update available", http.StatusConflict)
+				return
+			}
+		}
+		restarted, err := applyUpdate(info, true)
+		resp := map[string]any{"restarted": restarted, "version": info.Latest}
+		if err != nil {
+			resp["error"] = err.Error()
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

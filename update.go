@@ -35,23 +35,28 @@ func startAutoUpdate() {
 	}
 }
 
-func checkAndApplyUpdate() error {
-	if loadConfig().DisableAutoUpdate {
-		return nil
-	}
+// releaseInfo is one check against the latest GitHub release.
+type releaseInfo struct {
+	Latest    string // version without the v prefix
+	AssetURL  string // download url for this platform, "" if missing
+	Available bool
+}
+
+func checkUpdate() (releaseInfo, error) {
+	var info releaseInfo
 	req, err := http.NewRequest("GET", releaseAPI, nil)
 	if err != nil {
-		return err
+		return info, err
 	}
 	req.Header.Set("User-Agent", "agent-notify/"+version)
-	client := http.Client{Timeout: 30 * time.Second}
+	client := http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return info, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("release api: %s", resp.Status)
+		return info, fmt.Errorf("release api: %s", resp.Status)
 	}
 	var rel struct {
 		TagName string `json:"tag_name"`
@@ -61,42 +66,69 @@ func checkAndApplyUpdate() error {
 		} `json:"assets"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return err
+		return info, err
 	}
-	latest := strings.TrimPrefix(rel.TagName, "v")
-	if !versionNewer(latest, version) {
-		return nil
-	}
-
+	info.Latest = strings.TrimPrefix(rel.TagName, "v")
+	info.Available = versionNewer(info.Latest, version)
 	ext := ""
 	if runtime.GOOS == "windows" {
 		ext = ".exe"
 	}
 	want := fmt.Sprintf("agent-notify-%s-%s%s", runtime.GOOS, runtime.GOARCH, ext)
-	assetURL := ""
 	for _, a := range rel.Assets {
 		if a.Name == want {
-			assetURL = a.URL
+			info.AssetURL = a.URL
 		}
 	}
-	if assetURL == "" {
-		return fmt.Errorf("no asset %s in %s", want, rel.TagName)
-	}
+	return info, nil
+}
 
-	target := installDest()
-	if target == "" {
-		return fmt.Errorf("no install dir")
+func checkAndApplyUpdate() error {
+	if loadConfig().DisableAutoUpdate {
+		return nil
 	}
-	tmp, err := downloadTo(assetURL, filepath.Dir(target))
+	info, err := checkUpdate()
 	if err != nil {
 		return err
+	}
+	if !info.Available {
+		return nil
+	}
+	restarted, err := applyUpdate(info, true)
+	if err != nil || restarted {
+		return err
+	}
+	deliverNotification(Event{
+		Kind:    "done",
+		Title:   "agent-notify",
+		Message: fmt.Sprintf(T("update.ready"), "v"+info.Latest),
+		Time:    time.Now(),
+	})
+	return nil
+}
+
+// applyUpdate downloads, verifies, and swaps the binary. When restartOK
+// and running as the launchd-managed binary, it exits so KeepAlive brings
+// the new version up and reports restarted=true (the exit is deferred a
+// beat so an HTTP caller gets its response first).
+func applyUpdate(info releaseInfo, restartOK bool) (bool, error) {
+	if info.AssetURL == "" {
+		return false, fmt.Errorf("no asset for %s-%s in v%s", runtime.GOOS, runtime.GOARCH, info.Latest)
+	}
+	target := installDest()
+	if target == "" {
+		return false, fmt.Errorf("no install dir")
+	}
+	tmp, err := downloadTo(info.AssetURL, filepath.Dir(target))
+	if err != nil {
+		return false, err
 	}
 	defer os.Remove(tmp)
 
 	// Sanity gate: the downloaded binary must run and report the new version.
 	out, err := exec.Command(tmp, "version").Output()
-	if err != nil || !strings.Contains(string(out), latest) {
-		return fmt.Errorf("downloaded binary failed verification (%v: %q)", err, out)
+	if err != nil || !strings.Contains(string(out), info.Latest) {
+		return false, fmt.Errorf("downloaded binary failed verification (%v: %q)", err, out)
 	}
 
 	if runtime.GOOS == "windows" {
@@ -106,24 +138,22 @@ func checkAndApplyUpdate() error {
 		_ = os.Rename(target, old)
 	}
 	if err := os.Rename(tmp, target); err != nil {
-		return err
+		return false, err
 	}
-	fmt.Println("updated to", rel.TagName)
+	fmt.Println("updated to v" + info.Latest)
 
 	self, _ := os.Executable()
 	self, _ = filepath.EvalSymlinks(self)
-	if runtime.GOOS == "darwin" && self == target && os.Getppid() == 1 {
+	if restartOK && runtime.GOOS == "darwin" && self == target && os.Getppid() == 1 {
 		// launchd KeepAlive(SuccessfulExit=false) restarts us as the new
-		// version; the event feed and config are all on disk.
-		os.Exit(1)
+		// version; the event feed rebuilds, config is on disk.
+		go func() {
+			time.Sleep(700 * time.Millisecond)
+			os.Exit(1)
+		}()
+		return true, nil
 	}
-	deliverNotification(Event{
-		Kind:    "done",
-		Title:   "agent-notify",
-		Message: fmt.Sprintf(T("update.ready"), rel.TagName),
-		Time:    time.Now(),
-	})
-	return nil
+	return false, nil
 }
 
 // installDest mirrors installBinary's target path.

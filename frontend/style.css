@@ -313,8 +313,12 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
 .sess .statetxt { font-weight: 600; color: var(--text); opacity: 0.8; }
 .sess .elapsed { font-variant-numeric: tabular-nums; }
 .sess .task {
-  color: var(--dim); font-size: 11px; margin-top: 2px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--dim); font-size: 11px; line-height: 1.45; margin-top: 2px;
+  overflow: hidden;
+  transition: max-height 0.35s cubic-bezier(0.25, 0.9, 0.3, 1);
+}
+.sess .task.clamp {
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
 }
 
 /* ---------- events ---------- */
@@ -430,6 +434,20 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
 }
 #lang-sel:hover { color: var(--text); }
 .hidden { display: none !important; }
+
+/* ---------- footer ---------- */
+footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 4px;
+}
+footer .ver { color: var(--dim); font-size: 10px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+#upd-btn { font-size: 10.5px; }
+#upd-btn[data-state="available"] {
+  color: var(--accent); background: var(--accent-soft);
+  animation: pulse 2s ease-in-out infinite;
+}
+#upd-btn[data-state="checking"], #upd-btn[data-state="applying"] { opacity: 0.7; cursor: default; }
+#upd-btn[data-state="done"] { color: var(--good); cursor: default; }
 
 /* ---------- custom tooltip ---------- */
 #tooltip {

@@ -385,8 +385,37 @@ function renderSessions(all) {
       proj.dataset.tip = s.cwd || "";
       setText(li.querySelector(".statetxt"), sessionStateText(s));
       const task = li.querySelector(".task");
-      setText(task, s.task || "");
+      const tkey = "task:" + s.id;
       task.style.display = s.task ? "" : "none";
+      const tChanged = task.dataset.txt !== (s.task || "");
+      if (tChanged) {
+        task.dataset.txt = s.task || "";
+        task.textContent = s.task || "";
+      }
+      if (s.task) {
+        const isOpen = expanded.has(tkey);
+        task.classList.toggle("clamp", !isOpen);
+        let btn = li.querySelector(".more-btn");
+        if (tChanged || !btn) {
+          const overflows = isOpen || task.scrollHeight > task.clientHeight + 1;
+          if (overflows && !btn) {
+            btn = document.createElement("button");
+            btn.className = "more-btn" + (isOpen ? " open" : "");
+            btn.innerHTML = "<span></span>" + ICONS.chevron;
+            btn.querySelector("span").textContent = t(isOpen ? "events.less" : "events.more");
+            btn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              toggleMsg(task, btn, tkey, 1);
+            });
+            li.querySelector(".body").appendChild(btn);
+          } else if (!overflows && btn && !isOpen) {
+            btn.remove();
+          }
+        }
+      } else {
+        const btn = li.querySelector(".more-btn");
+        if (btn) btn.remove();
+      }
       const el = li.querySelector(".elapsed");
       const busyState = s.state === "tool" || s.state === "working";
       el.dataset.ts = busyState ? s.turnStart : s.lastSeen;
@@ -453,9 +482,9 @@ const expanded = new Set(); // event keys the user opened; survives re-renders
 
 const evKey = (ev) => (ev.session_id || "") + "|" + ev.time;
 
-function toggleMsg(msg, btn, key) {
+function toggleMsg(msg, btn, key, lines = 2) {
   const line = parseFloat(getComputedStyle(msg).lineHeight);
-  const collapsedPx = Math.round(line * 2);
+  const collapsedPx = Math.round(line * lines);
   if (expanded.has(key)) {
     // collapse: animate current height down to two lines, then re-clamp
     expanded.delete(key);
@@ -659,6 +688,7 @@ async function refresh() {
     // a badge appearing/disappearing changes the tab's width — resize the ink
     if (badgeChanged && currentTab) updateInk();
     $("plan-chip").textContent = (st.limits && st.limits.plan) || "";
+    setText($("ver"), st.version ? "v" + st.version : "");
     const mute = $("mute-btn");
     const mstate = st.muted ? "off" : "on";
     if (mute.dataset.state !== mstate) {
@@ -670,6 +700,50 @@ async function refresh() {
     $("live-dot").classList.add("off");
   }
 }
+
+// ---- update footer ----
+let updState = "idle"; // idle | checking | latest | available | applying | done
+let updLatest = "";
+
+function setUpd(state, label) {
+  updState = state;
+  const btn = $("upd-btn");
+  btn.dataset.state = state;
+  btn.querySelector("span").textContent = label;
+}
+
+$("upd-btn").addEventListener("click", async () => {
+  if (updState === "checking" || updState === "applying" || updState === "done") return;
+  if (updState === "available") {
+    setUpd("applying", t("update.applying"));
+    try {
+      const r = await (await fetch("/api/update-apply", { method: "POST" })).json();
+      if (r.error) setUpd("idle", t("update.fail"));
+      else setUpd("done", r.restarted ? t("update.restarting") : t("update.next"));
+    } catch (_) {
+      // daemon likely restarted mid-response; that's success
+      setUpd("done", t("update.restarting"));
+    }
+    return;
+  }
+  setUpd("checking", t("update.checking"));
+  try {
+    const r = await (await fetch("/api/update-check", { method: "POST" })).json();
+    if (r.error) {
+      setUpd("idle", t("update.fail"));
+    } else if (r.available) {
+      updLatest = r.latest;
+      setUpd("available", t("update.available").replace("{v}", r.latest));
+    } else {
+      setUpd("latest", t("update.latest"));
+      setTimeout(() => {
+        if (updState === "latest") setUpd("idle", t("update.check"));
+      }, 3000);
+    }
+  } catch (_) {
+    setUpd("idle", t("update.fail"));
+  }
+});
 
 $("lang-sel").addEventListener("change", (e) => post("/api/lang", { lang: e.target.value }));
 $("mute-btn").addEventListener("click", () => post("/api/mute"));
