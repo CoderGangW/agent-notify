@@ -84,8 +84,9 @@
     <ul id="events" class="hidden"></ul>
     <div id="empty" class="empty"><span data-i18n="events.empty">아직 이벤트 없음</span><span data-i18n="events.hint">Claude Code 세션이 끝나면 여기 뜸</span></div>
   </section>
-  <div id="settings-panel" class="hidden">
-    <div class="set-head"><h3 data-i18n="set.title">설정</h3></div>
+  <div id="settings-overlay" class="hidden">
+  <div id="settings-panel">
+    <div class="set-head"><h3 data-i18n="set.title">설정</h3><button id="settings-close" class="icon-btn"></button></div>
     <div class="set-row">
       <span data-i18n="set.lang">언어</span>
       <select id="lang-sel">
@@ -118,6 +119,7 @@
       <div><span data-i18n="set.update">자동 업데이트</span><small data-i18n="set.update.d"></small></div>
       <button class="switch" id="sw-update"></button>
     </div>
+  </div>
   </div>
 
   <footer>

@@ -711,10 +711,17 @@ async function refresh() {
 let settingsOpen = false;
 function toggleSettings(open) {
   settingsOpen = open === undefined ? !settingsOpen : open;
-  $("settings-panel").classList.toggle("hidden", !settingsOpen);
+  $("settings-overlay").classList.toggle("hidden", !settingsOpen);
   $("settings-btn").classList.toggle("active", settingsOpen);
 }
 $("settings-btn").addEventListener("click", () => toggleSettings());
+$("settings-close").addEventListener("click", () => toggleSettings(false));
+$("settings-overlay").addEventListener("click", (e) => {
+  if (e.target === $("settings-overlay")) toggleSettings(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && settingsOpen) toggleSettings(false);
+});
 
 function renderSettings(cfg) {
   if (!cfg) return;
@@ -924,6 +931,7 @@ $("restart-btn").addEventListener("click", () => {
 $("quit-btn").innerHTML = ICONS.x;
 $("help-btn").innerHTML = ICONS.help;
 $("settings-btn").innerHTML = ICONS.gear;
+$("settings-close").innerHTML = ICONS.x;
 $("restart-btn").innerHTML = ICONS.rotate;
 $("mute-btn").innerHTML = ICONS.bell;
 $("pin-btn").innerHTML = ICONS.pin;
