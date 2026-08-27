@@ -194,7 +194,7 @@ func main() {
 	}
 	renderBadge(32, 0.5, false, dir+"/icon.png")
 	renderMono(32, false, dir+"/icon_mac.png")
-	renderBadge(256, 0.5, true, dir+"/logo.png")
-	renderBadge(1024, 2.2, true, dir+"/appicon.png")
+	renderBadge(256, 0.5, false, dir+"/logo.png")
+	renderBadge(1024, 2.2, false, dir+"/appicon.png")
 	fmt.Println("done")
 }
