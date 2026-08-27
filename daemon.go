@@ -181,10 +181,11 @@ func (s *daemonState) assetHandler() http.Handler {
 			Muted       bool         `json:"muted"`
 			Lang        string       `json:"lang"`        // resolved UI language
 			LangSetting string       `json:"langSetting"` // raw config value
+			DefaultTab  string       `json:"defaultTab"`
 			Usage       usageReport  `json:"usage"`
 			Limits      limitsReport `json:"limits"`
 		}{Events: s.events, Done: s.done, Muted: s.muted,
-			Lang: resolveLang(cfg.Lang), LangSetting: cfg.Lang}
+			Lang: resolveLang(cfg.Lang), LangSetting: cfg.Lang, DefaultTab: cfg.DefaultTab}
 		s.mu.Unlock()
 		resp.Usage = usage.report()
 		resp.Limits = limits.report()
@@ -198,6 +199,19 @@ func (s *daemonState) assetHandler() http.Handler {
 		s.mu.Unlock()
 		c := loadConfig()
 		c.Muted = muted
+		saveConfig(c)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/tab", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Tab string `json:"tab"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil || (req.Tab != "claude" && req.Tab != "codex") {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		c := loadConfig()
+		c.DefaultTab = req.Tab
 		saveConfig(c)
 		w.WriteHeader(http.StatusNoContent)
 	})

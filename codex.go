@@ -47,6 +47,7 @@ func runCodexHook() {
 	deliver(Event{
 		CWD:      cwd,
 		Kind:     "done",
+		Source:   "codex",
 		Title:    title,
 		Activate: activate,
 		Message:  condense(n.Last, 180),

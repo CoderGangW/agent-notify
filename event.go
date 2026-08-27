@@ -12,6 +12,7 @@ type Event struct {
 	SessionID string    `json:"session_id"`
 	CWD       string    `json:"cwd"`
 	Kind      string    `json:"kind"`     // "done" | "attention"
+	Source    string    `json:"source"`   // "claude" | "codex" ("" = claude, pre-0.2 events)
 	Title     string    `json:"title"`    // session title, if found
 	Activate  string    `json:"activate"` // macOS bundle id to focus on click
 	Message   string    `json:"message"`

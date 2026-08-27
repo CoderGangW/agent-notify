@@ -83,6 +83,7 @@ func runHook() {
 		SessionID: in.SessionID,
 		CWD:       in.CWD,
 		Kind:      kind,
+		Source:    "claude",
 		Title:     title,
 		Activate:  activate,
 		Message:   in.Message, // Notification events carry their own message

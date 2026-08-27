@@ -14,6 +14,7 @@ const ICONS = {
   check: svgWrap('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'),
   x: svgWrap('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
   chevron: svgWrap('<path d="m6 9 6 6 6-6"/>'),
+  pin: svgWrap('<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"/>'),
   focus: svgWrap('<path d="M7 7h10v10"/><path d="M7 17 17 7"/>'),
 };
 
@@ -41,6 +42,7 @@ const I18N = {
     "tip.mute": "mute/unmute notifications",
     "tip.quit": "quit",
     "tip.open": "open",
+    "tip.pin": "Make this tab the default",
     "events.more": "Show more",
     "events.less": "Show less",
     reset: (d, h, m) =>
@@ -68,6 +70,7 @@ const I18N = {
     "tip.mute": "알림 끄기/켜기",
     "tip.quit": "종료",
     "tip.open": "열기",
+    "tip.pin": "이 탭을 기본값으로",
     "events.more": "더보기",
     "events.less": "접기",
     reset: (d, h, m) =>
@@ -95,6 +98,7 @@ const I18N = {
     "tip.mute": "开/关通知",
     "tip.quit": "退出",
     "tip.open": "打开",
+    "tip.pin": "将此标签设为默认",
     "events.more": "展开",
     "events.less": "收起",
     reset: (d, h, m) =>
@@ -262,6 +266,39 @@ function renderUsage(u) {
   }
 }
 
+// ---- tabs ----
+let currentTab = null; // set from defaultTab on first state fetch
+let defaultTab = "claude";
+let lastState = null;
+
+function applyTab() {
+  document.body.classList.toggle("tab-codex", currentTab === "codex");
+  const seg = document.querySelector("#tabs .seg");
+  const ink = $("tab-ink");
+  for (const b of seg.querySelectorAll(".tab")) {
+    const active = b.dataset.tab === currentTab;
+    b.classList.toggle("active", active);
+    if (active) {
+      ink.style.transform = `translateX(${b.offsetLeft - 3}px)`;
+      ink.style.width = b.offsetWidth + "px";
+    }
+  }
+  const pin = $("pin-btn");
+  pin.classList.toggle("pinned", currentTab === defaultTab);
+  pin.title = t("tip.pin");
+  if (lastState) renderEvents(lastState.events || [], lastState.done || 0);
+}
+
+document.querySelector("#tabs .seg").addEventListener("click", (e) => {
+  const b = e.target.closest(".tab");
+  if (!b || b.dataset.tab === currentTab) return;
+  currentTab = b.dataset.tab;
+  applyTab();
+});
+$("pin-btn").addEventListener("click", () => {
+  if (currentTab) post("/api/tab", { tab: currentTab });
+});
+
 let knownNewest = null; // Time of newest event we've already rendered
 const expanded = new Set(); // event keys the user opened; survives re-renders
 
@@ -311,11 +348,14 @@ function renderEvents(events, done) {
   $("done-badge").textContent = done > 0 ? String(done) : "";
   const list = $("events");
   const empty = $("empty");
-  empty.classList.toggle("hidden", events.length > 0);
-  list.classList.toggle("hidden", events.length === 0);
+  const tab = currentTab || "claude";
+  const shown = events.filter((ev) => (ev.source || "claude") === tab);
+  empty.classList.toggle("hidden", shown.length > 0);
+  list.classList.toggle("hidden", shown.length === 0);
 
   list.innerHTML = "";
   events.forEach((ev, i) => {
+    if ((ev.source || "claude") !== tab) return;
     const key = evKey(ev);
     const li = document.createElement("li");
     li.className = "ev" + (knownNewest && ev.time > knownNewest ? " new" : "");
@@ -384,7 +424,15 @@ async function refresh() {
   try {
     const res = await fetch("/api/state");
     const st = await res.json();
+    lastState = st;
     $("live-dot").classList.remove("off");
+    defaultTab = st.defaultTab || "claude";
+    if (currentTab === null) {
+      currentTab = defaultTab;
+      applyTab();
+    } else {
+      $("pin-btn").classList.toggle("pinned", currentTab === defaultTab);
+    }
     if (st.lang && st.lang !== lang) {
       lang = st.lang;
       applyI18n();
@@ -414,6 +462,7 @@ $("quit-btn").addEventListener("click", () => post("/api/quit"));
 
 $("quit-btn").innerHTML = ICONS.x;
 $("mute-btn").innerHTML = ICONS.bell;
+$("pin-btn").innerHTML = ICONS.pin;
 applyI18n();
 refresh();
 setInterval(refresh, 2500);
