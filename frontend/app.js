@@ -19,11 +19,14 @@ function showTip(target) {
   const th = tipEl.offsetHeight;
   let x = r.left + r.width / 2 - tw / 2;
   x = Math.max(6, Math.min(x, window.innerWidth - tw - 6));
-  let y = r.top - th - 7;
+  let y = r.top - th - 9;
   tipEl.classList.toggle("below", y < 4);
-  if (y < 4) y = r.bottom + 7;
+  if (y < 4) y = r.bottom + 9;
   tipEl.style.left = x + "px";
   tipEl.style.top = y + "px";
+  // caret tracks the hovered element's center even when clamped
+  const ax = Math.max(10, Math.min(r.left + r.width / 2 - x, tw - 10));
+  tipEl.style.setProperty("--ax", ax + "px");
 }
 
 document.addEventListener("mouseover", (e) => {
