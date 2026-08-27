@@ -297,10 +297,10 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
 .subtab.active { color: var(--text); border-color: var(--accent); }
 .sess .ic.spin svg {
   animation: rot 1.1s linear infinite;
-  /* WebKit resolves svg transform-origin against the path bbox without
-     these — the 3/4-circle loader then orbits instead of spinning */
-  transform-box: border-box;
-  transform-origin: center;
+  /* pixel-exact origin: WebKit's box/bbox resolution for svg
+     transform-origin is unreliable and made the loader orbit.
+     The icon is a fixed 15x15, so the center is simply 7.5px. */
+  transform-origin: 7.5px 7.5px;
 }
 @keyframes rot { to { transform: rotate(360deg); } }
 .sess .ic.work { color: var(--accent); }
