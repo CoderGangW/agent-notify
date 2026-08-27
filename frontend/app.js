@@ -100,9 +100,7 @@ function applyI18n() {
   $("gh-btn").dataset.tip = t("tip.github");
   $("pin-btn").dataset.tip = t("tip.pin");
   $("settings-btn").dataset.tip = t("tip.settings");
-  for (const opt of $("set-theme").options) {
-    opt.textContent = t("theme." + opt.value);
-  }
+  ddTheme.render();
 }
 
 
@@ -717,6 +715,96 @@ async function refresh() {
   }
 }
 
+// ---- custom dropdown ----
+const dropdowns = [];
+function makeDropdown(id, getOptions, onChange) {
+  const root = $(id);
+  root.innerHTML =
+    '<button class="dd-btn"><span class="dd-val"></span>' + ICONS.chevron + "</button>" +
+    '<div class="dd-menu"></div>';
+  const btn = root.querySelector(".dd-btn");
+  const menu = root.querySelector(".dd-menu");
+  const dd = {
+    root,
+    value: null,
+    set(v) {
+      dd.value = v;
+      dd.render();
+    },
+    render() {
+      const opts = getOptions();
+      const cur = opts.find((o) => o.v === dd.value) || opts[0];
+      root.querySelector(".dd-val").textContent = cur ? cur.label : "";
+      menu.innerHTML = "";
+      for (const o of opts) {
+        const item = document.createElement("button");
+        item.className = "dd-item" + (o.v === dd.value ? " sel" : "");
+        item.innerHTML = "<span></span>" + (o.v === dd.value ? ICONS.check : "");
+        item.querySelector("span").textContent = o.label;
+        item.addEventListener("click", (e) => {
+          e.stopPropagation();
+          dd.close();
+          if (o.v !== dd.value) {
+            dd.set(o.v);
+            onChange(o.v);
+          }
+        });
+        menu.appendChild(item);
+      }
+    },
+    open() {
+      for (const other of dropdowns) if (other !== dd) other.close();
+      dd.render();
+      root.classList.add("open");
+    },
+    close() {
+      root.classList.remove("open");
+    },
+  };
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    root.classList.contains("open") ? dd.close() : dd.open();
+  });
+  dropdowns.push(dd);
+  return dd;
+}
+document.addEventListener("click", () => dropdowns.forEach((d) => d.close()));
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") dropdowns.forEach((d) => d.close());
+});
+
+const ddLang = makeDropdown(
+  "dd-lang",
+  () => [
+    { v: "auto", label: "Auto" },
+    { v: "en", label: "English" },
+    { v: "ko", label: "한국어" },
+    { v: "zh", label: "中文" },
+  ],
+  (v) => post("/api/settings", { lang: v })
+);
+const ddTheme = makeDropdown(
+  "dd-theme",
+  () => [
+    { v: "auto", label: t("theme.auto") },
+    { v: "light", label: t("theme.light") },
+    { v: "dark", label: t("theme.dark") },
+  ],
+  (v) => {
+    themeSetting = v;
+    applyTheme();
+    post("/api/settings", { theme: v });
+  }
+);
+const ddTab = makeDropdown(
+  "dd-tab",
+  () => [
+    { v: "claude", label: "Claude" },
+    { v: "codex", label: "Codex" },
+  ],
+  (v) => post("/api/settings", { defaultTab: v })
+);
+
 // ---- theme ----
 let themeSetting = "auto";
 const lightMQ = window.matchMedia("(prefers-color-scheme: light)");
@@ -731,11 +819,7 @@ function applyTheme() {
 }
 lightMQ.addEventListener("change", applyTheme);
 applyTheme();
-$("set-theme").addEventListener("change", (e) => {
-  themeSetting = e.target.value;
-  applyTheme();
-  post("/api/settings", { theme: themeSetting });
-});
+
 
 // ---- settings panel ----
 let settingsOpen = false;
@@ -755,16 +839,13 @@ document.addEventListener("keydown", (e) => {
 
 function renderSettings(cfg) {
   if (!cfg) return;
-  const th = $("set-theme");
-  if (document.activeElement !== th) th.value = cfg.theme || "auto";
   if ((cfg.theme || "auto") !== themeSetting) {
     themeSetting = cfg.theme || "auto";
     applyTheme();
   }
-  const sel = $("lang-sel");
-  if (document.activeElement !== sel) sel.value = cfg.lang || "auto";
-  const tab = $("set-tab");
-  if (document.activeElement !== tab) tab.value = cfg.defaultTab || "claude";
+  ddTheme.set(cfg.theme || "auto");
+  ddLang.set(cfg.lang || "auto");
+  ddTab.set(cfg.defaultTab || "claude");
   $("sw-mute").classList.toggle("on", !!cfg.muted);
   $("sw-ai").classList.toggle("on", !cfg.disableAISummary);
   $("sw-live").classList.toggle("on", !cfg.disableLiveStatus);
@@ -784,7 +865,7 @@ bindSwitch("sw-ai", (on) => ({ disableAISummary: !on }));
 bindSwitch("sw-live", (on) => ({ disableLiveStatus: !on }));
 bindSwitch("sw-update", (on) => ({ disableAutoUpdate: !on }));
 bindSwitch("sw-autostart", (on) => ({ autostart: on }));
-$("set-tab").addEventListener("change", (e) => post("/api/settings", { defaultTab: e.target.value }));
+
 
 // ---- update footer ----
 let updState = "idle"; // idle | checking | latest | available | applying | done
@@ -985,7 +1066,7 @@ function tutMaybeAutoStart() {
   }
 }
 
-$("lang-sel").addEventListener("change", (e) => post("/api/settings", { lang: e.target.value }));
+
 $("mute-btn").addEventListener("click", () => post("/api/mute"));
 $("clear-btn").addEventListener("click", () => post("/api/clear"));
 $("readall-btn").addEventListener("click", () =>

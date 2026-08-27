@@ -500,11 +500,41 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
 .set-row small {
   display: block; color: var(--dim); font-size: 10px; margin-top: 1px;
 }
-.set-row select {
+/* custom dropdown */
+.dd { position: relative; }
+.dd-btn {
+  display: inline-flex; align-items: center; gap: 5px;
   background: var(--bg); color: var(--text);
-  border: 1px solid var(--card-edge); border-radius: 7px;
-  font-size: 11px; padding: 3px 6px; cursor: pointer;
+  border: 1px solid var(--card-edge); border-radius: 8px;
+  font-size: 11px; padding: 4px 8px 4px 10px; cursor: pointer;
+  transition: border-color 0.15s;
 }
+.dd-btn svg { width: 11px; height: 11px; color: var(--dim); transition: transform 0.2s; }
+.dd:hover .dd-btn { border-color: var(--accent); }
+.dd.open .dd-btn svg { transform: rotate(180deg); }
+.dd-menu {
+  position: absolute; right: 0; top: calc(100% + 5px); z-index: 5;
+  min-width: 110px;
+  background: var(--card);
+  border: 1px solid var(--card-edge);
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  opacity: 0; transform: translateY(-5px) scale(0.96);
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.dd.open .dd-menu { opacity: 1; transform: none; pointer-events: auto; }
+.dd-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%;
+  background: none; border: none; cursor: pointer;
+  color: var(--text); font-size: 11px; text-align: left;
+  padding: 5px 8px; border-radius: 7px;
+}
+.dd-item:hover { background: var(--accent-soft); }
+.dd-item.sel { color: var(--accent); font-weight: 650; }
+.dd-item svg { width: 12px; height: 12px; }
 .switch {
   position: relative; flex-shrink: 0;
   width: 32px; height: 18px;
