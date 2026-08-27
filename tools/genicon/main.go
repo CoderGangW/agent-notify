@@ -200,13 +200,39 @@ func writeICO(path string, margin float64) {
 
 const ss = 4 // supersample factor
 
+// badge colors: purple gradient background, pale lavender mark
+var (
+	gradTop = [3]float64{0x8A, 0x2B, 0xE2}
+	gradBot = [3]float64{0x5D, 0x0B, 0xCB}
+)
+
+const markFG = "#EBDDF9"
+
 func badgeImg(size int, margin float64, withWaves bool) image.Image {
-	const bg, fg = "#D97757", "#FFF6EF"
 	S := float64(size * ss)
+	// oksvg's gradient support is as flaky as its transforms: rasterize the
+	// squircle as an alpha mask and paint the vertical gradient directly.
+	mask := image.NewRGBA(image.Rect(0, 0, size*ss, size*ss))
+	drawInto(mask, squircleSVG(margin, "#000000"), 0, 0, S, S)
 	img := image.NewRGBA(image.Rect(0, 0, size*ss, size*ss))
-	drawInto(img, squircleSVG(margin, bg), 0, 0, S, S)
+	w := size * ss
+	for y := 0; y < w; y++ {
+		t := float64(y) / float64(w-1)
+		r := uint8(gradTop[0] + (gradBot[0]-gradTop[0])*t)
+		g := uint8(gradTop[1] + (gradBot[1]-gradTop[1])*t)
+		b := uint8(gradTop[2] + (gradBot[2]-gradTop[2])*t)
+		for x := 0; x < w; x++ {
+			i := y*img.Stride + x*4
+			a := mask.Pix[i+3]
+			if a == 0 {
+				continue
+			}
+			// straight (non-premultiplied) RGBA, matching image.RGBA semantics
+			img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = r, g, b, a
+		}
+	}
 	inset := (margin + 0.6) / 24 * S
-	drawInto(img, markSVG(fg, withWaves), inset, inset, S-2*inset, S-2*inset)
+	drawInto(img, markSVG(markFG, withWaves), inset, inset, S-2*inset, S-2*inset)
 	return resize.Resize(uint(size), uint(size), img, resize.Lanczos3)
 }
 

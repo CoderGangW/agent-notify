@@ -11,8 +11,14 @@
   <header style="--wails-draggable:drag">
     <div class="brand">
       <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="0.5" y="0.5" width="23" height="23" rx="6.2" fill="#D97757"/>
-        <g transform="translate(0.72 0.72) scale(0.94)" stroke="#FFF6EF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+        <defs>
+          <linearGradient id="logo-bg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#8A2BE2"/>
+            <stop offset="1" stop-color="#5D0BCB"/>
+          </linearGradient>
+        </defs>
+        <rect x="0.5" y="0.5" width="23" height="23" rx="6.2" fill="url(#logo-bg)"/>
+        <g transform="translate(0.72 0.72) scale(0.94)" stroke="#EBDDF9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
           <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
           <path d="M10.3 20.2a1.94 1.94 0 0 0 3.4 0"/>
           <g transform="translate(5.06 3.96) scale(0.52)" stroke-width="3.85">
