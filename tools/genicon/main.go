@@ -1,7 +1,10 @@
-// Generates claude-notify icons: a rounded ">-" prompt glyph on a squircle
-// badge. oksvg's stroke rendering is unreliable, so every stroke is built
-// as a filled capsule (round-capped bar); overlapping capsules union under
-// nonzero fill, which also gives the chevron a smooth round elbow.
+// Generates claude-notify icons: a rounded bell holding a ">-" prompt
+// glyph, on a squircle badge (color) or as a bare template glyph (macOS).
+//
+// oksvg quirks worked around here: transform attributes are mangled (so
+// layers composite via SetTarget placement instead) and stroke attributes
+// render as hairlines (so strokes are filled round-capped capsules; the
+// chevron elbow rounds itself via capsule overlap).
 package main
 
 import (
@@ -17,6 +20,22 @@ import (
 	"github.com/srwiley/rasterx"
 )
 
+// Hand-drawn bell on a 24-unit grid: smooth dome, flared skirt, rounded
+// lip bar, floating clapper. Overlapping subpaths union under nonzero fill.
+const bellPath = "M12 3.4" +
+	"C8.2 3.4 6.6 6.4 6.5 9.4" +
+	"C6.45 12.4 5.9 14.6 4.6 16.2" +
+	"L19.4 16.2" +
+	"C18.1 14.6 17.55 12.4 17.5 9.4" +
+	"C17.4 6.4 15.8 3.4 12 3.4Z" +
+	"M4.35 16.2L19.65 16.2" +
+	"C20.2 16.2 20.6 16.62 20.6 17.15" +
+	"C20.6 17.68 20.2 18.1 19.65 18.1" +
+	"L4.35 18.1" +
+	"C3.8 18.1 3.4 17.68 3.4 17.15" +
+	"C3.4 16.62 3.8 16.2 4.35 16.2Z" +
+	"M10.45 20.1a1.55 1.55 0 1 0 3.1 0a1.55 1.55 0 1 0 -3.1 0Z"
+
 // capsule returns a filled round-capped bar from p1 to p2 with half-width r.
 func capsule(x1, y1, x2, y2, r float64) string {
 	dx, dy := x2-x1, y2-y1
@@ -30,10 +49,11 @@ func capsule(x1, y1, x2, y2, r float64) string {
 		r, r, x1+nx, y1+ny)
 }
 
-// glyph builds the ">-" mark centered on (12,12) of the 24-grid, scaled by s.
-func glyph(fill string, s, r float64) string {
+// glyph builds the ">-" mark centered on (cx,cy), scaled by s from its
+// natural 11.5x9 box, as filled capsules.
+func glyph(fill string, cx, cy, s, r float64) string {
 	pt := func(x, y float64) (float64, float64) {
-		return 12 + (x-12)*s, 12 + (y-12)*s
+		return cx + (x-12)*s, cy + (y-12)*s
 	}
 	var b strings.Builder
 	seg := func(x1, y1, x2, y2 float64) {
@@ -41,49 +61,58 @@ func glyph(fill string, s, r float64) string {
 		bx, by := pt(x2, y2)
 		b.WriteString(capsule(ax, ay, bx, by, r*s))
 	}
-	seg(6.25, 7.5, 11.25, 12) // chevron upper arm
+	seg(6.25, 7.5, 11.25, 12)  // chevron upper arm
 	seg(11.25, 12, 6.25, 16.5) // chevron lower arm
-	seg(13.75, 12, 17.75, 12) // dash
+	seg(13.75, 12, 17.75, 12)  // dash
 	return `<path fill="` + fill + `" d="` + b.String() + `"/>`
-}
-
-func roundedRect(x, y, w, h, r float64, fill string) string {
-	return fmt.Sprintf(
-		`<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" rx="%.2f" ry="%.2f" fill="%s"/>`,
-		x, y, w, h, r, r, fill)
 }
 
 func wrap(inner string) string {
 	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">` + inner + `</svg>`
 }
 
-// badge: orange squircle + light glyph. margin shrinks the badge inside the
-// canvas (macOS app icons keep ~10% transparent margin).
-func badgeSVG(margin float64) string {
-	const bg, fg = "#D97757", "#FFF6EF"
+// glyph placement inside the bell dome (bell-grid coordinates)
+const glyphCX, glyphCY, glyphS, glyphR = 12, 10.6, 0.56, 1.45
+
+func bellSVG(bellFill, glyphFill string) string {
+	inner := `<path fill="` + bellFill + `" d="` + bellPath + `"/>`
+	if glyphFill != "" {
+		inner += glyph(glyphFill, glyphCX, glyphCY, glyphS, glyphR)
+	}
+	return wrap(inner)
+}
+
+func squircleSVG(margin float64, fill string) string {
 	side := 24 - 2*margin
-	return wrap(
-		roundedRect(margin, margin, side, side, side*0.27, bg) +
-			glyph(fg, side/24*0.92, 1.45))
+	return wrap(fmt.Sprintf(
+		`<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" rx="%.2f" ry="%.2f" fill="%s"/>`,
+		margin, margin, side, side, side*0.27, side*0.27, fill))
 }
 
-// mono: glyph only, for the macOS template tray icon.
-func monoSVG(color string) string {
-	return wrap(glyph(color, 1.12, 1.55))
-}
-
-func render(size int, svg, path string) {
-	const ss = 4 // supersample factor
-	big := size * ss
+func drawInto(img *image.RGBA, svg string, x, y, w, h float64) {
 	icon, err := oksvg.ReadIconStream(strings.NewReader(svg))
 	if err != nil {
 		panic(err)
 	}
-	icon.SetTarget(0, 0, float64(big), float64(big))
-	img := image.NewRGBA(image.Rect(0, 0, big, big))
-	scanner := rasterx.NewScannerGV(big, big, img, img.Bounds())
-	icon.Draw(rasterx.NewDasher(big, big, scanner), 1.0)
+	icon.SetTarget(x, y, w, h)
+	b := img.Bounds()
+	scanner := rasterx.NewScannerGV(b.Dx(), b.Dy(), img, b)
+	icon.Draw(rasterx.NewDasher(b.Dx(), b.Dy(), scanner), 1.0)
+}
 
+// subtractAlpha erases cut's coverage from dst (true knockout, needed for
+// the transparent-background macOS template icon).
+func subtractAlpha(dst, cut *image.RGBA) {
+	for i := 3; i < len(dst.Pix); i += 4 {
+		a := int(dst.Pix[i]) - int(cut.Pix[i])
+		if a < 0 {
+			a = 0
+		}
+		dst.Pix[i] = uint8(a)
+	}
+}
+
+func save(img image.Image, size int, path string) {
 	small := resize.Resize(uint(size), uint(size), img, resize.Lanczos3)
 	out, err := os.Create(path)
 	if err != nil {
@@ -95,14 +124,40 @@ func render(size int, svg, path string) {
 	}
 }
 
+const ss = 4 // supersample factor
+
+// badge: orange squircle, cream bell, glyph knocked out in badge color.
+// The glyph is painted (not subtracted): the backdrop is solid orange, so
+// paint-over reads identically to a knockout.
+func renderBadge(size int, margin float64, path string) {
+	const bg, fg = "#D97757", "#FFF6EF"
+	S := float64(size * ss)
+	img := image.NewRGBA(image.Rect(0, 0, size*ss, size*ss))
+	drawInto(img, squircleSVG(margin, bg), 0, 0, S, S)
+	inset := (margin + 2.1) / 24 * S
+	drawInto(img, bellSVG(fg, bg), inset, inset, S-2*inset, S-2*inset)
+	save(img, size, path)
+}
+
+// mono template: black bell, glyph as real transparency.
+func renderMono(size int, path string) {
+	S := float64(size * ss)
+	bell := image.NewRGBA(image.Rect(0, 0, size*ss, size*ss))
+	drawInto(bell, bellSVG("#000000", ""), 0, 0, S, S)
+	cut := image.NewRGBA(image.Rect(0, 0, size*ss, size*ss))
+	drawInto(cut, wrap(glyph("#000000", glyphCX, glyphCY, glyphS, glyphR)), 0, 0, S, S)
+	subtractAlpha(bell, cut)
+	save(bell, size, path)
+}
+
 func main() {
 	dir := "assets"
 	if len(os.Args) > 1 {
 		dir = os.Args[1]
 	}
-	render(32, badgeSVG(0.5), dir+"/icon.png")
-	render(32, monoSVG("#000000"), dir+"/icon_mac.png")
-	render(256, badgeSVG(0.5), dir+"/logo.png")
-	render(1024, badgeSVG(2.2), dir+"/appicon.png")
+	renderBadge(32, 0.5, dir+"/icon.png")
+	renderMono(32, dir+"/icon_mac.png")
+	renderBadge(256, 0.5, dir+"/logo.png")
+	renderBadge(1024, 2.2, dir+"/appicon.png")
 	fmt.Println("done")
 }
