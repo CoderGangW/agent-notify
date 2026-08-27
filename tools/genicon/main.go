@@ -112,9 +112,9 @@ func glyph(cx, cy, s, r float64) string {
 	p := func(x, y float64) pt { return pt{cx + (x-12)*s, cy + (y-12)*s} }
 	var b strings.Builder
 	seg := func(a, c pt) { b.WriteString(capsule(a.x, a.y, c.x, c.y, r)) }
-	seg(p(6.25, 7.5), p(11.25, 12))  // chevron upper arm
-	seg(p(11.25, 12), p(6.25, 16.5)) // chevron lower arm
-	seg(p(14.6, 12), p(19.6, 12))    // dash: long, clearly separated from the chevron
+	seg(p(6.8, 8.8), p(9.8, 12))  // chevron upper arm (small)
+	seg(p(9.8, 12), p(6.8, 15.2)) // chevron lower arm
+	seg(p(16.2, 12), p(20.8, 12)) // dash: long, with clear air after the chevron
 	return b.String()
 }
 
@@ -131,7 +131,7 @@ func markSVG(color string, withWaves bool) string {
 	if withWaves {
 		bs = 0.8 // waves take the freed side space
 	}
-	d := lucideBell(lineR, bs) + glyph(12, 12+(10.2-12)*bs, 0.52*bs, lineR)
+	d := lucideBell(lineR, bs) + glyph(11.3, 12+(10.2-12)*bs, 0.52*bs, lineR)
 	if withWaves {
 		d += waves(lineR, bs)
 	}
