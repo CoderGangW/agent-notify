@@ -566,6 +566,22 @@ footer .foot-actions { display: flex; align-items: center; gap: 2px; }
 }
 #tut-card h3 { font-size: 13px; margin-bottom: 5px; }
 #tut-card p { font-size: 11.5px; line-height: 1.55; color: var(--dim); }
+#tut-card .tut-legend {
+  list-style: none;
+  margin-top: 8px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+#tut-card .tut-legend li {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--text);
+}
+#tut-card .tut-legend .ic { display: inline-flex; flex-shrink: 0; }
+#tut-card .tut-legend .ic svg { width: 14px; height: 14px; }
+#tut-card .tut-legend .ic.work { color: var(--accent); }
+#tut-card .tut-legend .ic.tool { color: var(--warn); }
+#tut-card .tut-legend .ic.wait { color: var(--warn); }
+#tut-card .tut-legend .ic.wait svg { animation: wiggle 1.4s ease-in-out infinite; }
+#tut-card .tut-legend .ic.idle { color: var(--dim); }
 #tut-card .row {
   display: flex; align-items: center; justify-content: space-between;
   margin-top: 11px;

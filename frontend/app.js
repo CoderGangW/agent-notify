@@ -791,7 +791,15 @@ const TUT_STEPS = [
   { sel: "#tabs .seg", key: "s1" },
   { sel: "#limits-card", key: "s2" },
   { sel: "#usage-card", key: "s3" },
-  { sel: "#events-card", key: "s4", subtab: "sessions" },
+  {
+    sel: "#events-card", key: "s4", subtab: "sessions",
+    legend: [
+      { cls: "spin work", icon: "loader", key: "tut.leg.working" },
+      { cls: "spin tool", icon: "loader", key: "tut.leg.tool" },
+      { cls: "wait", icon: "bellRing", key: "tut.leg.waiting" },
+      { cls: "idle", icon: "check", key: "tut.leg.idle" },
+    ],
+  },
   { sel: "#events-card", key: "s5", subtab: "events" },
   { sel: "footer", key: "s6" },
 ];
@@ -804,7 +812,7 @@ function tutBuild() {
   const card = document.createElement("div");
   card.id = "tut-card";
   card.innerHTML =
-    '<h3></h3><p></p>' +
+    '<h3></h3><p></p><ul class="tut-legend"></ul>' +
     '<div class="row"><span class="dots"></span><span class="btns">' +
     '<button class="text-btn" id="tut-skip"></button>' +
     '<button class="text-btn" id="tut-prev"></button>' +
@@ -844,6 +852,19 @@ function tutGo(i) {
   card.style.display = "block";
   card.querySelector("h3").textContent = t("tut." + step.key + ".t");
   card.querySelector("p").textContent = t("tut." + step.key + ".b");
+  const legend = card.querySelector(".tut-legend");
+  if (step.legend) {
+    legend.innerHTML = step.legend
+      .map(
+        (l) =>
+          '<li><span class="ic ' + l.cls + '">' + ICONS[l.icon] + "</span><span>" +
+          t(l.key) + "</span></li>"
+      )
+      .join("");
+    legend.style.display = "";
+  } else {
+    legend.style.display = "none";
+  }
   card.querySelector(".dots").innerHTML = TUT_STEPS.map(
     (_, d) => '<i class="' + (d === i ? "on" : "") + '"></i>'
   ).join("");
