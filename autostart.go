@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -13,9 +14,17 @@ const launchdLabel = "com.codergangw.claude-notify"
 
 // installAutostart registers the daemon to start at login and starts it
 // now where the mechanism supports it.
+const appBundleBin = "/Applications/agent-notify.app/Contents/MacOS/agent-notify"
+
 func installAutostart(exe string, start bool) error {
 	switch runtime.GOOS {
 	case "darwin":
+		// Prefer the app bundle: Login Items then shows the app's name and
+		// icon instead of falling back to the macOS account name the way
+		// it does for bare unsigned binaries.
+		if _, err := os.Stat(appBundleBin); err == nil {
+			exe = appBundleBin
+		}
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return err
@@ -169,5 +178,40 @@ func removeAutostartFiles() {
 			"/v", "agent-notify", "/f").Run()
 	default:
 		_ = os.Remove(filepath.Join(home, ".config", "autostart", "agent-notify.desktop"))
+	}
+}
+
+// autostartHealthy reports whether the login entry exists and points at a
+// binary that is still there — daemons then leave it alone instead of
+// rewriting it every start (an older bundle build used to undo the
+// bundle-path preference that way).
+func autostartHealthy() bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		data, err := os.ReadFile(filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist"))
+		if err != nil {
+			return false
+		}
+		s := string(data)
+		i := strings.Index(s, "<array>")
+		j := strings.Index(s, "</string>")
+		if i < 0 || j < 0 || j < i {
+			return false
+		}
+		prog := s[i:j]
+		if k := strings.LastIndex(prog, "<string>"); k >= 0 {
+			prog = prog[k+len("<string>"):]
+		}
+		_, err = os.Stat(prog)
+		return err == nil
+	case "windows":
+		return true // registry entry never goes stale by path swap
+	default:
+		_, err := os.Stat(filepath.Join(home, ".config", "autostart", "agent-notify.desktop"))
+		return err == nil
 	}
 }

@@ -119,7 +119,18 @@ func runDaemon() {
 
 	go s.serve()
 	go firstRunSetup() // double-clicked .app installs its own hooks
-	go startAutoUpdate()
+	go s.autoUpdateLoop()
+	// after an in-window update the daemon respawns: bring the window back
+	if home, err := os.UserHomeDir(); err == nil {
+		stamp := filepath.Join(home, ".claude-notify", "reopen")
+		if _, err := os.Stat(stamp); err == nil {
+			_ = os.Remove(stamp)
+			go func() {
+				time.Sleep(800 * time.Millisecond)
+				window.Show().Focus()
+			}()
+		}
+	}
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
@@ -298,12 +309,16 @@ func (s *daemonState) assetHandler() http.Handler {
 			Version     string         `json:"version"`
 			Settings    config         `json:"settings"`
 			Setup       setupStatus    `json:"setup"`
+			UpdateAvail string         `json:"updateAvail"` // version waiting for a user-approved install
 			Usage       usageReport    `json:"usage"`
 			Limits      limitsReport   `json:"limits"`
 		}{Version: version, Settings: cfg, Setup: computeSetup(),
 			Events: s.events, Sessions: s.sessionListLocked(),
 			Unread: map[string]int{"claude": uc, "codex": ux}, Muted: s.muted,
 			Lang: resolveLang(cfg.Lang), LangSetting: cfg.Lang, DefaultTab: cfg.DefaultTab}
+		if s.pendingUpdate.Available {
+			resp.UpdateAvail = s.pendingUpdate.Latest
+		}
 		s.mu.Unlock()
 		resp.Usage = usage.report()
 		resp.Limits = limits.report()
@@ -464,6 +479,11 @@ func (s *daemonState) assetHandler() http.Handler {
 				return
 			}
 		}
+		// the window is open (the user clicked the button) — reopen it
+		// after the post-update respawn, ulio-style
+		if home, err := os.UserHomeDir(); err == nil {
+			_ = os.WriteFile(filepath.Join(home, ".claude-notify", "reopen"), nil, 0o644)
+		}
 		restarted, err := applyUpdate(info, true)
 		resp := map[string]any{"restarted": restarted, "version": info.Latest}
 		if err != nil {
@@ -533,6 +553,10 @@ func (s *daemonState) assetHandler() http.Handler {
 			setupMu.Unlock()
 		}
 		saveConfig(c)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/github", func(w http.ResponseWriter, r *http.Request) {
+		openFolder("https://github.com/CoderGangW/agent-notify") // open/xdg-open handle URLs too
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/restart", func(w http.ResponseWriter, r *http.Request) {

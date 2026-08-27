@@ -529,7 +529,7 @@ footer {
 }
 footer .ver { color: var(--dim); font-size: 10px; opacity: 0.7; font-variant-numeric: tabular-nums; }
 footer .foot-actions { display: flex; align-items: center; gap: 2px; }
-#restart-btn svg { width: 12px; height: 12px; }
+#restart-btn svg, #gh-btn svg { width: 12px; height: 12px; }
 #upd-btn { font-size: 10.5px; }
 #upd-btn[data-state="available"] {
   color: var(--accent); background: var(--accent-soft);

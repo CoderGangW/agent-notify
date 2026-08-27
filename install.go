@@ -193,7 +193,7 @@ func firstRunSetup() {
 	if added > 0 || updated > 0 {
 		fmt.Printf(T("install.hooks")+"\n", added, updated, settingsPath())
 	}
-	if !loadConfig().DisableAutostart {
+	if !loadConfig().DisableAutostart && !autostartHealthy() {
 		_ = installAutostart(installed, false)
 	}
 }

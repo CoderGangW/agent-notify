@@ -22,14 +22,28 @@ import (
 
 const releaseAPI = "https://api.github.com/repos/CoderGangW/agent-notify/releases/latest"
 
-func startAutoUpdate() {
-	if loadConfig().DisableAutoUpdate {
-		return
-	}
+// autoUpdateLoop only CHECKS and notifies — applying an update always
+// takes an explicit user click (an auto-applying updater would hand a
+// compromised release instant, silent code execution on every install).
+func (s *daemonState) autoUpdateLoop() {
 	time.Sleep(2 * time.Minute) // let startup settle
+	notified := ""
 	for {
-		if err := checkAndApplyUpdate(); err != nil {
-			fmt.Println("update check:", err)
+		if !loadConfig().DisableAutoUpdate {
+			if info, err := checkUpdate(); err == nil {
+				s.mu.Lock()
+				s.pendingUpdate = info
+				s.mu.Unlock()
+				if info.Available && notified != info.Latest {
+					notified = info.Latest
+					deliverNotification(Event{
+						Kind:    "done",
+						Title:   "agent-notify",
+						Message: fmt.Sprintf(T("update.found"), "v"+info.Latest),
+						Time:    time.Now(),
+					})
+				}
+			}
 		}
 		time.Sleep(6 * time.Hour)
 	}
@@ -83,30 +97,6 @@ func checkUpdate() (releaseInfo, error) {
 	return info, nil
 }
 
-func checkAndApplyUpdate() error {
-	if loadConfig().DisableAutoUpdate {
-		return nil
-	}
-	info, err := checkUpdate()
-	if err != nil {
-		return err
-	}
-	if !info.Available {
-		return nil
-	}
-	restarted, err := applyUpdate(info, true)
-	if err != nil || restarted {
-		return err
-	}
-	deliverNotification(Event{
-		Kind:    "done",
-		Title:   "agent-notify",
-		Message: fmt.Sprintf(T("update.ready"), "v"+info.Latest),
-		Time:    time.Now(),
-	})
-	return nil
-}
-
 // applyUpdate downloads, verifies, and swaps the binary. When restartOK
 // and running as the launchd-managed binary, it exits so KeepAlive brings
 // the new version up and reports restarted=true (the exit is deferred a
@@ -139,6 +129,20 @@ func applyUpdate(info releaseInfo, restartOK bool) (bool, error) {
 	}
 	if err := os.Rename(tmp, target); err != nil {
 		return false, err
+	}
+	// launchd may exec the app-bundle copy (nicer Login Items entry):
+	// keep it in sync and ad-hoc re-sign so the bundle stays launchable.
+	if runtime.GOOS == "darwin" {
+		if _, err := os.Stat(appBundleBin); err == nil {
+			if data, err := os.ReadFile(target); err == nil {
+				btmp := appBundleBin + ".new"
+				if os.WriteFile(btmp, data, 0o755) == nil && os.Rename(btmp, appBundleBin) == nil {
+					_ = exec.Command("codesign", "--force", "-s", "-",
+						"--identifier", "com.codergangw.claude-notify",
+						"/Applications/agent-notify.app").Run()
+				}
+			}
+		}
 	}
 	fmt.Println("updated to v" + info.Latest)
 
