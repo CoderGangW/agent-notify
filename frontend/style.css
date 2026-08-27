@@ -397,12 +397,22 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
 .more-btn {
-  display: flex; align-items: center; gap: 3px;
-  background: none; border: none; cursor: pointer;
-  color: var(--accent); opacity: 0.85;
-  font-size: 10.5px; padding: 3px 0 0;
+  display: inline-flex; align-items: center; gap: 4px;
+  width: fit-content;
+  background: var(--bg);
+  border: 1px solid var(--card-edge);
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--accent); opacity: 0.9;
+  font-size: 10.5px;
+  padding: 3px 10px;
+  margin-top: 5px;
 }
-.more-btn:hover { opacity: 1; }
+.more-btn:hover {
+  opacity: 1;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
 .more-btn svg { width: 12px; height: 12px; transition: transform 0.3s; }
 .more-btn.open svg { transform: rotate(180deg); }
 .badge {
