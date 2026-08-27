@@ -131,6 +131,10 @@ go run ./tools/genicon assets && go build
 - [ ] 实时会话状态（PreToolUse/PostToolUse：运行中的工具、耗时）
 - [ ] 收集远程机器的事件
 
+## 发布说明
+
+各版本变更见 [release_notes/](../release_notes/) 与[发布页](https://github.com/CoderGangW/agent-notify/releases)。
+
 ## 许可证
 
 源码可见许可：可自由使用与再分发未修改副本（含商业用途），修改及分发修改版需书面许可。见 [LICENSE](../LICENSE)。

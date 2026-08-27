@@ -131,6 +131,10 @@ go run ./tools/genicon assets && go build
 - [ ] Live session status (PreToolUse/PostToolUse: running tool, elapsed time)
 - [ ] Collect events from remote machines
 
+## Release notes
+
+Every release's changes live in [release_notes/](release_notes/) and on the [releases page](https://github.com/CoderGangW/agent-notify/releases).
+
 ## License
 
 Source-available: you may use and redistribute unmodified copies freely (commercial use included), but creating or distributing modified versions requires written permission. See [LICENSE](LICENSE).

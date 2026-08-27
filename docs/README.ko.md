@@ -131,6 +131,10 @@ go run ./tools/genicon assets && go build
 - [ ] 실시간 세션 상태 (PreToolUse/PostToolUse: 실행 중인 도구, 경과 시간)
 - [ ] 원격 머신 이벤트 수집
 
+## 릴리즈 노트
+
+버전별 변경사항은 [release_notes/](../release_notes/)와 [릴리즈 페이지](https://github.com/CoderGangW/agent-notify/releases)에서 볼 수 있습니다.
+
 ## 라이선스
 
 소스 공개형 라이선스: 무수정 사용·재배포는 자유(상업적 사용 포함)이나, 수정 및 수정본 배포는 서면 허가 필요. [LICENSE](../LICENSE) 참고.
