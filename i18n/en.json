@@ -14,6 +14,8 @@
   "events.title": "Session events",
   "greet.l1": "Hi, {name}.",
   "greet.l2": "Welcome!",
+  "greet.start": "Let's go",
+  "greet.sub": "Now, let's see how it works.",
   "install.already": "Hooks already installed: %s",
   "install.autostartFail": "Autostart registration failed (start manually): %v",
   "install.autostartOK": "Autostart at login registered (daemon started)",

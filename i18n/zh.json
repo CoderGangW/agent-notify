@@ -14,6 +14,8 @@
   "events.title": "会话事件",
   "greet.l1": "{name}，你好。",
   "greet.l2": "欢迎！",
+  "greet.start": "开始吧",
+  "greet.sub": "现在来看看怎么使用吧",
   "install.already": "hook 已安装：%s",
   "install.autostartFail": "开机自启注册失败（需手动启动）：%v",
   "install.autostartOK": "已注册登录自启（守护进程已启动）",

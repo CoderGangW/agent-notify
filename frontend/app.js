@@ -947,10 +947,8 @@ function tutBuild() {
   card.querySelector("#tut-skip").addEventListener("click", tutEnd);
   card.querySelector("#tut-prev").addEventListener("click", () => tutGo(tutStep - 1));
   card.querySelector("#tut-next").addEventListener("click", () => {
-    if (tutStep >= TUT_STEPS.length - 1) {
-      tutEnd();
-      greetToast();
-    } else tutGo(tutStep + 1);
+    if (tutStep >= TUT_STEPS.length - 1) tutEnd();
+    else tutGo(tutStep + 1);
   });
   return { hole, card };
 }
@@ -1073,19 +1071,18 @@ function renderWelcomeChecks(setup) {
   }
 }
 
-// Apple-style greeting: the whole window blurs over and the two lines
-// ink themselves in, character by character (soft blur → sharp, not a
-// typewriter).
-function greetToast() {
+// Apple-style intro between the welcome screen and the tour: the window
+// frosts over, the greeting inks itself in character by character, then
+// a call-to-action rises from the bottom; its button starts the tour.
+function greetIntro(onDone) {
   const name =
     (lastState && lastState.limits && lastState.limits.accountName) || "";
-  if (!name) return;
   const ov = document.createElement("div");
   ov.id = "greet-ov";
   const lines = [
-    t("greet.l1").replace("{name}", name),
+    name ? t("greet.l1").replace("{name}", name) : "",
     t("greet.l2"),
-  ];
+  ].filter(Boolean);
   let delay = 350; // let the blur settle first
   for (const line of lines) {
     const div = document.createElement("div");
@@ -1101,17 +1098,27 @@ function greetToast() {
     delay += 220; // beat between lines
     ov.appendChild(div);
   }
-  document.body.appendChild(ov);
-  const hold = delay + 1400;
-  setTimeout(() => {
+  const cta = document.createElement("div");
+  cta.className = "greet-cta";
+  cta.innerHTML = '<p></p><button class="tut-next"></button>';
+  cta.querySelector("p").textContent = t("greet.sub");
+  const btn = cta.querySelector("button");
+  btn.textContent = t("greet.start");
+  btn.addEventListener("click", () => {
     ov.classList.add("out");
-    setTimeout(() => ov.remove(), 800);
-  }, hold);
+    setTimeout(() => {
+      ov.remove();
+      if (onDone) onDone();
+    }, 650);
+  });
+  ov.appendChild(cta);
+  document.body.appendChild(ov);
+  setTimeout(() => cta.classList.add("show"), delay + 550);
 }
 
 function welcomeClose(startTour) {
   $("welcome-overlay").classList.add("hidden");
-  if (startTour) tutStart();
+  if (startTour) greetIntro(tutStart);
   else tutEnd(); // marks tutorialDone so it never auto-shows again
 }
 $("welcome-start").addEventListener("click", () => welcomeClose(true));
