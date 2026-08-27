@@ -934,6 +934,34 @@ function tutStart() {
 
 $("help-btn").addEventListener("click", tutStart);
 
+function renderWelcomeChecks(setup) {
+  const rows = [
+    { ok: setup.hooks, key: "welcome.hooks" },
+    { ok: setup.autostart, key: "welcome.autostart" },
+    { ok: setup.terminalNotifier, key: "welcome.notifier", miss: "welcome.notifier.miss" },
+    { ok: setup.claudeCLI, key: "welcome.cli", miss: "welcome.cli.miss" },
+  ];
+  $("welcome-checks").innerHTML = rows
+    .map((r) => {
+      const icon = r.ok ? ICONS.check : ICONS.bellOff;
+      const cls = r.ok ? "ok" : "miss";
+      const hint = !r.ok && r.miss ? "<small>" + t(r.miss) + "</small>" : "";
+      return (
+        '<li class="' + cls + '"><span class="ic">' + icon + "</span>" +
+        "<div><span>" + t(r.key) + "</span>" + hint + "</div></li>"
+      );
+    })
+    .join("");
+}
+
+function welcomeClose(startTour) {
+  $("welcome-overlay").classList.add("hidden");
+  if (startTour) tutStart();
+  else tutEnd(); // marks tutorialDone so it never auto-shows again
+}
+$("welcome-start").addEventListener("click", () => welcomeClose(true));
+$("welcome-skip").addEventListener("click", () => welcomeClose(false));
+
 let tutAutoChecked = false;
 function tutMaybeAutoStart() {
   if (tutAutoChecked) return;
@@ -942,7 +970,10 @@ function tutMaybeAutoStart() {
   try {
     done = localStorage.getItem("tutorialDone") || "";
   } catch (_) {}
-  if (!done) setTimeout(tutStart, 600); // let the cards animate in first
+  if (!done) {
+    renderWelcomeChecks((lastState && lastState.setup) || {});
+    setTimeout(() => $("welcome-overlay").classList.remove("hidden"), 500);
+  }
 }
 
 $("lang-sel").addEventListener("change", (e) => post("/api/settings", { lang: e.target.value }));

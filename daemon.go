@@ -10,8 +10,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -197,6 +199,51 @@ func (s *daemonState) refreshBadge() {
 	s.tray.SetLabel(label)
 }
 
+// setupStatus reports what first-run setup accomplished, for the welcome
+// screen's checklist. Cached briefly — it hits a few files.
+type setupStatus struct {
+	Hooks            bool `json:"hooks"`
+	Autostart        bool `json:"autostart"`
+	TerminalNotifier bool `json:"terminalNotifier"`
+	ClaudeCLI        bool `json:"claudeCLI"`
+}
+
+var (
+	setupMu      sync.Mutex
+	setupCached  setupStatus
+	setupChecked time.Time
+)
+
+func computeSetup() setupStatus {
+	setupMu.Lock()
+	defer setupMu.Unlock()
+	if time.Since(setupChecked) < 30*time.Second {
+		return setupCached
+	}
+	var st setupStatus
+	if data, err := os.ReadFile(settingsPath()); err == nil {
+		st.Hooks = strings.Contains(string(data), `agent-notify" hook`) ||
+			strings.Contains(string(data), `agent-notify hook`)
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		switch runtime.GOOS {
+		case "darwin":
+			_, err := os.Stat(filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist"))
+			st.Autostart = err == nil
+		case "windows":
+			st.Autostart = true // registry write never fails silently in install
+		default:
+			_, err := os.Stat(filepath.Join(home, ".config", "autostart", "agent-notify.desktop"))
+			st.Autostart = err == nil
+		}
+	}
+	st.TerminalNotifier = runtime.GOOS != "darwin" || findTerminalNotifier() != ""
+	_, err := exec.LookPath("claude")
+	st.ClaudeCLI = err == nil
+	setupCached, setupChecked = st, time.Now()
+	return st
+}
+
 // assetHandler serves the embedded window UI plus its local JSON API.
 func (s *daemonState) assetHandler() http.Handler {
 	sub, err := fs.Sub(frontendFS, "frontend")
@@ -222,9 +269,11 @@ func (s *daemonState) assetHandler() http.Handler {
 			DefaultTab  string         `json:"defaultTab"`
 			Version     string         `json:"version"`
 			Settings    config         `json:"settings"`
+			Setup       setupStatus    `json:"setup"`
 			Usage       usageReport    `json:"usage"`
 			Limits      limitsReport   `json:"limits"`
-		}{Version: version, Settings: cfg, Events: s.events, Sessions: s.sessionListLocked(),
+		}{Version: version, Settings: cfg, Setup: computeSetup(),
+			Events: s.events, Sessions: s.sessionListLocked(),
 			Unread: map[string]int{"claude": uc, "codex": ux}, Muted: s.muted,
 			Lang: resolveLang(cfg.Lang), LangSetting: cfg.Lang, DefaultTab: cfg.DefaultTab}
 		s.mu.Unlock()

@@ -130,6 +130,36 @@
   </div>
   </div>
 
+  <div id="welcome-overlay" class="hidden">
+    <div id="welcome-card">
+      <svg class="logo big" viewBox="0 0 24 24" aria-hidden="true">
+        <defs>
+          <linearGradient id="wl-bg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#8A2BE2"/>
+            <stop offset="1" stop-color="#5D0BCB"/>
+          </linearGradient>
+        </defs>
+        <rect x="0.5" y="0.5" width="23" height="23" rx="6.2" fill="url(#wl-bg)"/>
+        <g transform="translate(0.72 0.72) scale(0.94)" stroke="#EBDDF9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+          <path d="M10.3 20.2a1.94 1.94 0 0 0 3.4 0"/>
+          <g transform="translate(5.06 3.96) scale(0.52)" stroke-width="3.85">
+            <path d="M6.8 8.8 9.8 12 6.8 15.2"/>
+            <path d="M16.2 12h4.6"/>
+          </g>
+        </g>
+      </svg>
+      <h2 data-i18n="welcome.title">환영합니다</h2>
+      <p class="tag" data-i18n="welcome.tag"></p>
+      <p class="setup-label" data-i18n="welcome.setup"></p>
+      <ul id="welcome-checks"></ul>
+      <div class="welcome-btns">
+        <button id="welcome-skip" class="text-btn" data-i18n="welcome.skip">건너뛰기</button>
+        <button id="welcome-start" class="tut-next" data-i18n="welcome.start">투어 시작</button>
+      </div>
+    </div>
+  </div>
+
   <footer>
     <span class="ver" id="ver"></span>
     <span class="foot-actions">

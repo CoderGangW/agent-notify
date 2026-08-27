@@ -96,5 +96,16 @@
   "usage.out": "今日输出",
   "usage.title": "令牌用量",
   "usage.today": "今日",
-  "usage.week": "近7天"
+  "usage.week": "近7天",
+  "welcome.autostart": "登录时自动启动",
+  "welcome.cli": "claude CLI — AI 一句话摘要",
+  "welcome.cli.miss": "未安装 — 摘要将回退为节选",
+  "welcome.hooks": "已注册 Claude Code 钩子",
+  "welcome.notifier": "terminal-notifier — 点击通知聚焦窗口",
+  "welcome.notifier.miss": "未安装 — 建议 brew install terminal-notifier",
+  "welcome.setup": "首次运行已自动完成设置：",
+  "welcome.skip": "跳过",
+  "welcome.start": "开始导览",
+  "welcome.tag": "编码代理会话的通知与仪表盘",
+  "welcome.title": "欢迎使用 agent-notify"
 }

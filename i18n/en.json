@@ -96,5 +96,16 @@
   "usage.out": "Output today",
   "usage.title": "Token usage",
   "usage.today": "Today",
-  "usage.week": "Last 7 days"
+  "usage.week": "Last 7 days",
+  "welcome.autostart": "Starts at login",
+  "welcome.cli": "claude CLI — AI one-line summaries",
+  "welcome.cli.miss": "not found — summaries fall back to an excerpt",
+  "welcome.hooks": "Claude Code hooks registered",
+  "welcome.notifier": "terminal-notifier — click-to-focus notifications",
+  "welcome.notifier.miss": "not found — brew install terminal-notifier recommended",
+  "welcome.setup": "Set up automatically on first run:",
+  "welcome.skip": "Skip",
+  "welcome.start": "Take the tour",
+  "welcome.tag": "Notifications and a dashboard for your coding-agent sessions",
+  "welcome.title": "Welcome to agent-notify"
 }

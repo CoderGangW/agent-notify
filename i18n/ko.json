@@ -96,5 +96,16 @@
   "usage.out": "오늘 출력",
   "usage.title": "토큰 사용량",
   "usage.today": "오늘",
-  "usage.week": "최근 7일"
+  "usage.week": "최근 7일",
+  "welcome.autostart": "로그인 시 자동 시작",
+  "welcome.cli": "claude CLI — AI 한 줄 요약",
+  "welcome.cli.miss": "미설치 — 요약 대신 발췌로 대체됩니다",
+  "welcome.hooks": "Claude Code hook 등록",
+  "welcome.notifier": "terminal-notifier — 클릭 시 창 포커스 알림",
+  "welcome.notifier.miss": "미설치 — brew install terminal-notifier 권장",
+  "welcome.setup": "첫 실행에서 자동으로 설정했습니다:",
+  "welcome.skip": "건너뛰기",
+  "welcome.start": "투어 시작",
+  "welcome.tag": "코딩 에이전트 세션 알림과 대시보드",
+  "welcome.title": "agent-notify에 오신 것을 환영합니다"
 }
