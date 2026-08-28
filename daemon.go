@@ -29,37 +29,47 @@ type daemonState struct {
 	mu            sync.Mutex
 	events        []Event // newest first
 	sessions      map[string]*sessionInfo
-	muted         bool // suppress native notifications; events still listed
+	notifyMode    string // "on" | "alerts" | "quiet" | "silent" (config.notifyMode)
 	pendingUpdate releaseInfo
 	app           *application.App
 	tray          *application.SystemTray
 	window        application.Window
+	trayMenu      *application.Menu
+	updMenuItem   *application.MenuItem
 }
 
 func evSource(ev Event) string {
-	if ev.Source == "codex" {
-		return "codex"
+	if ev.Source == "" {
+		return "claude" // pre-0.2 events carried no source
 	}
-	return "claude"
+	return ev.Source
 }
 
-// unreadLocked returns per-source unacknowledged counts; caller holds mu.
-func (s *daemonState) unreadLocked() (claude, codex int) {
+// unreadLocked returns per-agent unacknowledged counts; caller holds mu.
+func (s *daemonState) unreadLocked() map[string]int {
+	unread := map[string]int{}
+	for _, a := range agentDefs {
+		unread[a.ID] = 0
+	}
 	for _, ev := range s.events {
-		if ev.Read {
-			continue
-		}
-		if evSource(ev) == "codex" {
-			codex++
-		} else {
-			claude++
+		if !ev.Read {
+			unread[evSource(ev)]++
 		}
 	}
-	return
+	return unread
 }
 
 func runDaemon() {
-	s := &daemonState{muted: loadConfig().Muted}
+	// fresh install (no config yet): start with no agents chosen — the
+	// window shows the pick-your-agents state and the tour runs on mock
+	// data. Upgraders (config without the agents key) keep the legacy
+	// claude+codex pair via enabledAgents().
+	if _, err := os.Stat(configPath()); os.IsNotExist(err) {
+		c := loadConfig()
+		c.Agents = []string{}
+		saveConfig(c)
+	}
+	s := &daemonState{notifyMode: loadConfig().notifyMode()}
 	setupNativeNotify() // no-op unless running from the .app bundle
 
 	app := application.New(application.Options{
@@ -103,17 +113,18 @@ func runDaemon() {
 		e.Cancel()
 	})
 	tray.AttachWindow(window).WindowOffset(8)
-	// Any click SHOWS the window — never toggle. Toggling races with
+	// Left click SHOWS the window — never toggle. Toggling races with
 	// HideOnFocusLost (the tray click first blurs and hides the window,
 	// then the toggle reads it as visible and hides it "again"), which
 	// made left clicks feel dead. Closing is Esc / clicking elsewhere.
-	// Any click SHOWS the window — never toggle, and bind every button:
-	// macOS can deliver status-item left clicks as right-button events
-	// (observed on macOS 27), which used to fall into the menuless
-	// right-click path and feel dead.
+	// Right click gets the native context menu (info · update · restart ·
+	// quit): with a menu set and NO OnRightClick handler, Wails shows it
+	// via native tracking on right-mouse-down. macOS 27 sometimes labels
+	// status-item left clicks as right-button events — those now open the
+	// menu instead of a dead click, which stays usable.
 	s.window = window
+	tray.SetMenu(s.buildTrayMenu())
 	tray.OnClick(s.showWindow)
-	tray.OnRightClick(s.showWindow)
 	tray.OnDoubleClick(s.showWindow)
 
 	go s.serve()
@@ -134,6 +145,52 @@ func runDaemon() {
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// animateHeight eases the window to the target height. On macOS AppKit
+// animates the frame natively (one smooth pass, top edge pinned); other
+// platforms step SetSize. A newer call supersedes a running stepper via
+// the generation counter.
+var (
+	animMu  sync.Mutex
+	animGen int
+)
+
+func (s *daemonState) animateHeight(target int) {
+	animMu.Lock()
+	animGen++
+	gen := animGen
+	animMu.Unlock()
+
+	width, start := s.window.Size()
+	if start == target {
+		return
+	}
+	// tray.PositionWindow reads the native frame directly, so no wails-side
+	// geometry sync is needed after the native animation
+	if nativeAnimateHeight(s.window.NativeWindow(), target) {
+		return
+	}
+	go func() {
+		const dur = 240 * time.Millisecond
+		t0 := time.Now()
+		for {
+			animMu.Lock()
+			cancelled := gen != animGen
+			animMu.Unlock()
+			if cancelled {
+				return
+			}
+			p := float64(time.Since(t0)) / float64(dur)
+			if p >= 1 {
+				s.window.SetSize(width, target)
+				return
+			}
+			e := 1 - (1-p)*(1-p)*(1-p) // ease-out cubic
+			s.window.SetSize(width, start+int(float64(target-start)*e))
+			time.Sleep(16 * time.Millisecond)
+		}
+	}()
 }
 
 func (s *daemonState) showWindow() {
@@ -217,14 +274,14 @@ func (s *daemonState) serve() {
 
 func (s *daemonState) add(ev Event) {
 	s.mu.Lock()
-	muted := s.muted
+	mode := s.notifyMode
 	s.events = append([]Event{ev}, s.events...)
 	if len(s.events) > maxEvents {
 		s.events = s.events[:maxEvents]
 	}
 	s.mu.Unlock()
 
-	if !muted {
+	if modeNotifies(mode) {
 		deliverNotification(ev)
 	}
 	s.refreshBadge()
@@ -236,11 +293,16 @@ func (s *daemonState) refreshBadge() {
 		return
 	}
 	s.mu.Lock()
-	uc, ux := s.unreadLocked()
+	unread := s.unreadLocked()
+	mode := s.notifyMode
 	s.mu.Unlock()
+	total := 0
+	for _, n := range unread {
+		total += n
+	}
 	label := ""
-	if uc+ux > 0 {
-		label = strconv.Itoa(uc + ux)
+	if total > 0 && modeBadges(mode) {
+		label = strconv.Itoa(total)
 	}
 	s.tray.SetLabel(label)
 }
@@ -248,10 +310,14 @@ func (s *daemonState) refreshBadge() {
 // setupStatus reports what first-run setup accomplished, for the welcome
 // screen's checklist. Cached briefly — it hits a few files.
 type setupStatus struct {
-	Hooks            bool `json:"hooks"`
+	Hooks            bool `json:"hooks"` // in-tab claude guide reads this
 	Autostart        bool `json:"autostart"`
 	TerminalNotifier bool `json:"terminalNotifier"`
 	ClaudeCLI        bool `json:"claudeCLI"`
+	// OS permissions (welcome checklist): 1 granted, 0 denied,
+	// 2 not determined, -1 unsupported on this platform/build
+	NotifPerm  int `json:"notifPerm"`
+	Automation int `json:"automation"`
 }
 
 var (
@@ -303,6 +369,8 @@ func computeSetup() setupStatus {
 	}
 	st.TerminalNotifier = runtime.GOOS != "darwin" || findTerminalNotifier() != ""
 	st.ClaudeCLI = findCLI("claude") != ""
+	st.NotifPerm = notifPermStatus()
+	st.Automation = automationStatus(false) // never prompts from a probe
 	setupCached, setupChecked = st, time.Now()
 	return st
 }
@@ -321,12 +389,13 @@ func (s *daemonState) assetHandler() http.Handler {
 	mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) {
 		cfg := loadConfig()
 		s.mu.Lock()
-		uc, ux := s.unreadLocked()
 		resp := struct {
 			Events      []Event        `json:"events"`
 			Sessions    []sessionInfo  `json:"sessions"`
-			Unread      map[string]int `json:"unread"` // per-source unacknowledged counts
-			Muted       bool           `json:"muted"`
+			Unread      map[string]int `json:"unread"`      // per-agent unacknowledged counts
+			Agents      []agentPublic  `json:"agents"`      // supported agents + setup status
+			Muted       bool           `json:"muted"`       // legacy: OS notifications off
+			NotifyMode  string         `json:"notifyMode"`  // resolved 4-level mode
 			Lang        string         `json:"lang"`        // resolved UI language
 			LangSetting string         `json:"langSetting"` // raw config value
 			DefaultTab  string         `json:"defaultTab"`
@@ -336,11 +405,13 @@ func (s *daemonState) assetHandler() http.Handler {
 			UpdateAvail string         `json:"updateAvail"` // version waiting for a user-approved install
 			Usage       usageReport    `json:"usage"`
 			Limits      limitsReport   `json:"limits"`
+			AgyQuota    agyQuotaReport `json:"agyQuota"`
 			Dev         bool           `json:"dev"` // running via tools/dev.sh
 		}{Version: version, Settings: cfg, Setup: computeSetup(),
 			Dev:    os.Getenv("AGENT_NOTIFY_DEV") != "",
 			Events: s.events, Sessions: s.sessionListLocked(),
-			Unread: map[string]int{"claude": uc, "codex": ux}, Muted: s.muted,
+			Unread: s.unreadLocked(), Agents: agentListEnabled(cfg),
+			Muted: !modeNotifies(s.notifyMode), NotifyMode: s.notifyMode,
 			Lang: resolveLang(cfg.Lang), LangSetting: cfg.Lang, DefaultTab: cfg.DefaultTab}
 		if s.pendingUpdate.Available {
 			resp.UpdateAvail = s.pendingUpdate.Latest
@@ -348,24 +419,36 @@ func (s *daemonState) assetHandler() http.Handler {
 		s.mu.Unlock()
 		resp.Usage = usage.report()
 		resp.Limits = limits.report()
+		// Antigravity quota needs a keyring read + token refresh, so only
+		// fetch it when that tab is actually in play and agy is installed.
+		if agentEnabled(cfg, "antigravity") && findCLI("agy") != "" {
+			resp.AgyQuota = agyQuota.report()
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	})
+	// header bell: cycle on → alerts → quiet → silent → on
 	mux.HandleFunc("/api/mute", func(w http.ResponseWriter, r *http.Request) {
+		next := map[string]string{"on": "alerts", "alerts": "quiet", "quiet": "silent", "silent": "on"}
 		s.mu.Lock()
-		s.muted = !s.muted
-		muted := s.muted
+		mode := next[s.notifyMode]
+		if mode == "" {
+			mode = "on"
+		}
+		s.notifyMode = mode
 		s.mu.Unlock()
 		c := loadConfig()
-		c.Muted = muted
+		c.NotifyMode = mode
+		c.Muted = !modeNotifies(mode) // keep the legacy field roughly in sync
 		saveConfig(c)
+		s.refreshBadge()
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/tab", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Tab string `json:"tab"`
 		}
-		if json.NewDecoder(r.Body).Decode(&req) != nil || (req.Tab != "claude" && req.Tab != "codex") {
+		if json.NewDecoder(r.Body).Decode(&req) != nil || !validAgent(req.Tab) {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
@@ -392,6 +475,7 @@ func (s *daemonState) assetHandler() http.Handler {
 		c.Lang = req.Lang
 		saveConfig(c)
 		setLang(resolveLang(req.Lang)) // notifications switch immediately
+		s.rebuildTrayMenu()
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/clear", func(w http.ResponseWriter, r *http.Request) {
@@ -481,6 +565,46 @@ func (s *daemonState) assetHandler() http.Handler {
 		focusTarget(info.Activate, info.Mux, info.Surface, info.CWD)
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("/api/agent-hook", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID string `json:"id"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		a := agentByID(req.ID)
+		if a == nil || a.installHook == nil {
+			http.Error(w, "unknown agent", http.StatusBadRequest)
+			return
+		}
+		if err := a.installHook(); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		invalidateAgentCache()
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/agent-login", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID string `json:"id"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		a := agentByID(req.ID)
+		if a == nil || a.LoginCmd == "" {
+			http.Error(w, "unknown agent", http.StatusBadRequest)
+			return
+		}
+		if err := openLoginTerminal(a.LoginCmd); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		invalidateAgentCache()
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("/api/hide-session", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ID string `json:"id"`
@@ -535,34 +659,49 @@ func (s *daemonState) assetHandler() http.Handler {
 	})
 	mux.HandleFunc("/api/settings", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Muted             *bool   `json:"muted"`
-			Lang              *string `json:"lang"`
-			DefaultTab        *string `json:"defaultTab"`
-			DisableAutoUpdate *bool   `json:"disableAutoUpdate"`
-			DisableAISummary  *bool   `json:"disableAISummary"`
-			DisableLiveStatus *bool   `json:"disableLiveStatus"`
-			Theme             *string `json:"theme"`
-			Autostart         *bool   `json:"autostart"`
+			Muted             *bool     `json:"muted"`      // legacy on/off
+			NotifyMode        *string   `json:"notifyMode"` // 4-level mode
+			Lang              *string   `json:"lang"`
+			DefaultTab        *string   `json:"defaultTab"`
+			DisableAutoUpdate *bool     `json:"disableAutoUpdate"`
+			DisableAISummary  *bool     `json:"disableAISummary"`
+			DisableLiveStatus *bool     `json:"disableLiveStatus"`
+			Theme             *string   `json:"theme"`
+			Autostart         *bool     `json:"autostart"`
+			Agents            *[]string `json:"agents"`
 		}
 		if json.NewDecoder(r.Body).Decode(&req) != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
 		c := loadConfig()
-		if req.Muted != nil {
-			c.Muted = *req.Muted
-			s.mu.Lock()
-			s.muted = *req.Muted
-			s.mu.Unlock()
+		if req.Muted != nil { // legacy toggle: map onto the 4-level mode
+			m := "on"
+			if *req.Muted {
+				m = "quiet"
+			}
+			req.NotifyMode = &m
+		}
+		if req.NotifyMode != nil {
+			switch *req.NotifyMode {
+			case "on", "alerts", "quiet", "silent":
+				c.NotifyMode = *req.NotifyMode
+				c.Muted = !modeNotifies(*req.NotifyMode)
+				s.mu.Lock()
+				s.notifyMode = *req.NotifyMode
+				s.mu.Unlock()
+				defer s.refreshBadge()
+			}
 		}
 		if req.Lang != nil {
 			switch *req.Lang {
 			case "", "auto", "en", "ko", "zh":
 				c.Lang = *req.Lang
 				setLang(resolveLang(*req.Lang))
+				s.rebuildTrayMenu()
 			}
 		}
-		if req.DefaultTab != nil && (*req.DefaultTab == "claude" || *req.DefaultTab == "codex") {
+		if req.DefaultTab != nil && validAgent(*req.DefaultTab) {
 			c.DefaultTab = *req.DefaultTab
 		}
 		if req.DisableAutoUpdate != nil {
@@ -578,6 +717,31 @@ func (s *daemonState) assetHandler() http.Handler {
 			switch *req.Theme {
 			case "", "auto", "light", "dark":
 				c.Theme = *req.Theme
+			}
+		}
+		if req.Agents != nil {
+			list := []string{} // empty is allowed: "no agents chosen" state
+			for _, id := range *req.Agents {
+				if validAgent(id) {
+					list = append(list, id)
+				}
+			}
+			c.Agents = list
+			// keep the default tab reachable
+			if c.DefaultTab != "" {
+				ok := false
+				for _, id := range list {
+					if id == c.DefaultTab {
+						ok = true
+					}
+				}
+				if !ok {
+					if len(list) > 0 {
+						c.DefaultTab = list[0]
+					} else {
+						c.DefaultTab = ""
+					}
+				}
 			}
 		}
 		if req.Autostart != nil {
@@ -636,6 +800,22 @@ func (s *daemonState) assetHandler() http.Handler {
 			// official Anthropic installer, explicitly user-initiated
 			err = exec.Command("/bin/bash", "-c",
 				"curl -fsSL https://claude.ai/install.sh | bash").Run()
+		case "notifperm":
+			// prompts while undecided; once denied only System Settings can
+			// flip it back, so open the Notifications pane
+			if notifPermStatus() == 0 {
+				_ = exec.Command("open",
+					"x-apple.systempreferences:com.apple.Notifications-Settings.extension").Start()
+			} else {
+				notifPermRequest()
+			}
+		case "automation":
+			// ask=true fires the consent dialog on first request; a hard
+			// denial needs the Privacy > Automation pane
+			if automationStatus(true) == 0 {
+				_ = exec.Command("open",
+					"x-apple.systempreferences:com.apple.preference.security?Privacy_Automation").Start()
+			}
 		default:
 			http.Error(w, "unknown item", http.StatusBadRequest)
 			return
@@ -656,21 +836,26 @@ func (s *daemonState) assetHandler() http.Handler {
 	})
 	mux.HandleFunc("/api/restart", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-		go func() {
-			time.Sleep(400 * time.Millisecond) // let the response flush
-			if runtime.GOOS == "darwin" && os.Getppid() == 1 {
-				os.Exit(1) // launchd KeepAlive respawns us
+		s.restartSelf()
+	})
+	// taller window for browsing long session/event lists; anchored at the
+	// top so it grows downward from the tray
+	mux.HandleFunc("/api/expand", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Expanded bool `json:"expanded"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if s.window != nil {
+			h := 600
+			if req.Expanded {
+				h = 820
 			}
-			// unmanaged: hand off to a detached replacement, then quit;
-			// its listen-retry loop waits for this port to free up
-			if bin := installDest(); bin != "" {
-				cmd := exec.Command(bin, "daemon")
-				if err := cmd.Start(); err == nil {
-					_ = cmd.Process.Release()
-				}
-			}
-			os.Exit(0)
-		}()
+			s.animateHeight(h)
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

@@ -32,12 +32,12 @@ type sessionInfo struct {
 	ID        string    `json:"id"`
 	Source    string    `json:"source"`
 	CWD       string    `json:"cwd"`
-	Title     string    `json:"title"` // session title (same chain as events)
-	Task      string    `json:"task"`  // current prompt excerpt
+	Title     string    `json:"title"`  // session title (same chain as events)
+	Task      string    `json:"task"`   // current prompt excerpt
 	State     string    `json:"state"`  // working | tool | waiting | idle
-	Tool      string    `json:"tool"`    // current tool while state == tool
-	Detail    string    `json:"detail"`  // what the tool is doing, one line
-	Surface   string    `json:"-"`       // Ghostty terminal id for exact focus
+	Tool      string    `json:"tool"`   // current tool while state == tool
+	Detail    string    `json:"detail"` // what the tool is doing, one line
+	Surface   string    `json:"-"`      // Ghostty terminal id for exact focus
 	Branch    string    `json:"branch"`
 	Model     string    `json:"model"`
 	Activate  string    `json:"activate"`

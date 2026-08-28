@@ -4,7 +4,7 @@
 
 <h1>agent-notify</h1>
 
-<p><b>끝난 Claude Code 세션, 다시는 놓치지 마세요.</b></p>
+<p><b>끝난 코딩 에이전트 세션, 다시는 놓치지 마세요 — Claude Code · Codex · Antigravity · Gemini · opencode · Cursor.</b></p>
 
 <p>
   <a href="https://github.com/CoderGangW/agent-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/agent-notify?color=8a2be2" alt="latest release"/></a>
@@ -27,7 +27,7 @@
 
 </div>
 
-여러 Claude Code 세션을 동시에 돌릴 때 **어느 세션이 방금 끝났는지** 알려주는 크로스플랫폼(macOS / Windows / Linux) 트레이 앱 — 세션·토큰 사용량·플랜 한도 대시보드 포함.
+여러 코딩 에이전트 세션(Claude Code · Codex · Antigravity CLI · Gemini CLI · opencode · Cursor CLI)을 동시에 돌릴 때 **어느 세션이 방금 끝났는지** 알려주는 크로스플랫폼(macOS / Windows / Linux) 트레이 앱 — 세션·토큰 사용량·플랜 한도 대시보드 포함.
 
 ## 기능
 

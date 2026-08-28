@@ -1,0 +1,73 @@
+/* ---------- session context menu ---------- */
+#ctxmenu {
+  position: fixed; z-index: 90;
+  min-width: 130px;
+  background: var(--card);
+  border: 1px solid var(--card-edge);
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  opacity: 0; transform: translateY(-4px) scale(0.96);
+  transform-origin: top left;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+#ctxmenu.show { opacity: 1; transform: none; pointer-events: auto; }
+.ctx-item {
+  display: flex; align-items: center; gap: 7px;
+  width: 100%;
+  background: none; border: none; cursor: pointer;
+  color: var(--text); font-size: 11px; text-align: left;
+  padding: 5px 8px; border-radius: 7px;
+}
+.ctx-item:hover { background: var(--accent-soft); }
+.ctx-item svg { width: 12px; height: 12px; color: var(--dim); flex-shrink: 0; }
+
+/* ---------- custom tooltip ---------- */
+#tooltip {
+  position: fixed; z-index: 99;
+  max-width: 280px;
+  background: linear-gradient(180deg, var(--tip-top), var(--tip-bot));
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+  border: 1px solid var(--tip-edge);
+  color: var(--text);
+  font-size: 10.5px; line-height: 1.45; font-weight: 500;
+  padding: 5px 10px; border-radius: 9px;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(5px) scale(0.92);
+  transform-origin: var(--ax, 50%) calc(100% + 5px);
+  transition: opacity 0.16s ease, transform 0.22s cubic-bezier(0.2, 1.1, 0.3, 1.25);
+  word-break: break-all;
+}
+#tooltip::after { /* caret pointing at the hovered element */
+  content: "";
+  position: absolute;
+  width: 8px; height: 8px;
+  left: var(--ax, 50%);
+  bottom: -4.8px;
+  margin-left: -4px;
+  background: var(--tip-bot);
+  border-right: 1px solid var(--tip-edge);
+  border-bottom: 1px solid var(--tip-edge);
+  transform: rotate(45deg);
+  border-radius: 0 0 2px 0;
+}
+#tooltip.below {
+  transform: translateY(-5px) scale(0.92);
+  transform-origin: var(--ax, 50%) -5px;
+}
+#tooltip.below::after {
+  bottom: auto; top: -4.8px;
+  background: var(--tip-top);
+  border: none;
+  border-left: 1px solid var(--tip-edge);
+  border-top: 1px solid var(--tip-edge);
+  border-radius: 2px 0 0 0;
+}
+#tooltip.show { opacity: 1; transform: none; }

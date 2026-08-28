@@ -4,7 +4,7 @@
 
 <h1>agent-notify</h1>
 
-<p><b>不再错过任何一个完成的 Claude Code 会话。</b></p>
+<p><b>不再错过任何一个完成的编码代理会话 — Claude Code · Codex · Antigravity · Gemini · opencode · Cursor。</b></p>
 
 <p>
   <a href="https://github.com/CoderGangW/agent-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/agent-notify?color=8a2be2" alt="latest release"/></a>
@@ -27,7 +27,7 @@
 
 </div>
 
-跨平台（macOS / Windows / Linux）托盘应用：同时运行多个 Claude Code 会话时，告诉你**刚刚完成的是哪一个** — 并附带会话、令牌用量与套餐限额仪表盘。
+跨平台（macOS / Windows / Linux）托盘应用：同时运行多个编码代理会话（Claude Code · Codex · Antigravity CLI · Gemini CLI · opencode · Cursor CLI）时，告诉你**刚刚完成的是哪一个** — 并附带会话、令牌用量与套餐限额仪表盘。
 
 ## 功能
 

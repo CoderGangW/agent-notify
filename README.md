@@ -4,7 +4,7 @@
 
 <h1>agent-notify</h1>
 
-<p><b>Never miss a finished Claude Code session.</b></p>
+<p><b>Never miss a finished coding-agent session — Claude Code, Codex, Antigravity, Gemini, opencode, Cursor.</b></p>
 
 <p>
   <a href="https://github.com/CoderGangW/agent-notify/releases/latest"><img src="https://img.shields.io/github/v/release/CoderGangW/agent-notify?color=8a2be2" alt="latest release"/></a>
@@ -27,7 +27,7 @@
 
 </div>
 
-A cross-platform (macOS / Windows / Linux) tray app that tells you **which Claude Code session just finished** when you're running several at once — with a dashboard for your sessions, token usage, and plan limits.
+A cross-platform (macOS / Windows / Linux) tray app that tells you **which coding-agent session just finished** when you're running several at once — Claude Code, Codex, Antigravity CLI, Gemini CLI, opencode, and Cursor CLI — with a dashboard for your sessions, token usage, and plan limits.
 
 ## Features
 

@@ -19,7 +19,8 @@ import (
 // reports an error until Claude Code itself refreshes it.
 
 type limitBucket struct {
-	Key         string    `json:"key"` // five_hour, seven_day, ...
+	Key         string    `json:"key"`             // five_hour, seven_day, weekly_scoped, ...
+	Model       string    `json:"model,omitempty"` // scoped buckets: model display name (e.g. "Fable")
 	Utilization float64   `json:"utilization"`
 	ResetsAt    time.Time `json:"resetsAt"`
 }
@@ -96,6 +97,43 @@ func fetchLimits() limitsReport {
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		r.Error = err.Error()
 		return r
+	}
+	// The `limits` array is the newer shape and the only place per-model
+	// scoped buckets appear (e.g. weekly Fable); the legacy top-level keys
+	// stay null for those. Prefer it, fall back to the legacy keys.
+	if msg, ok := raw["limits"]; ok {
+		var arr []struct {
+			Kind     string    `json:"kind"`
+			Percent  float64   `json:"percent"`
+			ResetsAt time.Time `json:"resets_at"`
+			Scope    *struct {
+				Model *struct {
+					DisplayName string `json:"display_name"`
+				} `json:"model"`
+			} `json:"scope"`
+		}
+		if json.Unmarshal(msg, &arr) == nil {
+			for _, b := range arr {
+				if b.ResetsAt.IsZero() {
+					continue
+				}
+				key := b.Kind
+				switch b.Kind { // reuse the legacy i18n labels
+				case "session":
+					key = "five_hour"
+				case "weekly_all":
+					key = "seven_day"
+				}
+				var model string
+				if b.Scope != nil && b.Scope.Model != nil {
+					model = b.Scope.Model.DisplayName
+				}
+				r.Buckets = append(r.Buckets, limitBucket{Key: key, Model: model, Utilization: b.Percent, ResetsAt: b.ResetsAt})
+			}
+		}
+	}
+	if len(r.Buckets) > 0 {
+		return r // array order is already session → weekly all → scoped
 	}
 	for key, msg := range raw {
 		var b struct {

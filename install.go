@@ -196,10 +196,16 @@ func firstRunSetup() {
 	}
 	exe, _ = filepath.EvalSymlinks(exe)
 	installed := installBinary(exe)
-	command := fmt.Sprintf("%q hook", installed)
-	added, updated := registerHooks(command)
-	if added > 0 || updated > 0 {
-		fmt.Printf(T("install.hooks")+"\n", added, updated, settingsPath())
+	// Claude hooks are NOT auto-registered anymore: agent wiring is the
+	// user's explicit choice via the in-tab setup guide (/api/setup-fix).
+	// EXCEPT when hooks are already ours from a previous version — then
+	// keep them pointing at the freshly installed binary.
+	if computeSetup().Hooks {
+		command := fmt.Sprintf("%q hook", installed)
+		added, updated := registerHooks(command)
+		if added > 0 || updated > 0 {
+			fmt.Printf(T("install.hooks")+"\n", added, updated, settingsPath())
+		}
 	}
 	if !loadConfig().DisableAutostart && !autostartHealthy() {
 		_ = installAutostart(installed, false)

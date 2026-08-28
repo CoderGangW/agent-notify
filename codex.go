@@ -57,17 +57,23 @@ func runCodexHook() {
 	})
 }
 
-// runInstallCodex wires the notify hook into ~/.codex/config.toml.
-func runInstallCodex() {
+// codexHooked reports whether ~/.codex/config.toml already runs our
+// notify hook.
+func codexHooked() bool {
+	data, _ := os.ReadFile(homePath(".codex", "config.toml"))
+	return strings.Contains(string(data), "notify") &&
+		(strings.Contains(string(data), "claude-notify") || strings.Contains(string(data), "agent-notify"))
+}
+
+// installCodexHook wires the notify hook into ~/.codex/config.toml.
+func installCodexHook() error {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return err
 	}
 	exe, err := os.Executable()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return err
 	}
 	exe, _ = filepath.EvalSymlinks(exe)
 	exe = installBinary(exe)
@@ -84,29 +90,26 @@ func runInstallCodex() {
 					lines[i] = line
 				}
 			}
-			if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
-			}
-			fmt.Printf(T("codex.installed")+"\n", path)
-			return
+			return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
 		}
-		fmt.Printf(T("codex.already")+"\n", path)
-		fmt.Println("  " + line)
-		return
+		return fmt.Errorf(T("codex.already")+"\n  %s", path, line)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return err
 	}
 	out := string(data)
 	if out != "" && !strings.HasSuffix(out, "\n") {
 		out += "\n"
 	}
 	out += line + "\n"
-	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
+	return os.WriteFile(path, []byte(out), 0o644)
+}
+
+// runInstallCodex is the CLI entry (`agent-notify install-codex`).
+func runInstallCodex() {
+	if err := installCodexHook(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Printf(T("codex.installed")+"\n", path)
+	fmt.Printf(T("codex.installed")+"\n", homePath(".codex", "config.toml"))
 }

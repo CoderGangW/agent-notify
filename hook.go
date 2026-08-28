@@ -90,6 +90,12 @@ func runHook() {
 	if os.Getenv("CLAUDE_NOTIFY_SUPPRESS") == "1" {
 		return
 	}
+	// Cursor CLI reads Claude Code's settings hooks too (third-party
+	// interop) and would run us with a Cursor-shaped payload; cursor-hook
+	// handles those sessions natively.
+	if os.Getenv("CURSOR_VERSION") != "" {
+		return
+	}
 
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil {

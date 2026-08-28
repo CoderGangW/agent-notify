@@ -4,7 +4,19 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>agent-notify</title>
-<link rel="stylesheet" href="/style.css"/>
+<!-- split by section; order matters (later files override earlier rules) -->
+<link rel="stylesheet" href="/css/base.css"/>
+<link rel="stylesheet" href="/css/header.css"/>
+<link rel="stylesheet" href="/css/tabs.css"/>
+<link rel="stylesheet" href="/css/cards.css"/>
+<link rel="stylesheet" href="/css/sessions.css"/>
+<link rel="stylesheet" href="/css/events.css"/>
+<link rel="stylesheet" href="/css/search.css"/>
+<link rel="stylesheet" href="/css/settings.css"/>
+<link rel="stylesheet" href="/css/footer.css"/>
+<link rel="stylesheet" href="/css/menus.css"/>
+<link rel="stylesheet" href="/css/tour.css"/>
+<link rel="stylesheet" href="/css/stats.css"/>
 </head>
 <body>
 <div id="shell">
@@ -39,11 +51,12 @@
   </header>
 
   <nav id="tabs">
+    <button id="tab-prev" class="icon-btn tab-arrow">‹</button>
     <div class="seg">
       <span id="tab-ink"></span>
-      <button class="tab" data-tab="claude">Claude<span class="tab-badge" id="badge-claude"></span></button>
-      <button class="tab" data-tab="codex">Codex<i class="beta">BETA</i><span class="tab-badge" id="badge-codex"></span></button>
+      <!-- tab buttons are rendered from the enabled-agent list (app.js) -->
     </div>
+    <button id="tab-next" class="icon-btn tab-arrow">›</button>
     <button id="pin-btn" class="icon-btn" title=""></button>
   </nav>
 
@@ -53,6 +66,14 @@
       <span class="sub" id="limits-note"></span>
     </div>
     <div id="limits-body" class="gauges"></div>
+  </section>
+
+  <section class="card" id="agy-quota-card">
+    <div class="card-head">
+      <h2 data-i18n="agyquota.title">모델 쿼터</h2>
+      <span class="sub" id="agy-quota-note"></span>
+    </div>
+    <div id="agy-quota-body" class="gauges"></div>
   </section>
 
   <section class="card" id="usage-card">
@@ -77,15 +98,35 @@
       <div class="subtabs">
         <button class="subtab active" data-subtab="sessions"><span data-i18n="sessions.tab">활성 세션</span><span class="badge" id="sess-badge"></span></button>
         <button class="subtab" data-subtab="events"><span data-i18n="events.title">이벤트</span><span class="badge" id="done-badge"></span></button>
+        <span class="beta-chip hidden" id="beta-chip">BETA</span>
       </div>
-      <span id="events-actions">
-        <button id="readall-btn" class="text-btn" data-i18n="events.readAll">모두 읽기</button>
-        <button id="clear-btn" class="text-btn" data-i18n="events.clear">비우기</button>
+      <span class="head-tools">
+        <span id="events-actions">
+          <button id="readall-btn" class="text-btn" data-i18n="events.readAll">모두 읽기</button>
+          <button id="clear-btn" class="text-btn" data-i18n="events.clear">비우기</button>
+        </span>
+        <button id="search-btn" class="icon-btn"></button>
+        <button id="expand-btn" class="icon-btn"></button>
       </span>
+    </div>
+    <div id="search-bar">
+      <div class="search-inner">
+        <div class="search-row">
+          <span class="s-ic"></span>
+          <input id="search-input" type="text" spellcheck="false" autocomplete="off"/>
+          <button id="search-clear" class="icon-btn"></button>
+          <button id="search-close" class="icon-btn"></button>
+        </div>
+        <div class="chips-row">
+          <div id="search-chips"></div>
+          <span id="search-count"></span>
+        </div>
+      </div>
     </div>
     <ul id="sessions"></ul>
     <ul id="events" class="hidden"></ul>
     <div id="empty" class="empty"><span data-i18n="events.empty">아직 이벤트 없음</span><span data-i18n="events.hint">Claude Code 세션이 끝나면 여기 뜸</span></div>
+    <div id="agent-setup" class="hidden"></div>
   </section>
   <div id="settings-overlay" class="hidden">
   <div id="settings-panel">
@@ -98,13 +139,17 @@
       <span data-i18n="set.theme">테마</span>
       <div class="dd" id="dd-theme"></div>
     </div>
+    <div class="set-row" id="agents-row">
+      <div><span data-i18n="set.agents">에이전트 탭</span><small data-i18n="set.agents.d"></small></div>
+      <div class="agent-picks" id="agent-picks"></div>
+    </div>
     <div class="set-row">
       <span data-i18n="set.tab">기본 탭</span>
       <div class="dd" id="dd-tab"></div>
     </div>
     <div class="set-row">
-      <span data-i18n="set.mute">알림 음소거</span>
-      <button class="switch" id="sw-mute"></button>
+      <div><span data-i18n="set.notify">알림</span><small data-i18n="set.notify.d"></small></div>
+      <div class="dd" id="dd-notify"></div>
     </div>
     <div class="set-row">
       <div><span data-i18n="set.ai">AI 요약</span><small data-i18n="set.ai.d"></small></div>
@@ -198,6 +243,22 @@
     </span>
   </footer>
 </div>
-<script src="/app.js"></script>
+<!-- classic scripts share the global lexical scope; load order preserves
+     the original single-file execution order — keep it when adding files -->
+<script src="/js/core.js"></script>
+<script src="/js/icons.js"></script>
+<script src="/js/i18n.js"></script>
+<script src="/js/util.js"></script>
+<script src="/js/status-cards.js"></script>
+<script src="/js/search.js"></script>
+<script src="/js/sessions.js"></script>
+<script src="/js/tabs.js"></script>
+<script src="/js/events.js"></script>
+<script src="/js/refresh.js"></script>
+<script src="/js/settings.js"></script>
+<script src="/js/stats.js"></script>
+<script src="/js/update.js"></script>
+<script src="/js/tutorial.js"></script>
+<script src="/js/boot.js"></script>
 </body>
 </html>

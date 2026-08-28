@@ -1,0 +1,59 @@
+/* ---------- header ---------- */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px;
+}
+.brand { display: flex; align-items: center; gap: 8px; }
+.logo {
+  width: 22px; height: 22px;
+  animation: logo-pop 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.35) both;
+}
+@keyframes logo-pop {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.title { font-weight: 700; letter-spacing: 0.02em; }
+.dev-chip {
+  margin-left: 6px; margin-right: auto; padding: 0 6px; border-radius: 999px;
+  font-size: 8.5px; font-weight: 800; letter-spacing: 0.08em; line-height: 14px;
+  color: var(--warn); border: 1px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  animation: fade-in 0.3s ease both;
+  vertical-align: 1px;
+}
+.dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 6px var(--good);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+.dot.off { background: var(--dim); box-shadow: none; animation: none; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+/* header utils wear the app purple, never the agent color */
+.actions {
+  display: flex; gap: 4px;
+  --accent: var(--app-accent);
+  --accent-soft: var(--app-accent-soft);
+  --on-accent: #fff;
+}
+.actions .icon-btn:hover { color: var(--app-accent); background: var(--app-accent-soft); }
+#quit-btn:hover { color: var(--bad); background: color-mix(in srgb, var(--bad) 13%, transparent); }
+.icon-btn {
+  background: none; border: none; color: var(--dim);
+  font-size: 13px; padding: 5px 7px; border-radius: 7px; cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+.icon-btn:hover { background: var(--card-edge); color: var(--text); }
+.icon-btn:active { transform: scale(0.9); }
+.icon-btn.muted { color: var(--bad); }
+#mute-btn.quiet { color: var(--warn); }
+#mute-btn.alerts { color: var(--accent); }
+/* hover always turns app purple, whatever mode color the bell is wearing */
+#mute-btn:hover { color: var(--app-accent); }
+/* search only fits the expanded (tall) window */
+body:not(.tall) #search-btn { display: none; }

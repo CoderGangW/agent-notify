@@ -4,7 +4,7 @@ package main
 
 /*
 #cgo CFLAGS: -x objective-c -fobjc-arc
-#cgo LDFLAGS: -framework Foundation -framework UserNotifications
+#cgo LDFLAGS: -framework Foundation -framework UserNotifications -framework CoreServices
 #include <stdlib.h>
 #include "notify_darwin.h"
 */
@@ -59,6 +59,20 @@ func nativeNotify(ev Event, title, subtitle, body string) bool {
 	}()
 	C.unNotify(cIdent, cTitle, cSub, cBody, cPl)
 	return true
+}
+
+// notifPermStatus: 1 granted, 0 denied, 2 not determined, -1 unavailable.
+func notifPermStatus() int { return int(C.unAuthStatus()) }
+
+// notifPermRequest prompts for notification permission (no-op once decided).
+func notifPermRequest() { C.unRequestAuth() }
+
+// automationStatus probes the Automation permission toward System Events
+// (the proxy for "can we focus terminal windows"); ask=true may prompt.
+func automationStatus(ask bool) int {
+	cs := C.CString("com.apple.systemevents")
+	defer C.free(unsafe.Pointer(cs))
+	return int(C.aeAutomationStatus(cs, C.bool(ask)))
 }
 
 //export goNotificationClicked

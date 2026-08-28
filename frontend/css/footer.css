@@ -1,0 +1,78 @@
+/* ---------- footer ---------- */
+footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 4px;
+}
+footer .ver { color: var(--dim); font-size: 10px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+footer .foot-actions { display: flex; align-items: center; gap: 2px; }
+#restart-btn svg, #gh-btn svg { width: 12px; height: 12px; }
+#upd-btn { font-size: 10.5px; }
+#upd-btn[data-state="available"] {
+  color: var(--accent); background: var(--accent-soft);
+  animation: pulse 2s ease-in-out infinite;
+}
+#upd-btn[data-state="checking"], #upd-btn[data-state="applying"] { opacity: 0.7; cursor: default; }
+#upd-btn[data-state="done"] { color: var(--good); cursor: default; }
+
+/* ---------- agent setup panel ---------- */
+#events-card.setup-mode #sessions,
+#events-card.setup-mode #events,
+#events-card.setup-mode #empty,
+#events-card.setup-mode .card-head,
+#events-card.setup-mode #search-bar,
+#events-card.setup-mode #events-actions { display: none; }
+/* beta tag for non-Claude agents — inside the card, not on the tab */
+.beta-chip {
+  display: inline-block;
+  margin-left: 8px; padding: 0 6px;
+  font-size: 8.5px; font-weight: 800; font-style: normal;
+  letter-spacing: 0.08em; line-height: 14px;
+  color: var(--accent); border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  vertical-align: 2px;
+  animation: fade-in 0.3s ease both;
+}
+.setup-title .beta-chip { vertical-align: 3px; }
+#agent-setup {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 8px; padding: 12px;
+  text-align: center;
+  animation: rise 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+#agent-setup .setup-ic { color: var(--accent); opacity: 0.85; }
+#agent-setup .setup-ic svg { width: 26px; height: 26px; }
+#agent-setup .setup-title { font-size: 12.5px; font-weight: 700; }
+#agent-setup .setup-hint {
+  color: var(--dim); font-size: 11px; line-height: 1.5;
+  max-width: 280px;
+}
+.setup-cmd {
+  display: flex; align-items: center; gap: 4px;
+  margin-top: 4px; padding: 5px 6px 5px 10px;
+  background: var(--bg);
+  border: 1px solid var(--card-edge); border-radius: 9px;
+  max-width: 100%;
+}
+.setup-cmd code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 10.5px; color: var(--text);
+  overflow-x: auto; white-space: nowrap;
+  user-select: text; -webkit-user-select: text;
+}
+.setup-btn {
+  margin-top: 4px; padding: 6px 16px;
+  background: var(--accent); color: var(--on-accent);
+  border: none; border-radius: 9px; cursor: pointer;
+  font-size: 11.5px; font-weight: 700;
+  transition: transform 0.12s, opacity 0.2s;
+}
+.setup-btn:hover { opacity: 0.9; }
+.setup-btn:active { transform: scale(0.96); }
+.setup-btn:disabled { opacity: 0.55; cursor: default; }
+
+/* five agent tabs need tighter buttons than two did */
+#tabs .seg.many .tab { padding: 4px 8px; font-size: 11px; }
+#tabs .seg.many .tab-badge { margin-left: 4px; }

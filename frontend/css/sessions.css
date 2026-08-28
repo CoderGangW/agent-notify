@@ -1,0 +1,47 @@
+/* ---------- sub-tabs & sessions ---------- */
+.subtabs { display: flex; gap: 10px; align-items: center; height: 20px; }
+.subtab {
+  display: inline-flex; align-items: center;
+  background: none; border: none; cursor: pointer;
+  color: var(--dim); font-size: 12px; font-weight: 700;
+  letter-spacing: 0.06em; padding: 0 0 2px;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+.subtab.active { color: var(--text); border-color: var(--accent); }
+/* loader rotation lives inside the SVG (SMIL animateTransform) —
+   see ICONS.loader; CSS transforms on svg rotate off-axis in WebKit */
+.sess .ic.work { color: var(--accent); }
+.sess .ic.tool { color: var(--warn); }
+/* active states shine: the glyph breathes with a soft glow */
+.sess .ic.act svg, #tut-card .tut-legend .ic.act svg {
+  animation: icon-shine 1.5s ease-in-out infinite;
+}
+@keyframes icon-shine {
+  0%, 100% { opacity: 0.45; filter: none; }
+  50% { opacity: 1; filter: drop-shadow(0 0 5px currentColor); }
+}
+.sess .ic.wait { color: var(--warn); }
+.sess .ic.wait svg { animation: wiggle 1.4s ease-in-out infinite; }
+@keyframes wiggle {
+  0%, 60%, 100% { transform: rotate(0); }
+  70% { transform: rotate(12deg); }
+  80% { transform: rotate(-10deg); }
+  90% { transform: rotate(6deg); }
+}
+.sess .ic.idle { color: var(--dim); }
+.sess.idle { opacity: 0.62; }
+.sess.idle:hover { opacity: 1; }
+.sess .statetxt {
+  font-weight: 600; color: var(--text); opacity: 0.8;
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sess .elapsed { font-variant-numeric: tabular-nums; }
+.sess .task {
+  color: var(--dim); font-size: 11px; line-height: 1.45; margin-top: 2px;
+  overflow: hidden;
+  transition: max-height 0.35s cubic-bezier(0.25, 0.9, 0.3, 1);
+}
+.sess .task.clamp {
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
+}

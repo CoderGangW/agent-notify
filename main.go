@@ -29,6 +29,36 @@ func main() {
 		runInstallCodex()
 	case "codex-hook": // called by Codex CLI's notify setting
 		runCodexHook()
+	case "gemini-hook": // called by Gemini CLI's hooks
+		runGeminiHook()
+	case "cursor-hook": // called by Cursor CLI's hooks
+		runCursorHook()
+	case "antigravity-hook": // called by Antigravity CLI's hooks
+		runAntigravityHook()
+	case "install-antigravity":
+		if err := installAntigravityHook(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Printf(T("install.agentHooks")+"\n", "Antigravity", antigravityHooksPath())
+	case "install-gemini":
+		if err := installGeminiHook(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Printf(T("install.agentHooks")+"\n", "Gemini", geminiSettingsPath())
+	case "install-opencode":
+		if err := installOpencodeHook(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Printf(T("install.opencodePlugin")+"\n", opencodePluginPath())
+	case "install-cursor":
+		if err := installCursorHook(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Printf(T("install.agentHooks")+"\n", "Cursor", cursorHooksPath())
 	case "uninstall":
 		runUninstall()
 	case "peek": // debug: show what a transcript resolves to

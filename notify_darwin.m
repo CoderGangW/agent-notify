@@ -1,3 +1,4 @@
+#import <CoreServices/CoreServices.h>
 #import <Foundation/Foundation.h>
 #import <UserNotifications/UserNotifications.h>
 #include "notify_darwin.h"
@@ -46,6 +47,60 @@ void unSetup(void) {
                                         UNAuthorizationOptionBadge)
                      completionHandler:^(BOOL granted, NSError *error){
                      }];
+}
+
+int unAuthStatus(void) {
+    if (!unBundled()) {
+        return -1;
+    }
+    __block int result = 2;
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    [[UNUserNotificationCenter currentNotificationCenter]
+        getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *s) {
+          switch (s.authorizationStatus) {
+          case UNAuthorizationStatusAuthorized:
+          case UNAuthorizationStatusProvisional:
+              result = 1;
+              break;
+          case UNAuthorizationStatusDenied:
+              result = 0;
+              break;
+          default:
+              result = 2;
+              break;
+          }
+          dispatch_semaphore_signal(sem);
+        }];
+    dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(700 * NSEC_PER_MSEC)));
+    return result;
+}
+
+void unRequestAuth(void) {
+    if (!unBundled()) {
+        return;
+    }
+    [[UNUserNotificationCenter currentNotificationCenter]
+        requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound |
+                                         UNAuthorizationOptionBadge)
+                      completionHandler:^(BOOL granted, NSError *error){
+                      }];
+}
+
+int aeAutomationStatus(const char *bundleID, bool ask) {
+    NSAppleEventDescriptor *target = [NSAppleEventDescriptor
+        descriptorWithBundleIdentifier:[NSString stringWithUTF8String:bundleID]];
+    OSStatus s = AEDeterminePermissionToAutomateTarget(target.aeDesc, typeWildCard,
+                                                       typeWildCard, ask);
+    if (s == noErr) {
+        return 1;
+    }
+    if (s == errAEEventNotPermitted) {
+        return 0;
+    }
+    if (s == -1744) { /* errAEEventWouldRequireUserConsent */
+        return 2;
+    }
+    return -1;
 }
 
 void unNotify(const char *ident, const char *title, const char *subtitle,
