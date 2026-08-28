@@ -27,6 +27,14 @@ $("expand-btn").innerHTML = ICONS.expand;
 $("search-close").innerHTML = ICONS.x;
 $("search-clear").innerHTML = ICONS.x;
 document.querySelector("#search-bar .s-ic").innerHTML = ICONS.search;
+// pin the boot overlay exactly under the header (CSS guesses 52px)
+{
+  const bl = $("boot-loading");
+  const head = document.querySelector("header");
+  if (bl && head) {
+    bl.style.top = Math.round(head.getBoundingClientRect().bottom) + 2 + "px";
+  }
+}
 applySubTab();
 refresh();
 setInterval(refresh, 2500);

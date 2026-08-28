@@ -143,15 +143,10 @@ function shortModel(m) {
     .replace(/-(\d+)-(\d+)$/, " $1.$2");
 }
 
-function renderUsage(u) {
-  setStat("u-today", u.today.input + u.today.output);
-  setStat("u-week", u.week.input + u.week.output);
-  setStat("u-out", u.today.output);
-  setStat("u-cache", u.today.cacheRead);
-  // Diff the model chips in place: rebuilding them every poll replays
-  // the enter animation and reads as flicker.
-  const models = $("models");
-  const want = (u.todayByModel || []).slice(0, 4);
+// renderModelChips diffs the per-model chips in place: rebuilding them
+// every poll replays the enter animation and reads as flicker.
+function renderModelChips(models, list, nameFn) {
+  const want = (list || []).slice(0, 4);
   const seen = new Set();
   for (const m of want) {
     seen.add(m.model);
@@ -167,7 +162,7 @@ function renderUsage(u) {
       chip.className = "chip enter";
       chip.dataset.model = m.model;
       chip.innerHTML = "<b></b> <span class=\"val\"></span>";
-      chip.querySelector("b").textContent = shortModel(m.model);
+      chip.querySelector("b").textContent = nameFn(m.model);
       models.appendChild(chip);
     }
     rollTo(chip.querySelector(".val"), fmtTokens(m.input + m.output), m.input + m.output);
@@ -179,4 +174,60 @@ function renderUsage(u) {
       chip.addEventListener("animationend", () => chip.remove(), { once: true });
     }
   }
+}
+
+function renderUsage(u) {
+  setStat("u-today", u.today.input + u.today.output);
+  setStat("u-week", u.week.input + u.week.output);
+  setStat("u-out", u.today.output);
+  setStat("u-cache", u.today.cacheRead);
+  renderModelChips($("models"), u.todayByModel, shortModel);
+}
+
+// opencode model ids look like "vendor/Model-Name:quant" — keep the
+// model name, drop the vendor path and quant suffix.
+function shortOcModel(m) {
+  return m.split("/").pop().split(":")[0];
+}
+
+// renderOcUsage fills the opencode usage card from the plugin-synced DB
+// aggregate. No data yet (plugin not installed / opencode never ran
+// since) leaves the placeholder dashes and explains itself in the note.
+function renderOcUsage(u) {
+  const note = $("oc-usage-note");
+  if (!u || !u.hasData) {
+    note.textContent = t("ocusage.none");
+    return;
+  }
+  note.textContent =
+    t("ocusage.local") +
+    (u.weekCost > 0.005 ? " · $" + u.weekCost.toFixed(2) + " / 7d" : "");
+  setStat("oc-today", u.today.input + u.today.output);
+  setStat("oc-week", u.week.input + u.week.output);
+  setStat("oc-out", u.today.output);
+  setStat("oc-cache", u.today.cacheRead);
+  renderModelChips($("oc-models"), u.todayByModel, shortOcModel);
+
+  const pad = (n) => String(n).padStart(2, "0");
+  reconcile(
+    $("oc-sessions"),
+    (u.sessions || []).slice(0, 5),
+    (s) => s.id,
+    () => {
+      const li = document.createElement("li");
+      li.className = "oc-s";
+      li.innerHTML = '<span class="t"></span><span class="m"></span>';
+      return li;
+    },
+    (li, s) => {
+      const dir = (s.dir || "").split("/").pop();
+      setText(li.querySelector(".t"), s.title || dir || s.id);
+      li.querySelector(".t").title = s.dir || "";
+      const d = new Date(s.updated);
+      setText(
+        li.querySelector(".m"),
+        fmtTokens(s.tokens || 0) + " · " + pad(d.getMonth() + 1) + "." + pad(d.getDate())
+      );
+    }
+  );
 }

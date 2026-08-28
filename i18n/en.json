@@ -67,6 +67,8 @@
   "notify.quiet.d": "No OS notifications; unread badges still shown",
   "notify.silent": "Silent",
   "notify.silent.d": "Everything off — no notifications, no badges",
+  "ocusage.local": "from the local opencode DB",
+  "ocusage.none": "collected the next time opencode runs",
   "reset.day": "resets in {d}d {h}h",
   "reset.hour": "resets in {h}h {m}m",
   "reset.min": "resets in {m}m",

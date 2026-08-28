@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 )
 
@@ -77,6 +78,10 @@ func main() {
 		enc.SetIndent("", "  ")
 		_ = enc.Encode(usage.report())
 		_ = enc.Encode(limits.report())
+	case "openurl": // Windows toast click → registered agent-notify: protocol
+		if len(os.Args) > 2 {
+			runOpenURL(os.Args[2])
+		}
 	case "show": // open the dashboard window of the running daemon
 		resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/show", daemonPort), "", nil)
 		if err != nil {
@@ -89,5 +94,24 @@ func main() {
 	default:
 		fmt.Fprintln(os.Stderr, "usage: agent-notify [daemon|hook|install|install-codex|uninstall|stats|version]")
 		os.Exit(2)
+	}
+}
+
+// runOpenURL handles an agent-notify:focus?session=<id> activation (a
+// clicked Windows toast) by asking the running daemon to focus that
+// session's window. Silent on any failure — there is no UI to report to.
+func runOpenURL(raw string) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "agent-notify" {
+		return
+	}
+	id := u.Query().Get("session")
+	if id == "" {
+		return
+	}
+	resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/api/focus-notify?id=%s",
+		daemonPort, url.QueryEscape(id)), "", nil)
+	if err == nil {
+		resp.Body.Close()
 	}
 }

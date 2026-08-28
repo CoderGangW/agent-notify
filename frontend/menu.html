@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ko" data-theme="{{THEME}}">
+<head>
+<meta charset="utf-8"/>
+<title>agent-notify</title>
+<link rel="stylesheet" href="/css/base.css"/>
+<style>
+  /* self-contained tray context menu */
+  html, body { overflow: hidden; }
+  #menu {
+    /* natural size: JS measures this box and resizes the window to fit */
+    width: max-content;
+    min-width: 168px;
+    display: flex; flex-direction: column;
+    padding: 6px;
+    gap: 1px;
+  }
+  .m-head {
+    display: flex; align-items: center; gap: 7px;
+    padding: 4px 6px 6px;
+  }
+  .m-head svg { width: 24px; height: 24px; flex-shrink: 0; }
+  .m-head .name { font-weight: 700; font-size: 12px; }
+  .m-head .ver { color: var(--dim); font-size: 9.5px; margin-top: 1px; }
+  .m-sep { height: 1px; background: var(--card-edge); margin: 2px 3px 4px; }
+  .m-item {
+    display: flex; align-items: center;
+    background: none; border: none; cursor: pointer;
+    color: var(--text); font-size: 11.5px; text-align: left;
+    padding: 6px 8px; border-radius: 7px;
+    transition: background 0.12s, color 0.12s;
+  }
+  .m-item:hover { background: var(--accent-soft); color: var(--accent); }
+  .m-item:disabled { color: var(--dim); cursor: default; background: none; }
+  .m-item.danger:hover {
+    color: var(--bad);
+    background: color-mix(in srgb, var(--bad) 12%, transparent);
+  }
+</style>
+</head>
+<body>
+<div id="menu">
+  <div class="m-head">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <defs>
+        <linearGradient id="m-bg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#8A2BE2"/>
+          <stop offset="1" stop-color="#5D0BCB"/>
+        </linearGradient>
+      </defs>
+      <rect x="0.5" y="0.5" width="23" height="23" rx="6.2" fill="url(#m-bg)"/>
+      <g transform="translate(0.72 0.72) scale(0.94)" stroke="#EBDDF9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+        <path d="M10.3 20.2a1.94 1.94 0 0 0 3.4 0"/>
+        <g transform="translate(5.06 3.96) scale(0.52)" stroke-width="3.85">
+          <path d="M6.8 8.8 9.8 12 6.8 15.2"/>
+          <path d="M16.2 12h4.6"/>
+        </g>
+      </g>
+    </svg>
+    <div>
+      <div class="name">agent-notify</div>
+      <div class="ver" id="m-ver">{{L_VERSION}}</div>
+    </div>
+  </div>
+  <div class="m-sep"></div>
+  <!-- static defaults keep the menu usable before /api/state answers -->
+  <button class="m-item" id="m-upd">{{L_UPDATE}}</button>
+  <button class="m-item" id="m-restart">{{L_RESTART}}</button>
+  <div class="m-sep"></div>
+  <button class="m-item danger" id="m-quit">{{L_QUIT}}</button>
+</div>
+<script>
+"use strict";
+// tiny standalone i18n: the menu window doesn't share the dashboard's JS
+let mdict = {};
+const mt = (k) => mdict[k] || k;
+const $id = (id) => document.getElementById(id);
+
+// mirror the dashboard's theme resolution (config value + OS preference)
+function applyMenuTheme(themeSetting) {
+  const th = themeSetting || "auto";
+  const light =
+    th === "light" ||
+    (th !== "dark" && matchMedia("(prefers-color-scheme: light)").matches);
+  document.documentElement.dataset.theme = light ? "light" : "dark";
+}
+
+let updState = "idle"; // idle | checking | available | applying
+let updLatest = "";
+
+function setUpd(state, label) {
+  updState = state;
+  const b = $id("m-upd");
+  b.textContent = label;
+  b.disabled = state === "checking" || state === "applying";
+}
+
+async function loadMenu() {
+  try {
+    const st = await (await fetch("/api/state")).json();
+    applyMenuTheme(st.settings && st.settings.theme);
+    mdict = await (await fetch("/i18n/" + (st.lang || "en") + ".json")).json();
+    $id("m-ver").textContent = mt("menu.version").replace("%s", "v" + st.version);
+    $id("m-restart").textContent = mt("tip.restart");
+    $id("m-quit").textContent = mt("tip.quit");
+    if (st.updateAvail) {
+      updLatest = st.updateAvail;
+      setUpd("available", mt("update.available").replace("{v}", st.updateAvail));
+    } else if (updState === "idle") {
+      setUpd("idle", mt("update.check"));
+    }
+  } catch (_) {}
+}
+
+$id("m-upd").addEventListener("click", async () => {
+  if (updState === "available") {
+    setUpd("applying", mt("update.applying"));
+    try {
+      const r = await (await fetch("/api/update-apply", { method: "POST" })).json();
+      if (!r.ok) throw new Error();
+      // daemon restarts on success; nothing more to do here
+    } catch (_) {
+      setUpd("idle", mt("update.fail"));
+    }
+    return;
+  }
+  setUpd("checking", mt("update.checking"));
+  try {
+    const r = await (await fetch("/api/update-check", { method: "POST" })).json();
+    if (r.available) {
+      updLatest = r.latest;
+      setUpd("available", mt("update.available").replace("{v}", r.latest));
+    } else {
+      setUpd("idle", mt("update.latest"));
+      setTimeout(() => {
+        if (updState === "idle") setUpd("idle", mt("update.check"));
+      }, 2500);
+    }
+  } catch (_) {
+    setUpd("idle", mt("update.fail"));
+  }
+});
+$id("m-restart").addEventListener("click", () => {
+  fetch("/api/restart", { method: "POST" }).catch(() => {});
+});
+$id("m-quit").addEventListener("click", () => {
+  fetch("/api/quit", { method: "POST" }).catch(() => {});
+});
+
+// fit the window to the rendered content (labels differ per language)
+function fitWindow() {
+  const r = $id("menu").getBoundingClientRect();
+  fetch("/api/menu-size", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ w: Math.ceil(r.width), h: Math.ceil(r.height) }),
+  }).catch(() => {});
+}
+
+fitWindow();
+loadMenu().then(fitWindow);
+// re-sync every time the window is summoned again
+window.addEventListener("focus", () => loadMenu().then(fitWindow));
+</script>
+</body>
+</html>

@@ -36,6 +36,7 @@ type notifyPayload struct {
 	Activate string `json:"activate"`
 	CWD      string `json:"cwd"`
 	Surface  string `json:"surface"`
+	Title    string `json:"title"`
 	Mux      muxRef `json:"mux"`
 }
 
@@ -44,7 +45,8 @@ func nativeNotify(ev Event, title, subtitle, body string) bool {
 		return false
 	}
 	pl, _ := json.Marshal(notifyPayload{
-		Activate: ev.Activate, CWD: ev.CWD, Surface: ev.Surface, Mux: ev.Mux,
+		Activate: ev.Activate, CWD: ev.CWD, Surface: ev.Surface,
+		Title: ev.Title, Mux: ev.Mux,
 	})
 	ident := "claude-notify"
 	if ev.SessionID != "" {
@@ -83,5 +85,5 @@ func goNotificationClicked(p *C.char) {
 	}
 	// focusTarget shells out (osascript / open) — never block the
 	// notification callback thread
-	go focusTarget(pl.Activate, pl.Mux, pl.Surface, pl.CWD)
+	go focusTarget(pl.Activate, pl.Mux, pl.Surface, pl.CWD, pl.Title)
 }

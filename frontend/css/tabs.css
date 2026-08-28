@@ -47,6 +47,9 @@ body:not([data-agent="claude"]) #usage-card { display: none; }
 /* Antigravity has no plan/usage cards, but it does expose model quota */
 #agy-quota-card { display: none; }
 body[data-agent="antigravity"] #agy-quota-card { display: block; }
+/* opencode has no plan API, but the plugin mirrors its local DB usage */
+#oc-usage-card { display: none; }
+body[data-agent="opencode"] #oc-usage-card { display: block; }
 body[data-agent="claude"] {
   --accent: var(--claude-accent);
   --accent-soft: color-mix(in srgb, var(--claude-accent) 15%, transparent);

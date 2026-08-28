@@ -50,6 +50,28 @@
     </div>
   </header>
 
+  <!-- covers everything below the header until the first /api/state -->
+  <div id="boot-loading">
+    <svg class="boot-logo" viewBox="0 0 24 24" aria-hidden="true">
+      <defs>
+        <linearGradient id="bl-bg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#8A2BE2"/>
+          <stop offset="1" stop-color="#5D0BCB"/>
+        </linearGradient>
+      </defs>
+      <rect x="0.5" y="0.5" width="23" height="23" rx="6.2" fill="url(#bl-bg)"/>
+      <g transform="translate(0.72 0.72) scale(0.94)" stroke="#EBDDF9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+        <path d="M10.3 20.2a1.94 1.94 0 0 0 3.4 0"/>
+        <g transform="translate(5.06 3.96) scale(0.52)" stroke-width="3.85">
+          <path d="M6.8 8.8 9.8 12 6.8 15.2"/>
+          <path d="M16.2 12h4.6"/>
+        </g>
+      </g>
+    </svg>
+    <div class="boot-dots"><i></i><i></i><i></i></div>
+  </div>
+
   <nav id="tabs">
     <button id="tab-prev" class="icon-btn tab-arrow">‹</button>
     <div class="seg">
@@ -74,6 +96,21 @@
       <span class="sub" id="agy-quota-note"></span>
     </div>
     <div id="agy-quota-body" class="gauges"></div>
+  </section>
+
+  <section class="card" id="oc-usage-card">
+    <div class="card-head">
+      <h2 data-i18n="usage.title">토큰 사용량</h2>
+      <span class="sub" id="oc-usage-note"></span>
+    </div>
+    <div class="usage-grid">
+      <div class="stat"><span class="num" id="oc-today">–</span><span class="lbl" data-i18n="usage.today">오늘</span></div>
+      <div class="stat"><span class="num" id="oc-week">–</span><span class="lbl" data-i18n="usage.week">최근 7일</span></div>
+      <div class="stat"><span class="num" id="oc-out">–</span><span class="lbl" data-i18n="usage.out">오늘 출력</span></div>
+      <div class="stat"><span class="num" id="oc-cache">–</span><span class="lbl" data-i18n="usage.cache">오늘 캐시 읽기</span></div>
+    </div>
+    <div id="oc-models" class="models"></div>
+    <ul id="oc-sessions" class="oc-sess"></ul>
   </section>
 
   <section class="card" id="usage-card">
@@ -125,7 +162,8 @@
     </div>
     <ul id="sessions"></ul>
     <ul id="events" class="hidden"></ul>
-    <div id="empty" class="empty"><span data-i18n="events.empty">아직 이벤트 없음</span><span data-i18n="events.hint">Claude Code 세션이 끝나면 여기 뜸</span></div>
+    <!-- hidden until the first state arrives; skeletons carry the boot -->
+    <div id="empty" class="empty hidden"><span data-i18n="events.empty">아직 이벤트 없음</span><span data-i18n="events.hint">Claude Code 세션이 끝나면 여기 뜸</span></div>
     <div id="agent-setup" class="hidden"></div>
   </section>
   <div id="settings-overlay" class="hidden">

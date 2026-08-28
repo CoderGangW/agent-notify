@@ -67,6 +67,8 @@
   "notify.quiet.d": "OS 알림 없이 미확인 뱃지만 표시합니다",
   "notify.silent": "무음",
   "notify.silent.d": "OS 알림과 뱃지를 모두 끕니다",
+  "ocusage.local": "opencode 로컬 DB 합산",
+  "ocusage.none": "opencode를 다시 실행하면 수집됩니다",
   "reset.day": "{d}일 {h}h 후 리셋",
   "reset.hour": "{h}h {m}m 후 리셋",
   "reset.min": "{m}m 후 리셋",

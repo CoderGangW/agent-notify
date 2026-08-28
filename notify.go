@@ -22,6 +22,10 @@ func deliverNotification(ev Event) {
 	title, body := notificationText(ev)
 	subtitle := shortPath(ev.CWD)
 
+	if runtime.GOOS == "windows" && windowsToastNotify(ev, title, subtitle, body) {
+		return // toast click focuses the session via the agent-notify: protocol
+	}
+
 	if runtime.GOOS == "darwin" {
 		if nativeNotify(ev, title, subtitle, body) {
 			return

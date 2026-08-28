@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,9 +36,7 @@ type daemonState struct {
 	app           *application.App
 	tray          *application.SystemTray
 	window        application.Window
-	trayMenu      *application.Menu
-	updMenuItem   *application.MenuItem
-	nameMenuItem  *application.MenuItem
+	menuWindow    application.Window // custom right-click tray menu
 }
 
 func evSource(ev Event) string {
@@ -72,6 +72,7 @@ func runDaemon() {
 	}
 	s := &daemonState{notifyMode: loadConfig().notifyMode()}
 	setupNativeNotify() // no-op unless running from the .app bundle
+	registerURLProtocol() // Windows: agent-notify: scheme for toast clicks (no-op elsewhere)
 
 	app := application.New(application.Options{
 		Name:        "agent-notify",
@@ -118,29 +119,38 @@ func runDaemon() {
 	// HideOnFocusLost (the tray click first blurs and hides the window,
 	// then the toggle reads it as visible and hides it "again"), which
 	// made left clicks feel dead. Closing is Esc / clicking elsewhere.
-	// Right click gets the native context menu (info · update · restart ·
-	// quit): with a menu set and NO OnRightClick handler, Wails shows it
-	// via native tracking on right-mouse-down. macOS 27 sometimes labels
-	// status-item left clicks as right-button events — those now open the
-	// menu instead of a dead click, which stays usable.
+	// Right click opens OUR menu window (webview): native NSMenuItem
+	// images stopped rendering on recent macOS, so the context menu is a
+	// small page we draw ourselves — logo included.
 	s.window = window
-	tray.SetMenu(s.buildTrayMenu())
+	s.menuWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:            "agent-notify-menu",
+		Title:           "agent-notify",
+		Width:           184,
+		Height:          172,
+		Frameless:       true,
+		AlwaysOnTop:     true,
+		Hidden:          true,
+		DisableResize:   true,
+		HideOnEscape:    true,
+		HideOnFocusLost: true,
+		Windows: application.WindowsWindow{
+			HiddenOnTaskbar: true,
+		},
+		BackgroundColour: application.NewRGB(20, 18, 16),
+		URL:              "/menu.html",
+	})
+	s.menuWindow.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		s.menuWindow.Hide()
+		e.Cancel()
+	})
 	tray.OnClick(s.showWindow)
 	tray.OnDoubleClick(s.showWindow)
+	tray.OnRightClick(s.showTrayMenu)
 
 	go s.serve()
-	// the tray menu is realized only once the app runs; a bitmap set
-	// before that can be dropped, so re-apply it on the live menu item
-	go func() {
-		time.Sleep(1200 * time.Millisecond)
-		if s.nameMenuItem != nil {
-			if small := scalePNG(iconLogo, 18); small != nil {
-				s.nameMenuItem.SetBitmap(small)
-				s.refreshTrayMenu()
-			}
-		}
-	}()
 	go firstRunSetup() // double-clicked .app installs its own hooks
+	go upgradeOpencodePlugin()
 	go s.autoUpdateLoop()
 	// after an in-window update the daemon respawns: bring the window back
 	if home, err := os.UserHomeDir(); err == nil {
@@ -178,9 +188,28 @@ func (s *daemonState) animateHeight(target int) {
 	if start == target {
 		return
 	}
+
+	// Growing must not push the window out of the work area. Windows
+	// anchors its tray at the bottom, so there the BOTTOM edge stays put
+	// and the window grows upward; elsewhere the top stays pinned and we
+	// only shift up when the bottom would cross the taskbar/dock line.
+	x, y := s.window.Position()
+	newY := y
+	if runtime.GOOS == "windows" {
+		newY = y + (start - target)
+	}
+	if scr, err := s.window.GetScreen(); err == nil && scr != nil && scr.WorkArea.Height > 0 {
+		if bottom := scr.WorkArea.Y + scr.WorkArea.Height; newY+target > bottom {
+			newY = bottom - target
+		}
+		if newY < scr.WorkArea.Y {
+			newY = scr.WorkArea.Y
+		}
+	}
+
 	// tray.PositionWindow reads the native frame directly, so no wails-side
 	// geometry sync is needed after the native animation
-	if nativeAnimateHeight(s.window.NativeWindow(), target) {
+	if newY == y && nativeAnimateHeight(s.window.NativeWindow(), target) {
 		return
 	}
 	go func() {
@@ -195,10 +224,14 @@ func (s *daemonState) animateHeight(target int) {
 			}
 			p := float64(time.Since(t0)) / float64(dur)
 			if p >= 1 {
+				s.window.SetPosition(x, newY)
 				s.window.SetSize(width, target)
 				return
 			}
 			e := 1 - (1-p)*(1-p)*(1-p) // ease-out cubic
+			if newY != y {
+				s.window.SetPosition(x, y+int(float64(newY-y)*e))
+			}
 			s.window.SetSize(width, start+int(float64(target-start)*e))
 			time.Sleep(16 * time.Millisecond)
 		}
@@ -263,6 +296,20 @@ func (s *daemonState) serve() {
 			s.mu.Unlock()
 		}
 		s.add(ev)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	// token/cost aggregates posted by the opencode plugin (see opencode.go)
+	mux.HandleFunc("/opencode-usage", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+			return
+		}
+		var p ocUsagePayload
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		ocUsage.ingest(p)
 		w.WriteHeader(http.StatusNoContent)
 	})
 
@@ -397,6 +444,28 @@ func (s *daemonState) assetHandler() http.Handler {
 
 	mux := http.NewServeMux()
 	mux.Handle("/", static)
+	// menu.html is served pre-baked: version, localized labels, and theme
+	// land in the markup so the tray menu paints complete on first load,
+	// with no client-side fetch in the way
+	mux.HandleFunc("/menu.html", func(w http.ResponseWriter, r *http.Request) {
+		data, err := fs.ReadFile(sub, "menu.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		page := string(data)
+		for tok, val := range map[string]string{
+			"{{L_VERSION}}": fmt.Sprintf(T("menu.version"), "v"+version),
+			"{{L_UPDATE}}":  T("update.check"),
+			"{{L_RESTART}}": T("tip.restart"),
+			"{{L_QUIT}}":    T("tip.quit"),
+			"{{THEME}}":     loadConfig().Theme,
+		} {
+			page = strings.ReplaceAll(page, tok, val)
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, page)
+	})
 	mux.Handle("/i18n/", http.FileServer(http.FS(i18nFS)))
 	mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) {
 		cfg := loadConfig()
@@ -418,6 +487,7 @@ func (s *daemonState) assetHandler() http.Handler {
 			Usage       usageReport    `json:"usage"`
 			Limits      limitsReport   `json:"limits"`
 			AgyQuota    agyQuotaReport `json:"agyQuota"`
+			OcUsage     ocUsageReport  `json:"ocUsage"`
 			Dev         bool           `json:"dev"` // running via tools/dev.sh
 		}{Version: version, Settings: cfg, Setup: computeSetup(),
 			Dev:    os.Getenv("AGENT_NOTIFY_DEV") != "",
@@ -435,6 +505,9 @@ func (s *daemonState) assetHandler() http.Handler {
 		// fetch it when that tab is actually in play and agy is installed.
 		if agentEnabled(cfg, "antigravity") && findCLI("agy") != "" {
 			resp.AgyQuota = agyQuota.report()
+		}
+		if agentEnabled(cfg, "opencode") {
+			resp.OcUsage = ocUsage.report()
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -487,7 +560,6 @@ func (s *daemonState) assetHandler() http.Handler {
 		c.Lang = req.Lang
 		saveConfig(c)
 		setLang(resolveLang(req.Lang)) // notifications switch immediately
-		s.rebuildTrayMenu()
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/clear", func(w http.ResponseWriter, r *http.Request) {
@@ -531,7 +603,7 @@ func (s *daemonState) assetHandler() http.Handler {
 		}
 		s.mu.Unlock()
 		s.refreshBadge()
-		focusTarget(ev.Activate, ev.Mux, ev.Surface, ev.CWD)
+		focusTarget(ev.Activate, ev.Mux, ev.Surface, ev.CWD, ev.Title)
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/folder", func(w http.ResponseWriter, r *http.Request) {
@@ -574,7 +646,34 @@ func (s *daemonState) assetHandler() http.Handler {
 			info = *p
 		}
 		s.mu.Unlock()
-		focusTarget(info.Activate, info.Mux, info.Surface, info.CWD)
+		focusTarget(info.Activate, info.Mux, info.Surface, info.CWD, info.Title)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	// focus-notify serves Windows toast clicks: the agent-notify: protocol
+	// relaunches the binary, which calls back here with the session id.
+	// Finished sessions may already be gone from the live map, so fall
+	// back to the newest event that carries the same id.
+	mux.HandleFunc("/api/focus-notify", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "missing id", http.StatusBadRequest)
+			return
+		}
+		s.mu.Lock()
+		var info sessionInfo
+		if p := s.sessions[id]; p != nil {
+			info = *p
+		} else {
+			for _, ev := range s.events { // newest first
+				if ev.SessionID == id {
+					info = sessionInfo{Activate: ev.Activate, CWD: ev.CWD,
+						Surface: ev.Surface, Mux: ev.Mux, Title: ev.Title}
+					break
+				}
+			}
+		}
+		s.mu.Unlock()
+		focusTarget(info.Activate, info.Mux, info.Surface, info.CWD, info.Title)
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/agent-hook", func(w http.ResponseWriter, r *http.Request) {
@@ -710,7 +809,6 @@ func (s *daemonState) assetHandler() http.Handler {
 			case "", "auto", "en", "ko", "zh":
 				c.Lang = *req.Lang
 				setLang(resolveLang(*req.Lang))
-				s.rebuildTrayMenu()
 			}
 		}
 		if req.DefaultTab != nil && validAgent(*req.DefaultTab) {
@@ -869,6 +967,30 @@ func (s *daemonState) assetHandler() http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+	// the tray menu page reports its rendered content size; clamp and fit
+	mux.HandleFunc("/api/menu-size", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			W int `json:"w"`
+			H int `json:"h"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		clamp := func(v, lo, hi int) int {
+			if v < lo {
+				return lo
+			}
+			if v > hi {
+				return hi
+			}
+			return v
+		}
+		if s.menuWindow != nil {
+			s.menuWindow.SetSize(clamp(req.W, 150, 320), clamp(req.H, 120, 400))
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		go s.app.Quit()
@@ -879,7 +1001,7 @@ func (s *daemonState) assetHandler() http.Handler {
 // focusTarget jumps to a session: select its exact multiplexer pane
 // first, then bring the hosting app forward; with neither, open the
 // project folder.
-func focusTarget(activate string, mux muxRef, surface, cwd string) {
+func focusTarget(activate string, mux muxRef, surface, cwd, title string) {
 	muxFocus(mux)
 	if activate != "" && runtime.GOOS == "darwin" {
 		// VSCode-family apps focus the window that already has the folder
@@ -894,6 +1016,11 @@ func focusTarget(activate string, mux muxRef, surface, cwd string) {
 			return
 		}
 		_ = exec.Command("open", "-b", activate).Start()
+		return
+	}
+	// Windows: no bundle ids — find the IDE/terminal window whose title
+	// mentions the project or session and raise it via win32.
+	if focusNativeWindow(cwd, title) {
 		return
 	}
 	if cwd != "" {

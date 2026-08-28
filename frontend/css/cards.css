@@ -37,6 +37,37 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
 }
 .text-btn:hover { color: var(--accent); background: var(--accent-soft); }
 
+/* ---------- boot loading overlay (below the header) ---------- */
+#boot-loading {
+  position: fixed; left: 0; right: 0; bottom: 0; top: 52px; /* JS refines to the header's real bottom */
+  z-index: 60;
+  background: var(--bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px;
+  transition: opacity 0.35s ease;
+}
+#boot-loading.done { opacity: 0; pointer-events: none; }
+.boot-logo {
+  width: 44px; height: 44px;
+  animation: boot-pulse 1.6s ease-in-out infinite;
+}
+@keyframes boot-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+.boot-dots { display: flex; gap: 5px; }
+.boot-dots i {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--dim);
+  animation: boot-dot 1.2s ease-in-out infinite;
+}
+.boot-dots i:nth-child(2) { animation-delay: 0.15s; }
+.boot-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes boot-dot {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-3px); }
+}
+
 /* ---------- limit gauges ---------- */
 .gauges { display: flex; flex-direction: column; gap: 9px; }
 .gauge .row {
@@ -132,5 +163,17 @@ h2 { font-size: 12px; font-weight: 700; color: var(--dim); letter-spacing: 0.06e
   from { transform: none; opacity: 1; }
   to { transform: translateY(6px) scale(0.85); opacity: 0; }
 }
-.chip b { color: var(--text); font-weight: 600; }
+/* max-width guards against huge opencode model ids ("vendor/Model-GGUF:quant") */
+.chip b {
+  color: var(--text); font-weight: 600;
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: inline-block; vertical-align: bottom;
+}
 .chip .val { transition: color 0.3s; }
+
+/* ---------- opencode recent sessions (inside the usage card) ---------- */
+.oc-sess { list-style: none; margin: 10px 0 0; padding: 8px 0 0; border-top: 1px solid var(--card-edge); display: flex; flex-direction: column; gap: 5px; }
+.oc-sess:empty { display: none; }
+.oc-s { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 11px; }
+.oc-s .t { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oc-s .m { color: var(--dim); flex-shrink: 0; font-variant-numeric: tabular-nums; }

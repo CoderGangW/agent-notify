@@ -31,6 +31,7 @@ async function refresh() {
     renderSettings(st.settings);
     renderLimits(st.limits || {});
     renderAgyQuota(st.agyQuota || {});
+    renderOcUsage(st.ocUsage || {});
     renderUsage(st.usage || { today: {}, week: {} });
     renderAgentSetup();
     renderSessions(st.sessions || []);
@@ -69,6 +70,12 @@ async function refresh() {
       mute.classList.toggle("alerts", notifyMode === "alerts");
     }
     mute.dataset.tip = t("tip.mute") + ": " + t("notify." + notifyMode);
+    // first real state has rendered: fade the boot overlay away
+    const bl = $("boot-loading");
+    if (bl && !bl.classList.contains("done")) {
+      bl.classList.add("done");
+      setTimeout(() => bl.remove(), 420);
+    }
   } catch (_) {
     $("live-dot").classList.add("off");
   }

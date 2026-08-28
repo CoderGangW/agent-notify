@@ -67,6 +67,8 @@
   "notify.quiet.d": "不弹系统通知，仅显示未读徽标",
   "notify.silent": "静音",
   "notify.silent.d": "全部关闭 — 无通知、无徽标",
+  "ocusage.local": "汇总自本地 opencode 数据库",
+  "ocusage.none": "下次运行 opencode 时开始收集",
   "reset.day": "{d}天{h}h后重置",
   "reset.hour": "{h}h {m}m后重置",
   "reset.min": "{m}m后重置",

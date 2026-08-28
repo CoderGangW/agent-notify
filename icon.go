@@ -1,7 +1,11 @@
 package main
 
 import (
+	"bytes"
 	_ "embed"
+	"image"
+	"image/color"
+	"image/png"
 	"runtime"
 )
 
@@ -33,4 +37,44 @@ func trayIcon() []byte {
 	default:
 		return iconColor
 	}
+}
+
+// scalePNG box-averages a PNG down to size×size.
+func scalePNG(data []byte, size int) []byte {
+	src, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil
+	}
+	b := src.Bounds()
+	out := image.NewRGBA(image.Rect(0, 0, size, size))
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			// average the source block this output pixel covers
+			x0, x1 := b.Min.X+x*b.Dx()/size, b.Min.X+(x+1)*b.Dx()/size
+			y0, y1 := b.Min.Y+y*b.Dy()/size, b.Min.Y+(y+1)*b.Dy()/size
+			var r, g, bl, a, n uint64
+			for sy := y0; sy < y1; sy++ {
+				for sx := x0; sx < x1; sx++ {
+					pr, pg, pb, pa := src.At(sx, sy).RGBA()
+					r += uint64(pr)
+					g += uint64(pg)
+					bl += uint64(pb)
+					a += uint64(pa)
+					n++
+				}
+			}
+			if n == 0 {
+				continue
+			}
+			out.SetRGBA(x, y, color.RGBA{
+				R: uint8(r / n >> 8), G: uint8(g / n >> 8),
+				B: uint8(bl / n >> 8), A: uint8(a / n >> 8),
+			})
+		}
+	}
+	var buf bytes.Buffer
+	if png.Encode(&buf, out) != nil {
+		return nil
+	}
+	return buf.Bytes()
 }
