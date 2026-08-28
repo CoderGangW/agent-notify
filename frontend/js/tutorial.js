@@ -240,6 +240,10 @@ function tutStart() {
 
 $("help-btn").addEventListener("click", tutStart);
 
+// true while a fix request is in flight — the welcome poll skips its
+// re-render then, so the disabled button isn't stomped mid-request
+let welcomeFixing = false;
+
 function renderWelcomeChecks(setup) {
   // OS-level items only. Agent wiring (hooks, CLI installs) is a per-tab
   // choice made through the in-tab setup guides, never automatic.
@@ -256,6 +260,13 @@ function renderWelcomeChecks(setup) {
       ok: setup.automation === 1, key: "welcome.automation",
       miss: setup.automation === 0 ? "welcome.automation.denied" : "welcome.automation.miss",
       item: "automation", fixKey: "welcome.allow",
+    });
+  }
+  if (setup.diskAccess !== undefined && setup.diskAccess >= 0) {
+    rows.push({
+      ok: setup.diskAccess === 1, key: "welcome.disk",
+      miss: setup.diskAccess === 0 ? "welcome.disk.denied" : "welcome.disk.miss",
+      item: "diskaccess", fixKey: "welcome.allow",
     });
   }
   rows.push({ ok: setup.autostart, key: "welcome.autostart", item: "autostart", fixKey: "welcome.hooks.fix" });
@@ -277,6 +288,7 @@ function renderWelcomeChecks(setup) {
       btn.addEventListener("click", async () => {
         btn.disabled = true;
         btn.textContent = t("welcome.fixing");
+        welcomeFixing = true;
         try {
           const res = await (
             await fetch("/api/setup-fix", {
@@ -286,9 +298,11 @@ function renderWelcomeChecks(setup) {
             })
           ).json();
           if (!res.ok) throw new Error(res.error || "");
+          welcomeFixing = false;
           await refresh();
           renderWelcomeChecks((lastState && lastState.setup) || {});
         } catch (_) {
+          welcomeFixing = false;
           btn.disabled = false;
           btn.textContent = t("welcome.fixfail") + " · " + t(r.fixKey);
         }

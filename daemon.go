@@ -74,6 +74,26 @@ func runDaemon() {
 	setupNativeNotify() // no-op unless running from the .app bundle
 	registerURLProtocol() // Windows: agent-notify: scheme for toast clicks (no-op elsewhere)
 
+	// First launch of the bundled app: fire the OS consent prompts up
+	// front — notification banners, then the Desktop/Documents/Downloads
+	// file access that click-to-focus needs. Each TCC dialog blocks its
+	// syscall until answered, hence the goroutine; macOS never re-prompts
+	// once decided, and unbundled dev runs (notifPermStatus -1) skip so
+	// the grants don't land on the hosting terminal instead of the app.
+	if c := loadConfig(); !c.PermsRequested && notifPermStatus() != -1 {
+		c.PermsRequested = true
+		saveConfig(c)
+		go func() {
+			if notifPermStatus() == 2 {
+				notifPermRequest()
+			}
+			requestFolderAccess()
+			setupMu.Lock()
+			setupChecked = time.Time{} // welcome checklist repolls fresh
+			setupMu.Unlock()
+		}()
+	}
+
 	app := application.New(application.Options{
 		Name:        "agent-notify",
 		Description: "Coding-agent session notifications",
@@ -377,6 +397,7 @@ type setupStatus struct {
 	// 2 not determined, -1 unsupported on this platform/build
 	NotifPerm  int `json:"notifPerm"`
 	Automation int `json:"automation"`
+	DiskAccess int `json:"diskAccess"` // file access for click-to-focus (FDA or folder grants)
 }
 
 var (
@@ -430,6 +451,7 @@ func computeSetup() setupStatus {
 	st.ClaudeCLI = findCLI("claude") != ""
 	st.NotifPerm = notifPermStatus()
 	st.Automation = automationStatus(false) // never prompts from a probe
+	st.DiskAccess = diskAccessStatus()      // silent too: skips folder reads until their prompts fired
 	setupCached, setupChecked = st, time.Now()
 	return st
 }
@@ -468,6 +490,13 @@ func (s *daemonState) assetHandler() http.Handler {
 	})
 	mux.Handle("/i18n/", http.FileServer(http.FS(i18nFS)))
 	mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) {
+		// the welcome checklist polls with fresh=1 so a grant made in
+		// System Settings shows up within one poll, not one cache TTL
+		if r.URL.Query().Get("fresh") == "1" {
+			setupMu.Lock()
+			setupChecked = time.Time{}
+			setupMu.Unlock()
+		}
 		cfg := loadConfig()
 		s.mu.Lock()
 		resp := struct {
@@ -926,6 +955,16 @@ func (s *daemonState) assetHandler() http.Handler {
 				_ = exec.Command("open",
 					"x-apple.systempreferences:com.apple.preference.security?Privacy_Automation").Start()
 			}
+		case "diskaccess":
+			// folder dialogs fire only while undecided; once asked, the
+			// only remaining lever is Full Disk Access (no request API —
+			// the user has to flip it in Privacy & Security by hand)
+			if loadConfig().FolderPermsAsked {
+				_ = exec.Command("open",
+					"x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles").Start()
+			} else {
+				requestFolderAccess()
+			}
 		default:
 			http.Error(w, "unknown item", http.StatusBadRequest)
 			return
@@ -1006,9 +1045,15 @@ func focusTarget(activate string, mux muxRef, surface, cwd, title string) {
 	if activate != "" && runtime.GOOS == "darwin" {
 		// VSCode-family apps focus the window that already has the folder
 		// open when handed its path — window-level precision for free.
+		// Only when the daemon can actually read the path though: a
+		// TCC-hidden cwd (no file access grant) makes `open` hand the
+		// IDE a folder it can't match, which spawns a fresh window —
+		// plain activation is the better failure.
 		if cwd != "" && ideBundles[activate] {
-			_ = exec.Command("open", "-b", activate, cwd).Start()
-			return
+			if _, err := os.Stat(cwd); err == nil {
+				_ = exec.Command("open", "-b", activate, cwd).Start()
+				return
+			}
 		}
 		// Ghostty: jump to the exact surface via its AppleScript API
 		// (focus also activates the window — no open -b needed then)

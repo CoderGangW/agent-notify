@@ -18,6 +18,8 @@ type config struct {
 	DisableAutostart  bool     `json:"disableAutostart,omitempty"`  // don't (re)register login autostart
 	Agents            []string `json:"agents"`                      // enabled agent tabs; nil = legacy default pair, [] = none chosen
 	NotifyMode        string   `json:"notifyMode,omitempty"`        // "on" | "alerts" | "quiet" | "silent"; "" = on
+	PermsRequested    bool     `json:"permsRequested,omitempty"`    // first-run OS permission prompts already fired
+	FolderPermsAsked  bool     `json:"folderPermsAsked,omitempty"`  // Desktop/Documents/Downloads consent dialogs fired (macOS)
 }
 
 // notifyMode resolves the 4-level notification mode:

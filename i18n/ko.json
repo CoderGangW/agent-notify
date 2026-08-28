@@ -180,6 +180,9 @@
   "welcome.autostart": "로그인 시 자동 시작",
   "welcome.cli": "claude CLI — AI 한 줄 요약",
   "welcome.cli.miss": "미설치 — 요약 대신 발췌로 대체됩니다",
+  "welcome.disk": "파일 접근 — 클릭 시 프로젝트가 열린 IDE 창 포커스",
+  "welcome.disk.denied": "미허용 — 개인정보 보호 > 전체 디스크 접근에서 허용, 필요 시 앱 재시작",
+  "welcome.disk.miss": "아직 요청되지 않음 — 허용을 눌러 승인하세요",
   "welcome.fix": "설치",
   "welcome.fixfail": "실패",
   "welcome.fixing": "설치 중…",
@@ -193,7 +196,7 @@
   "welcome.notifier.miss": "미설치 — brew install terminal-notifier 권장",
   "welcome.setup": "앱이 쓰는 OS 권한:",
   "welcome.skip": "건너뛰기",
-  "welcome.start": "투어 시작",
+  "welcome.start": "확인했습니다",
   "welcome.tag": "코딩 에이전트 세션 알림과 대시보드",
   "welcome.title": "agent-notify에 오신 것을 환영합니다"
 }

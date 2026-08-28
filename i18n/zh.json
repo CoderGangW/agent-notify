@@ -180,6 +180,9 @@
   "welcome.autostart": "登录时自动启动",
   "welcome.cli": "claude CLI — AI 一句话摘要",
   "welcome.cli.miss": "未安装 — 摘要将回退为节选",
+  "welcome.disk": "文件访问 — 点击时聚焦已打开该项目的 IDE 窗口",
+  "welcome.disk.denied": "未授权 — 请在隐私与安全性 > 完全磁盘访问权限中开启，必要时重启应用",
+  "welcome.disk.miss": "尚未请求 — 点击「允许」以授权",
   "welcome.fix": "安装",
   "welcome.fixfail": "失败",
   "welcome.fixing": "安装中…",
@@ -193,7 +196,7 @@
   "welcome.notifier.miss": "未安装 — 建议 brew install terminal-notifier",
   "welcome.setup": "本应用使用的系统权限：",
   "welcome.skip": "跳过",
-  "welcome.start": "开始导览",
+  "welcome.start": "知道了",
   "welcome.tag": "编码代理会话的通知与仪表盘",
   "welcome.title": "欢迎使用 agent-notify"
 }

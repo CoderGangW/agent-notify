@@ -3,7 +3,10 @@
 async function refresh() {
   if (tourMock) return; // the tour is showing mock data; don't overwrite
   try {
-    const res = await fetch("/api/state");
+    // welcome open: bypass the daemon's setup cache so a permission
+    // granted in System Settings ticks the checklist within one poll
+    const welcomeOpen = !$("welcome-overlay").classList.contains("hidden");
+    const res = await fetch("/api/state" + (welcomeOpen ? "?fresh=1" : ""));
     const st = await res.json();
     lastState = st;
     $("live-dot").classList.remove("off");
@@ -34,6 +37,7 @@ async function refresh() {
     renderOcUsage(st.ocUsage || {});
     renderUsage(st.usage || { today: {}, week: {} });
     renderAgentSetup();
+    if (welcomeOpen && !welcomeFixing) renderWelcomeChecks(st.setup || {});
     renderSessions(st.sessions || []);
     renderEvents(st.events || [], st.unread || {});
     let badgeChanged = false;

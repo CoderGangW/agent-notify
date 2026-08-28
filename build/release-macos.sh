@@ -54,6 +54,10 @@ cat > "$APP/Contents/Info.plist" <<EOF
 	<key>LSMinimumSystemVersion</key><string>13.0</string>
 	<key>LSUIElement</key><true/>
 	<key>NSHighResolutionCapable</key><true/>
+	<key>NSAppleEventsUsageDescription</key><string>Focuses the terminal window of the coding-agent session you clicked.</string>
+	<key>NSDesktopFolderUsageDescription</key><string>Lets a click hand the project path to your IDE so it focuses the window that already has the project open.</string>
+	<key>NSDocumentsFolderUsageDescription</key><string>Lets a click hand the project path to your IDE so it focuses the window that already has the project open.</string>
+	<key>NSDownloadsFolderUsageDescription</key><string>Lets a click hand the project path to your IDE so it focuses the window that already has the project open.</string>
 </dict>
 </plist>
 EOF

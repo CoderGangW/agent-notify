@@ -180,6 +180,9 @@
   "welcome.autostart": "Starts at login",
   "welcome.cli": "claude CLI — AI one-line summaries",
   "welcome.cli.miss": "not found — summaries fall back to an excerpt",
+  "welcome.disk": "File access — click focuses the IDE window with the project open",
+  "welcome.disk.denied": "Missing — grant Full Disk Access in Privacy & Security, then relaunch if needed",
+  "welcome.disk.miss": "Not requested yet — press Allow to approve",
   "welcome.fix": "Install",
   "welcome.fixfail": "failed",
   "welcome.fixing": "Installing…",
@@ -193,7 +196,7 @@
   "welcome.notifier.miss": "not found — brew install terminal-notifier recommended",
   "welcome.setup": "OS permissions this app uses:",
   "welcome.skip": "Skip",
-  "welcome.start": "Take the tour",
+  "welcome.start": "Got it",
   "welcome.tag": "Notifications and a dashboard for your coding-agent sessions",
   "welcome.title": "Welcome to agent-notify"
 }
