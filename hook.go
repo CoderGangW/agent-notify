@@ -293,6 +293,7 @@ func aiSummarize(request, report string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, claude, "-p", "--model", "haiku")
+	hideConsole(cmd) // GUI-subsystem parent: a console child would flash a window
 	cmd.Stdin = strings.NewReader(prompt)
 	cmd.Dir = os.TempDir()
 	cmd.Env = append(os.Environ(), "CLAUDE_NOTIFY_SUPPRESS=1")

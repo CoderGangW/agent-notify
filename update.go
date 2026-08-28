@@ -117,7 +117,9 @@ func applyUpdate(info releaseInfo, restartOK bool) (bool, error) {
 	defer os.Remove(tmp)
 
 	// Sanity gate: the downloaded binary must run and report the new version.
-	out, err := exec.Command(tmp, "version").Output()
+	verify := exec.Command(tmp, "version")
+	hideConsole(verify)
+	out, err := verify.Output()
 	if err != nil || !strings.Contains(string(out), info.Latest) {
 		return false, fmt.Errorf("downloaded binary failed verification (%v: %q)", err, out)
 	}

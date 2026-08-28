@@ -83,10 +83,12 @@ func installAutostart(exe string, start bool) error {
 		return err
 
 	case "windows":
-		return exec.Command("reg", "add",
+		cmd := exec.Command("reg", "add",
 			`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
 			"/v", "agent-notify", "/t", "REG_SZ",
-			"/d", fmt.Sprintf(`"%s" daemon`, exe), "/f").Run()
+			"/d", fmt.Sprintf(`"%s" daemon`, exe), "/f")
+		hideConsole(cmd)
+		return cmd.Run()
 
 	default: // Linux desktop environments honor XDG autostart
 		home, err := os.UserHomeDir()
@@ -123,9 +125,11 @@ func uninstallAutostart() error {
 		return os.Remove(filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist"))
 
 	case "windows":
-		return exec.Command("reg", "delete",
+		cmd := exec.Command("reg", "delete",
 			`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
-			"/v", "agent-notify", "/f").Run()
+			"/v", "agent-notify", "/f")
+		hideConsole(cmd)
+		return cmd.Run()
 
 	default:
 		home, err := os.UserHomeDir()
@@ -173,9 +177,11 @@ func removeAutostartFiles() {
 	case "darwin":
 		_ = os.Remove(filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist"))
 	case "windows":
-		_ = exec.Command("reg", "delete",
+		cmd := exec.Command("reg", "delete",
 			`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
-			"/v", "agent-notify", "/f").Run()
+			"/v", "agent-notify", "/f")
+		hideConsole(cmd)
+		_ = cmd.Run()
 	default:
 		_ = os.Remove(filepath.Join(home, ".config", "autostart", "agent-notify.desktop"))
 	}

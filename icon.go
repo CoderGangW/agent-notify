@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	_ "embed"
-	"encoding/binary"
 	"runtime"
 )
 
@@ -24,29 +22,15 @@ func trayIcon() []byte {
 	case "darwin":
 		return iconMac
 	case "windows":
-		return pngToICO(iconColor, 32)
+		// Wails' CreateIconFromResourceEx wants raw PNG bytes (RT_ICON
+		// style), not an ICO file — an ICONDIR-wrapped payload fails and
+		// leaves the tray blank. Pre-scale so Windows doesn't shrink the
+		// full-size art badly.
+		if small := scalePNG(iconColor, 32); small != nil {
+			return small
+		}
+		return iconColor
 	default:
 		return iconColor
 	}
-}
-
-// pngToICO wraps PNG data in a single-image ICO container (PNG-in-ICO is
-// supported since Windows Vista).
-func pngToICO(pngData []byte, size int) []byte {
-	var buf bytes.Buffer
-	// ICONDIR
-	binary.Write(&buf, binary.LittleEndian, uint16(0)) // reserved
-	binary.Write(&buf, binary.LittleEndian, uint16(1)) // type: icon
-	binary.Write(&buf, binary.LittleEndian, uint16(1)) // count
-	// ICONDIRENTRY
-	buf.WriteByte(byte(size % 256))                     // width
-	buf.WriteByte(byte(size % 256))                     // height
-	buf.WriteByte(0)                                    // palette
-	buf.WriteByte(0)                                    // reserved
-	binary.Write(&buf, binary.LittleEndian, uint16(1))  // color planes
-	binary.Write(&buf, binary.LittleEndian, uint16(32)) // bits per pixel
-	binary.Write(&buf, binary.LittleEndian, uint32(len(pngData)))
-	binary.Write(&buf, binary.LittleEndian, uint32(6+16)) // data offset
-	buf.Write(pngData)
-	return buf.Bytes()
 }

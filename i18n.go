@@ -98,22 +98,35 @@ func matchLang(locale string) string {
 	}
 }
 
+var (
+	localeOnce sync.Once
+	localeVal  = "en"
+)
+
+// systemLocale is cached: it's consulted on every /api/state poll, and
+// the fallback probes below spawn a process (the Windows one flashed a
+// PowerShell console every second before the cache).
 func systemLocale() string {
-	for _, k := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
-		if v := os.Getenv(k); v != "" && v != "C" && v != "POSIX" {
-			return v
+	localeOnce.Do(func() {
+		for _, k := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
+			if v := os.Getenv(k); v != "" && v != "C" && v != "POSIX" {
+				localeVal = v
+				return
+			}
 		}
-	}
-	switch runtime.GOOS {
-	case "darwin":
-		// launchd agents and Finder-launched apps carry no locale env.
-		if out, err := exec.Command("defaults", "read", "-g", "AppleLocale").Output(); err == nil {
-			return strings.TrimSpace(string(out))
+		switch runtime.GOOS {
+		case "darwin":
+			// launchd agents and Finder-launched apps carry no locale env.
+			if out, err := exec.Command("defaults", "read", "-g", "AppleLocale").Output(); err == nil {
+				localeVal = strings.TrimSpace(string(out))
+			}
+		case "windows":
+			cmd := exec.Command("powershell", "-NoProfile", "-Command", "(Get-Culture).Name")
+			hideConsole(cmd)
+			if out, err := cmd.Output(); err == nil {
+				localeVal = strings.TrimSpace(string(out))
+			}
 		}
-	case "windows":
-		if out, err := exec.Command("powershell", "-NoProfile", "-Command", "(Get-Culture).Name").Output(); err == nil {
-			return strings.TrimSpace(string(out))
-		}
-	}
-	return "en"
+	})
+	return localeVal
 }
