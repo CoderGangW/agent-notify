@@ -304,7 +304,7 @@ function renderWelcomeChecks(setup) {
 // a call-to-action rises from the bottom; its button starts the tour.
 function greetIntro(onDone) {
   const name =
-    (lastState && lastState.limits && lastState.limits.accountName) || "";
+    ((lastState && lastState.limits && lastState.limits.accountName) || "").trim();
   const ov = document.createElement("div");
   ov.id = "greet-ov";
   const lines = [
