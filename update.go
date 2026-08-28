@@ -152,14 +152,22 @@ func applyUpdate(info releaseInfo, restartOK bool) (bool, error) {
 	self, _ := os.Executable()
 	self, _ = filepath.EvalSymlinks(self)
 	if restartOK && runtime.GOOS == "darwin" && (self == target || self == appBundleBin) {
-		// Hand the relaunch to a detached helper: kickstart the launchd
-		// job when one manages us, else reopen the app bundle, else run
-		// the CLI binary. We exit 0 so a KeepAlive job doesn't also
-		// respawn on top of the helper's instance (the loser of that
-		// race would exit nonzero and put launchd in a respawn loop).
+		// Hand the relaunch to a detached helper. Reload the launchd job
+		// (bootout + bootstrap) rather than kickstart: our exit(0) below
+		// satisfies the job's KeepAlive SuccessfulExit=false semaphore,
+		// and a satisfied job ignores kickstart on newer macOS — which
+		// left the app dead (or relaunched unmanaged via open, losing
+		// the daemon-arg log redirection) after an in-app update. A
+		// fresh bootstrap resets the semaphore and RunAtLoad starts the
+		// new version under launchd; without a plist (autostart off),
+		// fall back to the app bundle, then the CLI binary. We exit 0 so
+		// launchd doesn't also respawn on top of the helper's instance.
+		home, _ := os.UserHomeDir()
+		plist := filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist")
 		script := fmt.Sprintf(
-			"sleep 1; launchctl kickstart -k gui/%d/%s 2>/dev/null || open -b %s 2>/dev/null || (%q daemon >/dev/null 2>&1 &)",
-			os.Getuid(), launchdLabel, launchdLabel, target)
+			"sleep 1; launchctl bootout gui/%d/%s 2>/dev/null; sleep 0.5; "+
+				"launchctl bootstrap gui/%d %q 2>/dev/null || open -b %s 2>/dev/null || (%q daemon >/dev/null 2>&1 &)",
+			os.Getuid(), launchdLabel, os.Getuid(), plist, launchdLabel, target)
 		helper := exec.Command("/bin/sh", "-c", script)
 		if err := helper.Start(); err == nil {
 			go func() {

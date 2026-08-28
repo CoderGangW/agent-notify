@@ -342,9 +342,23 @@ func reviveDaemon() {
 	_ = os.WriteFile(stamp, []byte(time.Now().Format(time.RFC3339)), 0o644)
 
 	if runtime.GOOS == "darwin" {
-		// kickstart revives the launchd job whether it crashed or was quit
-		if exec.Command("launchctl", "kickstart",
-			fmt.Sprintf("gui/%d/%s", os.Getuid(), launchdLabel)).Run() == nil {
+		// Reload the job instead of kickstart: a daemon that exited 0
+		// (tray quit, in-app update) satisfies the KeepAlive
+		// SuccessfulExit=false semaphore, and a satisfied job ignores
+		// kickstart on newer macOS. bootout+bootstrap resets it and
+		// RunAtLoad brings the daemon up managed, with its log intact.
+		plist := filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist")
+		if _, err := os.Stat(plist); err == nil {
+			gui := fmt.Sprintf("gui/%d", os.Getuid())
+			_ = exec.Command("launchctl", "bootout", gui+"/"+launchdLabel).Run()
+			if exec.Command("launchctl", "bootstrap", gui, plist).Run() == nil {
+				return
+			}
+		}
+		// no plist (autostart off): the app bundle, when installed, still
+		// runs the daemon on a plain no-arg open
+		if _, err := os.Stat(appBundleBin); err == nil &&
+			exec.Command("open", "-b", launchdLabel).Run() == nil {
 			return
 		}
 	}
