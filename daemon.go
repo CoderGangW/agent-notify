@@ -36,6 +36,7 @@ type daemonState struct {
 	window        application.Window
 	trayMenu      *application.Menu
 	updMenuItem   *application.MenuItem
+	nameMenuItem  *application.MenuItem
 }
 
 func evSource(ev Event) string {
@@ -128,6 +129,17 @@ func runDaemon() {
 	tray.OnDoubleClick(s.showWindow)
 
 	go s.serve()
+	// the tray menu is realized only once the app runs; a bitmap set
+	// before that can be dropped, so re-apply it on the live menu item
+	go func() {
+		time.Sleep(1200 * time.Millisecond)
+		if s.nameMenuItem != nil {
+			if small := scalePNG(iconLogo, 18); small != nil {
+				s.nameMenuItem.SetBitmap(small)
+				s.refreshTrayMenu()
+			}
+		}
+	}()
 	go firstRunSetup() // double-clicked .app installs its own hooks
 	go s.autoUpdateLoop()
 	// after an in-window update the daemon respawns: bring the window back

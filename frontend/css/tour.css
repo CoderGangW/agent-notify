@@ -1,7 +1,7 @@
 /* ---------- onboarding tour ---------- */
 /* tour chrome is app UI: purple ring, dots, buttons, welcome screen.
    The legend keeps the live accent so it matches the real session list. */
-#tut-hole, #tut-card .row, #welcome-overlay {
+#tut-hole, #tut-card .row, #welcome-overlay, #greet-ov {
   --accent: var(--app-accent);
   --accent-soft: var(--app-accent-soft);
   --on-accent: #fff;

@@ -30,6 +30,7 @@ func (s *daemonState) buildTrayMenu() *application.Menu {
 		name.SetBitmap(small) // NSMenuItem renders images at natural size
 	}
 	name.SetEnabled(false)
+	s.nameMenuItem = name
 
 	menu.Add(fmt.Sprintf(T("menu.version"), "v"+version)).SetEnabled(false)
 	if st, err := os.Stat(installDest()); err == nil {
