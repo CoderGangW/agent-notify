@@ -133,7 +133,8 @@ func fetchLimits() limitsReport {
 		}
 	}
 	if len(r.Buckets) > 0 {
-		return r // array order is already session → weekly all → scoped
+		sortBuckets(r.Buckets)
+		return r
 	}
 	for key, msg := range raw {
 		var b struct {
@@ -145,19 +146,34 @@ func fetchLimits() limitsReport {
 		}
 		r.Buckets = append(r.Buckets, limitBucket{Key: key, Utilization: b.Utilization, ResetsAt: b.ResetsAt})
 	}
-	rank := map[string]int{"five_hour": 0, "seven_day": 1, "seven_day_sonnet": 2, "seven_day_opus": 3}
-	sort.Slice(r.Buckets, func(i, j int) bool {
-		ri, iok := rank[r.Buckets[i].Key]
-		rj, jok := rank[r.Buckets[j].Key]
-		if iok != jok {
-			return iok
+	sortBuckets(r.Buckets)
+	return r
+}
+
+// sortBuckets pins the display order regardless of what the API returns:
+// session, weekly all, per-model weekly (by model name), then anything else.
+func sortBuckets(b []limitBucket) {
+	rank := func(x limitBucket) int {
+		switch {
+		case x.Key == "five_hour":
+			return 0
+		case x.Key == "seven_day":
+			return 1
+		case x.Model != "" || strings.HasPrefix(x.Key, "seven_day_"):
+			return 2
 		}
+		return 3
+	}
+	sort.SliceStable(b, func(i, j int) bool {
+		ri, rj := rank(b[i]), rank(b[j])
 		if ri != rj {
 			return ri < rj
 		}
-		return r.Buckets[i].Key < r.Buckets[j].Key
+		if b[i].Model != b[j].Model {
+			return b[i].Model < b[j].Model
+		}
+		return b[i].Key < b[j].Key
 	})
-	return r
 }
 
 // oauthCredentials reads Claude Code's stored OAuth token and subscription

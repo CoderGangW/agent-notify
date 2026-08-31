@@ -11,7 +11,7 @@ function renderLimits(lim) {
       "</div>";
     return;
   }
-  for (const b of lim.buckets) {
+  lim.buckets.forEach((b, i) => {
     const id = "gauge-" + b.key + (b.model ? "-" + b.model : "");
     let el = $(id);
     if (!el) {
@@ -23,6 +23,10 @@ function renderLimits(lim) {
         '<div class="bar"><i></i></div>';
       body.appendChild(el);
     }
+    // Keep DOM order = bucket order (daemon sorts: session, weekly all,
+    // per-model). Only move a node when it is actually out of place, since
+    // re-inserting restarts its bar transition.
+    if (body.children[i] !== el) body.insertBefore(el, body.children[i] || null);
     const pct = Math.min(100, Math.max(0, b.utilization));
     el.querySelector(".name").textContent = b.model
       ? (t("bucket.weekly_model") || "Weekly {model}").replace("{model}", b.model)
@@ -36,7 +40,10 @@ function renderLimits(lim) {
     requestAnimationFrame(() =>
       requestAnimationFrame(() => (bar.style.width = pct + "%"))
     );
-  }
+  });
+  // Drop gauges for buckets the API stopped returning (also clears a stale
+  // limits-err div left from an earlier failed fetch).
+  for (const el of [...body.children].slice(lim.buckets.length)) el.remove();
 }
 
 // renderAgyQuota draws the Antigravity model-quota gauges. Unlike the
