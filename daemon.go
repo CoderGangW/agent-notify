@@ -1049,9 +1049,16 @@ func focusTarget(activate string, mux muxRef, surface, cwd, title string) {
 		// TCC-hidden cwd (no file access grant) makes `open` hand the
 		// IDE a folder it can't match, which spawns a fresh window —
 		// plain activation is the better failure.
+		// The path handed over must be a window's root: a folder inside
+		// a multi-root workspace (or under an open folder) is mapped to
+		// the .code-workspace file / root folder of the window showing it.
 		if cwd != "" && ideBundles[activate] {
-			if _, err := os.Stat(cwd); err == nil {
-				_ = exec.Command("open", "-b", activate, cwd).Start()
+			target := vscodeOpenTarget(cwd, activate)
+			if target == "" {
+				target = cwd
+			}
+			if _, err := os.Stat(target); err == nil {
+				_ = exec.Command("open", "-b", activate, target).Start()
 				return
 			}
 		}

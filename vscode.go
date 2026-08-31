@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -25,6 +26,24 @@ var ideBundleID = map[string]string{
 	"VSCodium":        "com.vscodium",
 	"Cursor":          "com.todesktop.230313mzl4w4u92",
 	"Windsurf":        "com.exafunction.windsurf",
+}
+
+var ideProducts = []string{"Code", "Code - Insiders", "VSCodium", "Cursor", "Windsurf"}
+
+// ideUserDataDir is the VSCode-family user-data root for a product
+// (logs, User/globalStorage, User/workspaceStorage live under it).
+func ideUserDataDir(home, product string) string {
+	switch runtime.GOOS {
+	case "darwin":
+		return filepath.Join(home, "Library", "Application Support", product)
+	case "windows":
+		if appdata := os.Getenv("APPDATA"); appdata != "" {
+			return filepath.Join(appdata, product)
+		}
+		return ""
+	default:
+		return filepath.Join(home, ".config", product)
+	}
 }
 
 func vscodeTitle(sessionID string) (title, bundleID string) {
@@ -54,21 +73,9 @@ func claudeExtensionLogs() []extensionLog {
 	}
 	type base struct{ dir, product string }
 	var bases []base
-	products := []string{"Code", "Code - Insiders", "VSCodium", "Cursor", "Windsurf"}
-	switch runtime.GOOS {
-	case "darwin":
-		for _, p := range products {
-			bases = append(bases, base{filepath.Join(home, "Library", "Application Support", p, "logs"), p})
-		}
-	case "windows":
-		if appdata := os.Getenv("APPDATA"); appdata != "" {
-			for _, p := range products {
-				bases = append(bases, base{filepath.Join(appdata, p, "logs"), p})
-			}
-		}
-	default:
-		for _, p := range products {
-			bases = append(bases, base{filepath.Join(home, ".config", p, "logs"), p})
+	for _, p := range ideProducts {
+		if d := ideUserDataDir(home, p); d != "" {
+			bases = append(bases, base{filepath.Join(d, "logs"), p})
 		}
 	}
 
@@ -129,4 +136,209 @@ func lastTitleInLog(path string, needle []byte) string {
 		}
 	}
 	return title
+}
+
+// vscodeOpenTarget maps a session's cwd onto the path VSCode needs to
+// focus the window that already shows it. `open -b <ide> <path>` only
+// reuses a window when <path> is exactly that window's root — a folder
+// that's a member of a multi-root .code-workspace, or a subfolder of an
+// open folder, spawns a fresh window instead. So: read the IDE's live
+// window list (globalStorage/storage.json → windowsState.openedWindows),
+// find the window whose root contains cwd, and return that root — the
+// .code-workspace file for workspace windows, the folder for plain ones.
+// Exact folder windows win over workspaces, then the deepest root. ""
+// means no open window contains cwd (caller keeps handing over cwd).
+func vscodeOpenTarget(cwd, bundleID string) string {
+	product := ""
+	for p, id := range ideBundleID {
+		if id == bundleID {
+			product = p
+		}
+	}
+	home, err := os.UserHomeDir()
+	if product == "" || err != nil {
+		return ""
+	}
+	dir := ideUserDataDir(home, product)
+	if dir == "" {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "User", "globalStorage", "storage.json"))
+	if err != nil {
+		return ""
+	}
+	var st struct {
+		WindowsState struct {
+			OpenedWindows []ideWindow `json:"openedWindows"`
+			LastActive    *ideWindow  `json:"lastActiveWindow"`
+		} `json:"windowsState"`
+	}
+	if json.Unmarshal(data, &st) != nil {
+		return ""
+	}
+	wins := st.WindowsState.OpenedWindows
+	if st.WindowsState.LastActive != nil {
+		wins = append(wins, *st.WindowsState.LastActive)
+	}
+	cwd = canonPath(cwd)
+	best, bestDepth, bestExact := "", -1, false
+	consider := func(root, target string) {
+		root = canonPath(root)
+		exact := pathsEqual(root, cwd)
+		if !exact && !pathContains(root, cwd) {
+			return
+		}
+		depth := strings.Count(root, string(filepath.Separator))
+		if (exact && !bestExact) || (exact == bestExact && depth > bestDepth) {
+			best, bestDepth, bestExact = target, depth, exact
+		}
+	}
+	for _, w := range wins {
+		if f := fileURIPath(w.Folder); f != "" {
+			consider(f, f)
+		}
+		ws := fileURIPath(w.Workspace.ConfigURIPath)
+		if ws == "" {
+			continue
+		}
+		for _, f := range workspaceFolders(ws) {
+			consider(f, ws)
+		}
+	}
+	return best
+}
+
+type ideWindow struct {
+	Folder    string `json:"folder"`
+	Workspace struct {
+		ConfigURIPath string `json:"configURIPath"`
+	} `json:"workspaceIdentifier"`
+}
+
+// workspaceFolders lists the absolute folder roots of a .code-workspace
+// file (JSON with comments; relative paths resolve against the file).
+func workspaceFolders(wsFile string) []string {
+	data, err := os.ReadFile(wsFile)
+	if err != nil {
+		return nil
+	}
+	var ws struct {
+		Folders []struct {
+			Path string `json:"path"`
+			URI  string `json:"uri"`
+		} `json:"folders"`
+	}
+	if json.Unmarshal(stripJSONC(data), &ws) != nil {
+		return nil
+	}
+	base := filepath.Dir(wsFile)
+	var out []string
+	for _, f := range ws.Folders {
+		switch {
+		case f.Path != "":
+			p := f.Path
+			if !filepath.IsAbs(p) {
+				p = filepath.Join(base, p)
+			}
+			out = append(out, p)
+		case f.URI != "":
+			if p := fileURIPath(f.URI); p != "" {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
+}
+
+// stripJSONC drops // and /* */ comments plus trailing commas so a
+// VSCode settings-style file parses with encoding/json.
+func stripJSONC(b []byte) []byte {
+	out := make([]byte, 0, len(b))
+	inStr, esc := false, false
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		if inStr {
+			out = append(out, c)
+			switch {
+			case esc:
+				esc = false
+			case c == '\\':
+				esc = true
+			case c == '"':
+				inStr = false
+			}
+			continue
+		}
+		switch {
+		case c == '"':
+			inStr = true
+			out = append(out, c)
+		case c == '/' && i+1 < len(b) && b[i+1] == '/':
+			for i < len(b) && b[i] != '\n' {
+				i++
+			}
+		case c == '/' && i+1 < len(b) && b[i+1] == '*':
+			i += 2
+			for i+1 < len(b) && !(b[i] == '*' && b[i+1] == '/') {
+				i++
+			}
+			i++
+		case c == ',':
+			// trailing comma: skip if only whitespace precedes a closer
+			j := i + 1
+			for j < len(b) && (b[j] == ' ' || b[j] == '\t' || b[j] == '\n' || b[j] == '\r') {
+				j++
+			}
+			if j < len(b) && (b[j] == '}' || b[j] == ']') {
+				continue
+			}
+			out = append(out, c)
+		default:
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// fileURIPath turns a file:// URI into a native path ("" for other
+// schemes, e.g. vscode-remote://).
+func fileURIPath(uri string) string {
+	if uri == "" {
+		return ""
+	}
+	u, err := url.Parse(uri)
+	if err != nil || u.Scheme != "file" {
+		return ""
+	}
+	p := u.Path
+	if runtime.GOOS == "windows" && len(p) > 2 && p[0] == '/' && p[2] == ':' {
+		p = p[1:] // /c:/Users/... → c:/Users/...
+	}
+	return filepath.FromSlash(p)
+}
+
+// canonPath cleans and resolves symlinks (/tmp vs /private/tmp) so open
+// window roots and hook cwds compare as the same tree.
+func canonPath(p string) string {
+	p = filepath.Clean(p)
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return p
+}
+
+func pathsEqual(a, b string) bool {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
+
+// pathContains reports whether sub lies strictly inside root.
+func pathContains(root, sub string) bool {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		root, sub = strings.ToLower(root), strings.ToLower(sub)
+	}
+	rel, err := filepath.Rel(root, sub)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
