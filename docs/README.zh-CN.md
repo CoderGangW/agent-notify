@@ -27,40 +27,59 @@
 
 </div>
 
-跨平台（macOS / Windows / Linux）托盘应用：同时运行多个编码代理会话（Claude Code · Codex · Antigravity CLI · Gemini CLI · opencode · Cursor CLI）时，告诉你**刚刚完成的是哪一个** — 并附带会话、令牌用量与套餐限额仪表盘。
+同时运行多个编码代理时，很容易搞不清哪个刚刚完成、哪个正在等你输入、套餐额度又用掉了多少。**agent-notify** 是一个适用于 macOS · Windows · Linux 的轻量托盘应用，一次解决这三个问题：会话完成或需要输入时立即通知你，一键跳回它运行所在的那个窗口，并把会话、token 用量和套餐额度汇总在一个仪表盘里。
 
-## 功能
+## 你能得到什么
 
-**通知**
-- ✅ 任务完成（Stop）/ 🔔 需要输入（Notification）时发送原生系统通知
-- 标题 = **会话标题**（含 VSCode 扩展生成的标题），正文 = **一句话 AI 摘要**（`claude -p --model haiku`，使用现有认证 · 失败时回退为最后回复的摘录）
-- macOS 通知由应用原生发送（自带图标，无需依赖），点击即**聚焦会话所在的那个窗口** — 自动识别 IDE（VSCode / Cursor / Windsurf）、终端标签页或多路复用器面板
+**第一时间知道会话完成了，还是卡住了**
+- ✅ 任务完成时发送系统原生通知，🔔 代理等待你的输入或权限确认时也会通知
+- 通知本身就告诉你是*哪个*会话：标题 = 会话自己的标题（包括 VSCode 扩展设置的标题），正文 = 一句话 AI 摘要说明它做了什么（失败时回退为最后一条回复的摘录）
+- 四档通知模式 — **开启**、**仅提醒**、**安静**（只显示角标，不弹横幅）、**静音**
 
-**仪表盘窗口** — 点击托盘图标
-- 最近会话事件：状态、标题、AI 摘要，一键聚焦回会话的 IDE/终端
-- **令牌用量** — 本地汇总 `~/.claude/projects` 转录（今日 / 近 7 天 / 按模型），去重，里程表式数字动画
-- **套餐限额仪表** — 与 `/usage` 命令相同的 5 小时 / 每周使用率，附重置倒计时
-- 界面语言：English / 한국어 / 简体中文（自动检测，可在窗口内切换）
+**直接跳回去**
+- 点击通知、事件或活动会话，会话运行所在的那个窗口会被带到最前 — IDE 工作区（VSCode / Cursor / Windsurf）、终端标签页或多路复用器面板
+- 多根 `.code-workspace` 和子文件夹中的会话会聚焦已经显示它们的窗口，而不是新开一个
 
-**同样支持 Codex**
-- `agent-notify install-codex` 一条命令，通过 [Codex CLI](https://github.com/openai/codex) 的 `notify` 钩子接入同样的通知
+**所有代理，一个仪表盘** — 点击托盘图标
+- 你选择的每个代理各有一个标签页；每页都有设置清单（已安装 · 已登录 · 钩子已连接）和一键修复按钮
+- **活动会话**及实时状态 — 工作中 · 等待输入 · 空闲
+- **会话事件**流 — 未读角标、搜索、筛选
+- **用量统计** — 按小时 / 天 / 月的 token 图表（滚轮缩放、拖拽平移），按模型区分
+- **套餐额度仪表** — 与 `/usage` 显示一致的 5 小时和每周使用率，附重置倒计时
+- English / 한국어 / 简体中文，浅色 / 深色 / 跟随系统主题，登录时自启动，新版本通知与一键安装
 
-## 工作原理
+## 支持的代理
 
-```
-Claude Code ──(Stop / Notification hook)──▶ agent-notify hook ─┐
-Codex CLI  ──(notify)──▶ agent-notify codex-hook ──────────────┤ POST localhost:49517
-                                                                ▼
-                                            托盘守护进程 ──▶ 系统通知
-                                                 │
-                                                 └──▶ 仪表盘窗口（会话 · 用量 · 限额）
-```
+| 代理 | 任务完成 | 需要输入 | 实时会话状态 | 用量与额度 | 接入命令 |
+|---|:-:|:-:|:-:|---|---|
+| **Claude Code** | ✅ | ✅ | ✅ | token 用量 + 套餐额度 | `agent-notify install` |
+| **Codex CLI** | ✅ | — | — | — | `agent-notify install-codex` |
+| **Gemini CLI**（测试版） | ✅ | ✅ | ✅ | — | `agent-notify install-gemini` |
+| **Antigravity CLI**（测试版） | ✅ | — | ✅ | 模型配额仪表 | `agent-notify install-antigravity` |
+| **opencode**（测试版） | ✅ | ✅（权限请求） | ✅ | token 与费用用量 | `agent-notify install-opencode` |
+| **Cursor CLI**（测试版） | ✅ | — | ✅ | — | `agent-notify install-cursor` |
 
-守护进程未运行时，钩子会直接发送系统通知作为回退 — 只装钩子也能收到通知。
+接入命令只需运行一次：它会把 agent-notify 注册到该代理自己的钩子 / 插件配置中，可用 `agent-notify uninstall` 撤销。仪表盘的设置清单会替你执行这些命令，所以基本不需要打开终端。
+
+## 点击聚焦支持范围
+
+| 会话运行位置 | 聚焦目标 | 备注 |
+|---|---|---|
+| VSCode / Cursor / Windsurf | 精确的工作区窗口 | 支持多根工作区与子文件夹 |
+| tmux | 精确的面板 | 切换窗口、面板和客户端 |
+| WezTerm | 精确的面板 | |
+| iTerm2 | 精确的会话 | |
+| kitty | 窗口 | 需要 `allow_remote_control` |
+| GNU screen | 窗口 | |
+| Zellij | 面板（尽力而为） | 需要支持 `focus-pane-with-id` 的 zellij 版本 |
+| [cmux](https://cmux.com) | 工作区 + 面板 | 将 Settings → Automation → socket 访问设为 password/allowAll |
+| 其他终端 | 应用窗口 | |
+
+各平台精度：**macOS** — 以上全部。**Windows** — 将会话所在窗口带到最前。**Linux** — 打开会话的项目文件夹。
 
 ## 安装
 
-一行命令 — 下载二进制、注册 Claude Code 钩子、设置开机自启：
+一行命令完成下载、接入 Claude Code 并设置登录自启动：
 
 ```sh
 # macOS / Linux
@@ -72,75 +91,36 @@ curl -fsSL https://raw.githubusercontent.com/CoderGangW/agent-notify/main/instal
 irm https://raw.githubusercontent.com/CoderGangW/agent-notify/main/install.ps1 | iex
 ```
 
-已安装 Go：
+**macOS，无需终端：** 通过上方按钮下载 **agent-notify.app**（已签名、通用版）并打开 — 首次启动会自动接入 Claude Code 并注册登录自启动，然后请求所需的通知和文件夹访问权限。
 
-```sh
-go install github.com/CoderGangW/agent-notify@latest
-agent-notify install   # 注册钩子 + 自启 + 启动守护进程
-```
+已安装 Go：`go install github.com/CoderGangW/agent-notify@latest && agent-notify install`。
 
-macOS 也可从发布页下载 **agent-notify.app**（已签名、通用二进制）— 双击即可：首次运行会启动守护进程并**自动安装钩子和登录自启**，无需终端。
-
-## 命令
-
-| 命令 | 说明 |
-|---|---|
-| `agent-notify` | 运行托盘守护进程（默认） |
-| `agent-notify install` | 复制二进制到固定路径、注册 Stop/Notification 钩子、开机自启、启动守护进程 |
-| `agent-notify install-codex` | 在 `~/.codex/config.toml` 注册 Codex CLI `notify` 钩子 |
-| `agent-notify uninstall` | 移除钩子与自启 |
-| `agent-notify stats` | 调试：输出窗口所示的用量 + 限额 JSON |
-| `agent-notify hook` / `codex-hook` | 由 Claude Code / Codex 调用的钩子端点（勿手动运行） |
-| `agent-notify peek <transcript.jsonl> [session-id]` | 调试：查看会话标题/摘要来源 |
-
-## 点击聚焦支持范围
-
-点击通知、事件或活跃会话即可跳回其运行位置：
-
-| 宿主 | 精度 | 备注 |
-|---|---|---|
-| VSCode / Cursor / Windsurf | 精确到工作区窗口 | |
-| tmux | 精确到窗格 | 窗口 + 窗格 + 客户端切换 |
-| GNU screen | 窗口 | |
-| WezTerm | 精确到窗格 | `wezterm cli` |
-| kitty | 窗口 | 需要 `allow_remote_control` |
-| iTerm2 | 精确到会话 | AppleScript |
-| Zellij | 窗格（尽力而为） | 需支持 `focus-pane-with-id` 的版本 |
-| [cmux](https://cmux.com) | 工作区 + 窗格 | Settings → Automation → socket 访问设为 password/allowAll |
-| 其他终端 | 应用窗口 | 基于 bundle id |
-
-复用器身份来自各工具的标准环境变量（`$TMUX_PANE`、`$CMUX_PANEL_ID`、`$WEZTERM_PANE` 等），由 hook 捕获 — 在任何机器上名称都相同。
+其他代理可在仪表盘的代理选择器中添加，或使用上表中的 `install-*` 命令接入。`agent-notify uninstall` 会移除所有钩子和自启动项。
 
 ## 平台说明
 
-- **macOS**：通知为原生（UNUserNotificationCenter），无需额外工具；`terminal-notifier` 仅在守护进程未运行时作为回退。窗口 UI 为原生（Wails v3 / WebKit）。本地构建用 `build/release-macos.sh` 打包签名（bundle id 固定为 `com.codergangw.claude-notify`）。
-- **Linux**：窗口 UI 需要发行版的 `libgtk-3` + `libwebkit2gtk-4.1`；托盘需要 `libayatana-appindicator`，通知需要 `notify-send`。缺少它们时仅钩子通知仍可用。安装时注册应用菜单启动器和图标。
-- **Windows**：toast 通知，无额外依赖。exe 运行不弹控制台窗口。
-- **AI 摘要**：PATH 中有 `claude` CLI 时自动启用。设 `CLAUDE_NOTIFY_NO_AI=1` 可禁用。
-- **套餐限额**：通过 `/usage` 命令所用的同一非官方端点、以现有 Claude Code 认证只读查询（绝不刷新或修改令牌）。即使失效也不影响应用其余功能。
+- **macOS** — 使用应用自有图标的原生通知，无需额外工具。首次启动会请求通知权限以及桌面 / 文稿 / 下载文件夹的访问权限（有了文件夹访问权限，点击才能聚焦到精确的 IDE 窗口）。
+- **Windows** — Toast 通知，无额外依赖，不弹控制台窗口。
+- **Linux** — 通知依赖 `notify-send`；仪表盘窗口需要 `libgtk-3` 和 `libwebkit2gtk-4.1`，托盘图标需要 `libayatana-appindicator`。即使没有这些，基于钩子的通知仍可工作。
+- **AI 摘要**使用你已登录的 `claude` CLI（Haiku，每条通知消耗少量 token）。可在设置中关闭，或通过 `CLAUDE_NOTIFY_NO_AI=1` 禁用。
 
-## 自定义图标
+## 隐私
 
-图标由 `tools/genicon` 从矢量几何生成（托盘 PNG、macOS 包 `.icns`、Windows 多尺寸 `.ico`），构建时嵌入：
-
-```sh
-go run ./tools/genicon assets && go build
-```
+一切都留在你的电脑上。token 用量由本地转录文件计算；套餐额度使用 Claude Code 已保存的凭据只读查询 — 不会刷新、修改或上传。所有网络请求都是你看得见的：额度查询、可选的 AI 摘要，以及新版本检查。
 
 ## 路线图
 
-- [x] 点击通知/事件聚焦会话的 IDE 或终端
-- [x] 仪表盘窗口：会话、令牌用量、套餐限额
-- [x] Codex CLI 支持
-- [ ] 聚焦 VSCode 扩展中的特定会话面板（依赖扩展提供深链接 API）
-- [ ] Webhook（ntfy / Slack / Telegram / Discord）— 离开电脑时推送到手机
-- [ ] 实时会话状态（PreToolUse/PostToolUse：运行中的工具、耗时）
+- [x] 点击通知 / 事件聚焦会话所在的 IDE 或终端
+- [x] 仪表盘：会话、token 用量、套餐额度
+- [x] Codex · Gemini · Antigravity · opencode · Cursor
+- [ ] 聚焦到 VSCode 扩展内的具体会话面板（等待扩展提供深链 API）
+- [ ] Webhook（ntfy / Slack / Telegram / Discord）— 离开电脑时的手机提醒
 - [ ] 收集远程机器的事件
 
-## 发布说明
+## 发行说明
 
-各版本变更见 [release_notes/](../release_notes/) 与[发布页](https://github.com/CoderGangW/agent-notify/releases)。
+每个版本的变更记录见 [release_notes/](../release_notes/) 和 [发布页面](https://github.com/CoderGangW/agent-notify/releases)。
 
 ## 许可证
 
-源码可见许可：可自由使用与再分发未修改副本（含商业用途），修改及分发修改版需书面许可。见 [LICENSE](../LICENSE)。
+源码可见许可：可自由使用和再分发未修改的副本（包括商业用途），但创建或分发修改版本需获得书面许可。详见 [LICENSE](../LICENSE)。
