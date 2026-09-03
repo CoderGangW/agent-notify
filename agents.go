@@ -33,6 +33,10 @@ type agentDef struct {
 	// installHook wires the notify hook into the agent's config; nil for
 	// agents whose hook install is handled elsewhere.
 	installHook func() error
+	// repair reclaims hook wiring the user already opted into after the
+	// agent's own tooling overwrites it (e.g. the Codex desktop app
+	// rewriting config.toml on update); nil = nothing to repair.
+	repair func()
 }
 
 // agentPublic is the per-agent status exposed to the window.
@@ -101,6 +105,7 @@ var agentDefs = []agentDef{
 		loggedIn:    func() bool { return fileExists(homePath(".codex", "auth.json")) },
 		hooked:      codexHooked,
 		installHook: installCodexHook,
+		repair:      codexRepairHook,
 	},
 	{
 		// Personal-account OAuth was cut off 2026-06-18 (migrated to
@@ -192,6 +197,9 @@ func agentList() []agentPublic {
 		}
 		if a.loggedIn != nil {
 			p.LoggedIn = a.loggedIn()
+		}
+		if a.repair != nil {
+			a.repair()
 		}
 		if a.hooked != nil {
 			p.Hooked = a.hooked()

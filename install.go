@@ -216,6 +216,9 @@ func runUninstall() {
 	if err := uninstallAutostart(); err == nil {
 		fmt.Println(T("uninstall.autostart"))
 	}
+	if uninstallCodexHook() {
+		fmt.Printf(T("codex.uninstalled")+"\n", codexConfigPath())
+	}
 
 	path := settingsPath()
 	settings := loadSettings(path)
