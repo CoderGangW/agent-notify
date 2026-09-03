@@ -30,7 +30,7 @@ sed -i '' "s/\"$CUR\"/\"$VERSION\"/g" build/winres/winres.json
 BODY=$(awk 'BEGIN{c=0} /<!--/{c=1} c==0{print} /-->/{c=0}' "$NOTES")
 [ -n "$(echo "$BODY" | tr -d '[:space:]-')" ] || { echo "release body came out empty" >&2; exit 1; }
 git add -A && git commit -m "release: $TAG"
-git tag "$TAG"
+git tag -m "$TAG" "$TAG"
 git push origin main "$TAG"
 gh release create "$TAG" --title "$TAG" --notes "$BODY"
 
