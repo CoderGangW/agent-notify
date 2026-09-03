@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -85,7 +86,9 @@ func chainCodexNotify(payload string) {
 		return // app updated past this path; the next repair re-captures it
 	}
 	args := append(append([]string{}, argv[1:]...), payload)
-	_ = exec.Command(argv[0], args...).Start()
+	cmd := exec.Command(argv[0], args...)
+	hideConsole(cmd) // Windows: the app's helper is a console binary
+	_ = cmd.Start()
 }
 
 type codexChain struct {
@@ -219,6 +222,12 @@ func installCodexHook() error {
 // when a chain backup exists — proof the user opted in — so one hook
 // registration survives app updates; re-installing re-captures the app's
 // new command into the chain.
+var (
+	codexRepairMu   sync.Mutex
+	codexRepairLast time.Time
+	codexRepairHits int
+)
+
 func codexRepairHook() {
 	if len(loadCodexChain()) == 0 || codexHooked() {
 		return
@@ -227,6 +236,22 @@ func codexRepairHook() {
 	if idx < 0 || err != nil || len(argv) == 0 {
 		return // slot empty or unparsable: nothing to reclaim safely
 	}
+	codexRepairMu.Lock()
+	defer codexRepairMu.Unlock()
+	// The running desktop app fights back: it watches config.toml and
+	// reasserts its command, restarting its helper on every rewrite (a
+	// visibly strobing window on Windows). A slot that held for an hour
+	// was a one-off rewrite (app update) — reset the strike count; a slot
+	// snapping back within minutes is an active war — re-take at most
+	// every 10 minutes and give up for this run after 3 rounds.
+	if time.Since(codexRepairLast) > time.Hour {
+		codexRepairHits = 0
+	}
+	if codexRepairHits >= 3 || time.Since(codexRepairLast) < 10*time.Minute {
+		return
+	}
+	codexRepairLast = time.Now()
+	codexRepairHits++
 	_ = installCodexHook()
 }
 
