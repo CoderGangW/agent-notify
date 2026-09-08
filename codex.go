@@ -19,17 +19,30 @@ import (
 // daemon event, so Codex turns land in the same tray/window/notifications.
 //
 // Codex has a single notify slot, and the Codex desktop app claims it for
-// its own binary. When that happens, install saves the app's command to
-// codex-chain.json and codex-hook relays every event to it — both the
-// desktop app and our notifications stay live off one registration.
+// its Computer Use helper. Two shapes of that exist in the wild:
+//
+//   - the helper alone: `[helper, "turn-ended"]`. Install saves that argv
+//     to codex-chain.json, takes the slot, and codex-hook relays every
+//     event to the helper — both integrations stay live off one
+//     registration.
+//   - the helper wrapping whatever was there: `[helper, "turn-ended",
+//     "--previous-notify", "<json argv>"]` (openai/codex#28404). When the
+//     wrapped argv is ours the app is already calling us, so that counts
+//     as hooked and nothing is rewritten — and codex-hook must NOT relay
+//     to the helper, or helper → us → helper would recurse forever.
 
 func codexConfigPath() string { return homePath(".codex", "config.toml") }
 func codexChainPath() string  { return homePath(".claude-notify", "codex-chain.json") }
 
+// codexRelayEnv marks a helper process we spawned; the helper's own
+// --previous-notify callback inherits it, and that callback must not
+// deliver a second time (or relay again).
+const codexRelayEnv = "AGENT_NOTIFY_CODEX_RELAY"
+
 // runCodexHook is invoked by Codex as `agent-notify codex-hook <json>`.
 func runCodexHook() {
 	defer os.Exit(0)
-	if len(os.Args) < 3 {
+	if len(os.Args) < 3 || os.Getenv(codexRelayEnv) != "" {
 		return
 	}
 	payload := os.Args[2]
@@ -39,6 +52,8 @@ func runCodexHook() {
 
 	var n struct {
 		Type          string   `json:"type"`
+		ThreadID      string   `json:"thread-id"`
+		CWD           string   `json:"cwd"`
 		InputMessages []string `json:"input-messages"`
 		Last          string   `json:"last-assistant-message"`
 	}
@@ -56,30 +71,41 @@ func runCodexHook() {
 	if title == "" {
 		title = "Codex"
 	}
-	cwd, _ := os.Getwd() // notify runs in the session's working directory
+	cwd := n.CWD
+	if cwd == "" {
+		cwd, _ = os.Getwd() // older payloads: notify runs in the session's cwd
+	}
 	activate := ""
 	if runtime.GOOS == "darwin" {
 		activate = os.Getenv("__CFBundleIdentifier")
 	}
 	mux := muxContext()
 	deliver(Event{
-		CWD:      cwd,
-		Kind:     "done",
-		Source:   "codex",
-		Title:    title,
-		Activate: activate,
-		Mux:      mux,
-		Message:  condense(n.Last, 180),
-		Time:     time.Now(),
+		// thread-id keys the event like a session id: the Windows toast
+		// click-to-focus path looks the event up by it
+		SessionID: n.ThreadID,
+		CWD:       cwd,
+		Kind:      "done",
+		Source:    "codex",
+		Title:     title,
+		Activate:  activate,
+		Mux:       mux,
+		Message:   condense(n.Last, 180),
+		Time:      time.Now(),
 	})
 }
 
 // chainCodexNotify relays the raw notify JSON to the command that owned the
 // notify slot before our install (the Codex desktop app). Fire-and-forget:
 // a stale path after an app update must never block our own delivery.
+// Relays only while we hold the slot directly — if the slot is the app's
+// wrapper calling us back, the helper already ran for this event.
 func chainCodexNotify(payload string) {
 	argv := loadCodexChain()
-	if len(argv) == 0 || isOurCodexArgv(argv) { // self-loop guard
+	if len(argv) == 0 || codexArgvMentionsUs(argv) { // self-loop guard
+		return
+	}
+	if !codexOwnsSlot() {
 		return
 	}
 	if !fileExists(argv[0]) {
@@ -87,8 +113,53 @@ func chainCodexNotify(payload string) {
 	}
 	args := append(append([]string{}, argv[1:]...), payload)
 	cmd := exec.Command(argv[0], args...)
+	cmd.Env = append(os.Environ(), codexRelayEnv+"=1")
 	hideConsole(cmd) // Windows: the app's helper is a console binary
 	_ = cmd.Start()
+}
+
+// codexOwnsSlot reports whether the top-level notify is exactly our
+// command (not the app's wrapper around it).
+func codexOwnsSlot() bool {
+	_, idx, _, argv, err := readCodexNotify()
+	return idx >= 0 && err == nil && isOurCodexArgv(argv)
+}
+
+// codexPreviousNotify finds the desktop app's `--previous-notify <json>`
+// pair in a helper argv and decodes the wrapped argv. valueIdx is the
+// index of the JSON argument, -1 when the pair is absent or malformed.
+func codexPreviousNotify(argv []string) (valueIdx int, prev []string) {
+	for i := 0; i+1 < len(argv); i++ {
+		if argv[i] != "--previous-notify" {
+			continue
+		}
+		if json.Unmarshal([]byte(argv[i+1]), &prev) != nil {
+			return -1, nil
+		}
+		return i + 1, prev
+	}
+	return -1, nil
+}
+
+// codexWrapsUs reports whether argv is the app's helper wrapping our
+// command via --previous-notify.
+func codexWrapsUs(argv []string) bool {
+	_, prev := codexPreviousNotify(argv)
+	return isOurCodexArgv(prev)
+}
+
+// codexArgvMentionsUs is the broad loop guard: our command anywhere in
+// argv, wrapped or otherwise.
+func codexArgvMentionsUs(argv []string) bool {
+	if isOurCodexArgv(argv) || codexWrapsUs(argv) {
+		return true
+	}
+	for _, a := range argv {
+		if strings.Contains(a, "codex-hook") {
+			return true
+		}
+	}
+	return false
 }
 
 type codexChain struct {
@@ -169,7 +240,7 @@ func writeCodexConfig(lines []string) error {
 // runs our hook.
 func codexHooked() bool {
 	_, idx, _, argv, err := readCodexNotify()
-	return idx >= 0 && err == nil && isOurCodexArgv(argv)
+	return idx >= 0 && err == nil && (isOurCodexArgv(argv) || codexWrapsUs(argv))
 }
 
 // installCodexHook wires the notify hook into ~/.codex/config.toml,
@@ -181,7 +252,8 @@ func installCodexHook() error {
 	}
 	exe, _ = filepath.EvalSymlinks(exe)
 	exe = installBinary(exe)
-	line := codexNotifyValue([]string{exe, "codex-hook"})
+	ourArgv := []string{exe, "codex-hook"}
+	line := codexNotifyValue(ourArgv)
 
 	path := codexConfigPath()
 	lines, notifyIdx, headerIdx, argv, parseErr := readCodexNotify()
@@ -190,6 +262,18 @@ func installCodexHook() error {
 		if parseErr != nil {
 			// a notify we can't parse we also can't preserve: hands off
 			return fmt.Errorf(T("codex.already")+"\n  %s", path, line)
+		}
+		if vi, prev := codexPreviousNotify(argv); vi >= 0 && isOurCodexArgv(prev) {
+			// the app wrapped us: it already calls our hook, so leave its
+			// wrapper alone — rewriting would only restart its rewrite. Just
+			// repoint the wrapped command if it names a binary that's gone.
+			if fileExists(prev[0]) {
+				return nil
+			}
+			wrapped, _ := json.Marshal(ourArgv)
+			argv[vi] = string(wrapped)
+			lines[notifyIdx] = codexNotifyValue(argv)
+			return writeCodexConfig(lines)
 		}
 		if len(argv) > 0 && !isOurCodexArgv(argv) {
 			// foreign owner (Codex desktop app): remember its command so
@@ -260,13 +344,21 @@ func codexRepairHook() {
 // changed the config; a slot we don't own is left untouched.
 func uninstallCodexHook() bool {
 	lines, idx, _, argv, err := readCodexNotify()
-	if idx < 0 || err != nil || !isOurCodexArgv(argv) {
+	if idx < 0 || err != nil {
 		return false
 	}
 	chain := loadCodexChain()
-	if len(chain) > 0 && !isOurCodexArgv(chain) {
+	switch {
+	case codexWrapsUs(argv):
+		// the app's wrapper: drop only our --previous-notify pair
+		vi, _ := codexPreviousNotify(argv)
+		argv = append(append([]string{}, argv[:vi-1]...), argv[vi+1:]...)
+		lines[idx] = codexNotifyValue(argv)
+	case !isOurCodexArgv(argv):
+		return false
+	case len(chain) > 0 && !isOurCodexArgv(chain):
 		lines[idx] = codexNotifyValue(chain)
-	} else {
+	default:
 		lines = append(lines[:idx], lines[idx+1:]...)
 	}
 	if writeCodexConfig(lines) != nil {

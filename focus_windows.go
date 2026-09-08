@@ -100,7 +100,7 @@ var (
 // ideMarkers tag window titles of apps we can address precisely; a match
 // on one of these plus the folder name beats a bare substring hit.
 var ideMarkers = []string{
-	"visual studio code", "vscodium", "cursor", "windsurf",
+	"visual studio code", "vscodium", "cursor", "windsurf", "codex",
 	"windows terminal", "powershell", "command prompt", "wezterm",
 	"alacritty", "hyper", "tabby", "conemu", "cmder",
 }

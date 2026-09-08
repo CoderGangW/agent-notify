@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The desktop-app config shape that broke real installs: notify already
@@ -250,5 +253,175 @@ func TestNotifyInsideTableIgnored(t *testing.T) {
 	}
 	if len(loadCodexChain()) != 0 {
 		t.Fatal("chained a table-scoped notify")
+	}
+}
+
+// wrappedConfig renders the desktop app's newer shape: its helper wrapping
+// a previous notify command via --previous-notify (openai/codex#28404).
+func wrappedConfig(t *testing.T, prev []string) string {
+	t.Helper()
+	wrapped, _ := json.Marshal(prev)
+	argv := []string{`C:\Users\R2SOFT\AppData\Local\OpenAI\Codex\bin\codex-computer-use.exe`, "turn-ended", "--previous-notify", string(wrapped)}
+	return "model = \"gpt-5.6-sol\"\n" + codexNotifyValue(argv) + "\n[projects.'C:\\x']\ntrust_level = \"trusted\"\n"
+}
+
+func putCodexConfig(t *testing.T, cfg string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(codexConfigPath()), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(codexConfigPath(), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWrappedByHelperCountsAsHooked(t *testing.T) {
+	home := setupCodexHome(t, "")
+	ourExe := filepath.Join(home, "agent-notify.exe")
+	if err := os.WriteFile(ourExe, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := wrappedConfig(t, []string{ourExe, "codex-hook"})
+	putCodexConfig(t, cfg)
+
+	if !codexHooked() {
+		t.Fatal("helper wrapping our hook must count as hooked")
+	}
+	if codexOwnsSlot() {
+		t.Fatal("wrapped slot reported as directly owned")
+	}
+	// install is a no-op: rewriting the app's wrapper would restart its war
+	if err := installCodexHook(); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(codexConfigPath())
+	if string(data) != cfg {
+		t.Fatalf("install rewrote the app's wrapper:\n%s", data)
+	}
+	// and repair must stay quiet even with a chain backup lying around
+	if err := saveCodexChain([]string{`C:\old\helper.exe`, "turn-ended"}); err != nil {
+		t.Fatal(err)
+	}
+	codexRepairHook()
+	data, _ = os.ReadFile(codexConfigPath())
+	if string(data) != cfg {
+		t.Fatalf("repair rewrote the app's wrapper:\n%s", data)
+	}
+}
+
+func TestWrappedStaleBinaryRepointed(t *testing.T) {
+	setupCodexHome(t, "")
+	cfg := wrappedConfig(t, []string{`C:\gone\claude-notify.exe`, "codex-hook"})
+	putCodexConfig(t, cfg)
+	if err := installCodexHook(); err != nil {
+		t.Fatal(err)
+	}
+	_, idx, _, argv, err := readCodexNotify()
+	if err != nil || idx < 0 || len(argv) != 4 || argv[2] != "--previous-notify" {
+		t.Fatalf("wrapper shape lost: %v (err %v)", argv, err)
+	}
+	if !strings.HasSuffix(argv[0], "codex-computer-use.exe") {
+		t.Fatalf("helper prefix lost: %v", argv)
+	}
+	_, prev := codexPreviousNotify(argv)
+	if !isOurCodexArgv(prev) || strings.Contains(prev[0], `C:\gone`) || !fileExists(prev[0]) {
+		t.Fatalf("wrapped command not repointed at the live binary: %v", prev)
+	}
+	if !codexHooked() {
+		t.Fatal("not hooked after repoint")
+	}
+	if len(loadCodexChain()) != 0 {
+		t.Fatal("must not chain the helper that is already calling us")
+	}
+}
+
+func TestUninstallStripsPreviousNotify(t *testing.T) {
+	home := setupCodexHome(t, "")
+	ourExe := filepath.Join(home, "agent-notify.exe")
+	if err := os.WriteFile(ourExe, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := wrappedConfig(t, []string{ourExe, "codex-hook"})
+	putCodexConfig(t, cfg)
+	if !uninstallCodexHook() {
+		t.Fatal("uninstall reported no change")
+	}
+	_, idx, _, argv, err := readCodexNotify()
+	if err != nil || idx < 0 || len(argv) != 2 || argv[1] != "turn-ended" {
+		t.Fatalf("helper not left standalone: %v (err %v)", argv, err)
+	}
+	if codexHooked() {
+		t.Fatal("still hooked after uninstall")
+	}
+}
+
+func TestArgvMentionsUsGuard(t *testing.T) {
+	ours := []string{`C:\a\agent-notify.exe`, "codex-hook"}
+	wrapped, _ := json.Marshal(ours)
+	cases := map[string][]string{
+		"direct":      ours,
+		"wrapped":     {`C:\h.exe`, "turn-ended", "--previous-notify", string(wrapped)},
+		"loose":       {`C:\h.exe`, "run", "something codex-hook something"},
+		"other-owner": {`C:\h.exe`, "turn-ended", "--previous-notify", `["uv","run","notify.py"]`},
+		"plain":       {`C:\h.exe`, "turn-ended"},
+	}
+	for name, argv := range cases {
+		want := name != "other-owner" && name != "plain"
+		if got := codexArgvMentionsUs(argv); got != want {
+			t.Errorf("%s: mentions-us = %v, want %v", name, got, want)
+		}
+	}
+}
+
+// relayProbe wires a chain to a shell script that records the relay env
+// marker and the payload it received.
+func relayProbe(t *testing.T, home string) (out string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("shell probe")
+	}
+	out = filepath.Join(home, "relay.out")
+	script := filepath.Join(home, "probe.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho \"$AGENT_NOTIFY_CODEX_RELAY|$2\" > \""+out+"\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveCodexChain([]string{"/bin/sh", script, "turn-ended"}); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func waitFile(path string) (string, bool) {
+	for i := 0; i < 40; i++ {
+		if data, err := os.ReadFile(path); err == nil {
+			return strings.TrimSpace(string(data)), true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return "", false
+}
+
+func TestChainRelaysWithMarkerWhenSlotIsOurs(t *testing.T) {
+	home := setupCodexHome(t, "")
+	if err := installCodexHook(); err != nil {
+		t.Fatal(err)
+	}
+	out := relayProbe(t, home)
+	chainCodexNotify(`{"type":"agent-turn-complete"}`)
+	got, ok := waitFile(out)
+	if !ok {
+		t.Fatal("helper was not relayed to")
+	}
+	if got != `1|{"type":"agent-turn-complete"}` {
+		t.Fatalf("relay got %q", got)
+	}
+}
+
+func TestChainSkipsWhenSlotIsNotOurs(t *testing.T) {
+	home := setupCodexHome(t, codexDesktopConfig) // slot held by the app
+	out := relayProbe(t, home)
+	chainCodexNotify(`{}`)
+	if _, ok := waitFile(out); ok {
+		t.Fatal("relayed although the app holds the slot (helper → us → helper loop)")
 	}
 }
