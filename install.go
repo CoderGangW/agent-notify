@@ -67,17 +67,14 @@ func hookEntries(hooks map[string]any, event string) []any {
 // Documents/Downloads) — the process hangs in dyld before main — and a dev
 // build path would break the install when the working copy moves anyway.
 func installBinary(exe string) string {
-	var dir string
-	home, err := os.UserHomeDir()
-	if err != nil {
+	// Always the canonical name: a browser-downloaded asset arrives as
+	// "agent-notify-windows-amd64 (1).exe", and hooks registered under that
+	// name would outlive every in-app update (which writes agent-notify.exe).
+	dest := installDest()
+	if dest == "" {
 		return exe
 	}
-	if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" && filepath.Separator == '\\' {
-		dir = filepath.Join(localAppData, "agent-notify")
-	} else {
-		dir = filepath.Join(home, ".local", "bin")
-	}
-	dest := filepath.Join(dir, filepath.Base(exe))
+	dir := filepath.Dir(dest)
 	if exe == dest {
 		return exe
 	}
@@ -104,9 +101,20 @@ func installBinary(exe string) string {
 			"--identifier", "com.codergangw.claude-notify", dest).Run()
 	}
 	fmt.Printf(T("install.binary")+"\n", dest)
-	// drop the pre-rename binary so stale copies don't linger
-	_ = os.Remove(filepath.Join(dir, "claude-notify"))
-	_ = os.Remove(filepath.Join(dir, "claude-notify.exe"))
+	// drop stale copies (the pre-rename name, release-asset names) so
+	// nothing keeps resolving to an old version; a running exe just fails
+	// to delete on Windows, which is fine
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		n := e.Name()
+		p := filepath.Join(dir, n)
+		if p == dest || p == exe || e.IsDir() {
+			continue
+		}
+		if strings.HasPrefix(n, "claude-notify") || strings.HasPrefix(n, "agent-notify-") {
+			_ = os.Remove(p)
+		}
+	}
 	return dest
 }
 

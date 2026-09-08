@@ -276,8 +276,11 @@ func putCodexConfig(t *testing.T, cfg string) {
 }
 
 func TestWrappedByHelperCountsAsHooked(t *testing.T) {
-	home := setupCodexHome(t, "")
-	ourExe := filepath.Join(home, "agent-notify.exe")
+	setupCodexHome(t, "")
+	ourExe := installDest() // the wrapper names our canonical install path
+	if err := os.MkdirAll(filepath.Dir(ourExe), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(ourExe, []byte("x"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -423,5 +426,92 @@ func TestChainSkipsWhenSlotIsNotOurs(t *testing.T) {
 	chainCodexNotify(`{}`)
 	if _, ok := waitFile(out); ok {
 		t.Fatal("relayed although the app holds the slot (helper → us → helper loop)")
+	}
+}
+
+func TestWrappedOldNameRepointedToCanonical(t *testing.T) {
+	home := setupCodexHome(t, "")
+	// the shape seen on a real Windows machine: a browser-downloaded asset
+	// name got installed verbatim, then the app wrapped it
+	oldExe := filepath.Join(home, "agent-notify-windows-amd64 (1).exe")
+	if err := os.WriteFile(oldExe, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	putCodexConfig(t, wrappedConfig(t, []string{oldExe, "codex-hook"}))
+	if !codexHooked() {
+		t.Fatal("wrapped old name must still count as hooked")
+	}
+	if err := installCodexHook(); err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, argv, err := readCodexNotify()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, prev := codexPreviousNotify(argv)
+	if len(prev) != 2 || prev[0] != installDest() {
+		t.Fatalf("wrapped command not repointed at the canonical path: %v", prev)
+	}
+	if !strings.HasSuffix(argv[0], "codex-computer-use.exe") || argv[2] != "--previous-notify" {
+		t.Fatalf("wrapper shape lost: %v", argv)
+	}
+}
+
+func TestInstallBinaryCanonicalName(t *testing.T) {
+	setupCodexHome(t, "")
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Dir(installDest())
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(dir, "agent-notify-windows-amd64 (1).exe")
+	if err := os.WriteFile(stale, data, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(t.TempDir(), "agent-notify-darwin-arm64 (2)")
+	if err := os.WriteFile(src, data, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := installBinary(src)
+	if got != installDest() {
+		t.Fatalf("installed as %q, want canonical %q", got, installDest())
+	}
+	if !fileExists(got) {
+		t.Fatal("canonical binary missing")
+	}
+	if fileExists(stale) {
+		t.Fatal("stale release-asset copy left behind")
+	}
+}
+
+func TestRepairRepointsWrappedOldName(t *testing.T) {
+	home := setupCodexHome(t, "")
+	oldExe := filepath.Join(home, "agent-notify-windows-amd64 (1).exe")
+	if err := os.WriteFile(oldExe, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	putCodexConfig(t, wrappedConfig(t, []string{oldExe, "codex-hook"}))
+	codexRepairHook() // no chain file needed: the wrapper itself proves opt-in
+	_, _, _, argv, err := readCodexNotify()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, prev := codexPreviousNotify(argv)
+	if len(prev) != 2 || prev[0] != installDest() {
+		t.Fatalf("repair left the wrapper on the old name: %v", prev)
+	}
+	before, _ := os.ReadFile(codexConfigPath())
+	codexRepairHook() // settled: a second pass must not touch the file
+	after, _ := os.ReadFile(codexConfigPath())
+	if string(before) != string(after) {
+		t.Fatal("repair rewrote a settled wrapper")
 	}
 }

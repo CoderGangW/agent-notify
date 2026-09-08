@@ -265,9 +265,10 @@ func installCodexHook() error {
 		}
 		if vi, prev := codexPreviousNotify(argv); vi >= 0 && isOurCodexArgv(prev) {
 			// the app wrapped us: it already calls our hook, so leave its
-			// wrapper alone — rewriting would only restart its rewrite. Just
-			// repoint the wrapped command if it names a binary that's gone.
-			if fileExists(prev[0]) {
+			// wrapper alone — rewriting would only restart its rewrite. Only
+			// the wrapped command is repointed when it names another copy
+			// (an old name, a gone binary) so updates keep reaching it.
+			if prev[0] == exe {
 				return nil
 			}
 			wrapped, _ := json.Marshal(ourArgv)
@@ -313,12 +314,21 @@ var (
 )
 
 func codexRepairHook() {
-	if len(loadCodexChain()) == 0 || codexHooked() {
-		return
-	}
 	_, idx, _, argv, err := readCodexNotify()
 	if idx < 0 || err != nil || len(argv) == 0 {
 		return // slot empty or unparsable: nothing to reclaim safely
+	}
+	if _, prev := codexPreviousNotify(argv); isOurCodexArgv(prev) {
+		// the app's wrapper calls us; only make sure it calls the canonical
+		// copy (a release-asset name would never see an update). One-shot
+		// and deterministic — no backoff needed.
+		if prev[0] != installDest() {
+			_ = installCodexHook()
+		}
+		return
+	}
+	if len(loadCodexChain()) == 0 || codexHooked() {
+		return
 	}
 	codexRepairMu.Lock()
 	defer codexRepairMu.Unlock()
