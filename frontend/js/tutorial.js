@@ -3,10 +3,17 @@
 // ---- onboarding tour: spotlight overlay, first run + help button ----
 // The tour runs on MOCK Claude data (see tourEnterMock): a fresh install
 // has nothing to show, and every step should point at populated UI.
+// Ordered by on-screen position, top → bottom, so the spotlight (and the
+// tip card, which sits below targets until it runs out of room) travels
+// downward. One deliberate exception: the tour opens on the tabs, then
+// steps up to the header bell just above them. Keys keep their i18n
+// text; order is array order.
 const TUT_STEPS = [
   { sel: "#tabs .seg", key: "s1" },
+  { sel: "#mute-btn", key: "s7" },
   { sel: "#limits-card", key: "s2" },
   { sel: "#usage-card", key: "s3" },
+  { sel: "#events-card .head-tools", key: "s6", subtab: "sessions" },
   {
     sel: "#events-card", key: "s4", subtab: "sessions",
     legend: [
@@ -17,8 +24,6 @@ const TUT_STEPS = [
     ],
   },
   { sel: "#events-card", key: "s5", subtab: "events" },
-  { sel: "#events-card .head-tools", key: "s6", subtab: "sessions" },
-  { sel: "#mute-btn", key: "s7" },
   { sel: "footer", key: "s8" },
 ];
 let tutStep = -1;
@@ -93,7 +98,13 @@ function tourEnterMock() {
   renderLimits(m.limits);
   renderUsage(m.usage);
   const b = $("badge-claude");
-  if (b) b.textContent = "2";
+  if (b) {
+    b.textContent = "2";
+    // the badge widens the tab after applyTab measured it: re-fit the ink
+    // pill and the carousel (refresh() does the same on badge changes)
+    updateInk();
+    updateCarousel();
+  }
 }
 
 function tourExitMock() {
