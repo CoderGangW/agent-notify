@@ -28,7 +28,19 @@
     background: none; border: none; cursor: pointer;
     color: var(--text); font-size: 11.5px; text-align: left;
     padding: 6px 8px; border-radius: 7px;
-    transition: background 0.12s, color 0.12s;
+    transition: background 0.12s, color 0.35s, opacity 0.16s;
+  }
+  /* version picker rows: indented under the item, slightly dimmer */
+  #m-verlist { display: flex; flex-direction: column; gap: 1px; }
+  .m-verrow { padding-left: 20px; font-size: 11px; color: var(--dim); }
+  .m-verrow:disabled { cursor: default; color: var(--text); }
+  /* "up to date": the label lights up in the app purple once, then
+     fades back to "check for updates" */
+  .m-item.latest { color: var(--app-accent); animation: m-glow 1.1s ease-out; }
+  @keyframes m-glow {
+    0%   { text-shadow: 0 0 0 transparent; }
+    35%  { text-shadow: 0 0 10px var(--app-accent); }
+    100% { text-shadow: 0 0 0 transparent; }
   }
   .m-item:hover { background: var(--accent-soft); color: var(--accent); }
   .m-item:disabled { color: var(--dim); cursor: default; background: none; }
@@ -66,6 +78,8 @@
   <div class="m-sep"></div>
   <!-- static defaults keep the menu usable before /api/state answers -->
   <button class="m-item" id="m-upd">{{L_UPDATE}}</button>
+  <button class="m-item" id="m-vers">{{L_VERSIONS}}</button>
+  <div id="m-verlist" hidden></div>
   <button class="m-item" id="m-restart">{{L_RESTART}}</button>
   <div class="m-sep"></div>
   <button class="m-item danger" id="m-quit">{{L_QUIT}}</button>
@@ -94,6 +108,7 @@ function setUpd(state, label) {
   const b = $id("m-upd");
   b.textContent = label;
   b.disabled = state === "checking" || state === "applying";
+  b.classList.toggle("latest", state === "latest");
 }
 
 async function loadMenu() {
@@ -102,6 +117,7 @@ async function loadMenu() {
     applyMenuTheme(st.settings && st.settings.theme);
     mdict = await (await fetch("/i18n/" + (st.lang || "en") + ".json")).json();
     $id("m-ver").textContent = mt("menu.version").replace("%s", "v" + st.version);
+    $id("m-vers").textContent = mt("menu.versions");
     $id("m-restart").textContent = mt("tip.restart");
     $id("m-quit").textContent = mt("tip.quit");
     if (st.updateAvail) {
@@ -132,14 +148,62 @@ $id("m-upd").addEventListener("click", async () => {
       updLatest = r.latest;
       setUpd("available", mt("update.available").replace("{v}", r.latest));
     } else {
-      setUpd("idle", mt("update.latest"));
+      setUpd("latest", mt("update.latest"));
       setTimeout(() => {
-        if (updState === "idle") setUpd("idle", mt("update.check"));
-      }, 2500);
+        if (updState !== "latest") return;
+        const b = $id("m-upd");
+        b.style.opacity = "0"; // fade out, swap the label, fade back in
+        setTimeout(() => {
+          b.style.opacity = "";
+          setUpd("idle", mt("update.check"));
+        }, 160);
+      }, 2200);
     }
   } catch (_) {
     setUpd("idle", mt("update.fail"));
   }
+});
+// version picker: expands under the item; any listed version installs via
+// the same verified pipeline as an update (downgrades included)
+$id("m-vers").addEventListener("click", async () => {
+  const list = $id("m-verlist");
+  if (!list.hidden) {
+    list.hidden = true;
+    fitWindow();
+    return;
+  }
+  list.textContent = "…";
+  list.hidden = false;
+  fitWindow();
+  try {
+    const r = await (await fetch("/api/releases")).json();
+    list.textContent = "";
+    for (const v of r.versions) {
+      const b = document.createElement("button");
+      b.className = "m-item m-verrow";
+      b.textContent = (v.current ? "✓ " : "") + "v" + v.version;
+      b.disabled = v.current;
+      b.addEventListener("click", async () => {
+        b.textContent = mt("update.applying");
+        for (const x of list.children) x.disabled = true;
+        try {
+          const res = await (await fetch("/api/update-apply", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ version: v.version }),
+          })).json();
+          if (!res.ok) throw new Error();
+          // daemon restarts on success
+        } catch (_) {
+          b.textContent = mt("update.fail");
+        }
+      });
+      list.appendChild(b);
+    }
+  } catch (_) {
+    list.textContent = mt("update.fail");
+  }
+  fitWindow();
 });
 $id("m-restart").addEventListener("click", () => {
   fetch("/api/restart", { method: "POST" }).catch(() => {});

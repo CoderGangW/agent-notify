@@ -56,6 +56,65 @@ type releaseInfo struct {
 	Available bool
 }
 
+// platformAsset picks this platform's binary out of a release's assets.
+func platformAsset(assets []releaseAsset) string {
+	ext := ""
+	if runtime.GOOS == "windows" {
+		ext = ".exe"
+	}
+	want := fmt.Sprintf("agent-notify-%s-%s%s", runtime.GOOS, runtime.GOARCH, ext)
+	for _, a := range assets {
+		if a.Name == want {
+			return a.URL
+		}
+	}
+	return ""
+}
+
+type releaseAsset struct {
+	Name string `json:"name"`
+	URL  string `json:"browser_download_url"`
+}
+
+// listReleases returns recent releases (newest first) that carry this
+// platform's asset — the tray menu's version picker, which doubles as a
+// downgrade path when a release misbehaves.
+func listReleases(limit int) ([]releaseInfo, error) {
+	url := fmt.Sprintf("%s?per_page=%d", strings.TrimSuffix(releaseAPI, "/latest"), limit)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "agent-notify/"+version)
+	client := http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("release api: %s", resp.Status)
+	}
+	var rels []struct {
+		TagName string         `json:"tag_name"`
+		Assets  []releaseAsset `json:"assets"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rels); err != nil {
+		return nil, err
+	}
+	out := make([]releaseInfo, 0, len(rels))
+	for _, rel := range rels {
+		info := releaseInfo{
+			Latest:   strings.TrimPrefix(rel.TagName, "v"),
+			AssetURL: platformAsset(rel.Assets),
+		}
+		if info.AssetURL != "" {
+			out = append(out, info)
+		}
+	}
+	return out, nil
+}
+
 func checkUpdate() (releaseInfo, error) {
 	var info releaseInfo
 	req, err := http.NewRequest("GET", releaseAPI, nil)
@@ -73,27 +132,15 @@ func checkUpdate() (releaseInfo, error) {
 		return info, fmt.Errorf("release api: %s", resp.Status)
 	}
 	var rel struct {
-		TagName string `json:"tag_name"`
-		Assets  []struct {
-			Name string `json:"name"`
-			URL  string `json:"browser_download_url"`
-		} `json:"assets"`
+		TagName string         `json:"tag_name"`
+		Assets  []releaseAsset `json:"assets"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
 		return info, err
 	}
 	info.Latest = strings.TrimPrefix(rel.TagName, "v")
 	info.Available = versionNewer(info.Latest, version)
-	ext := ""
-	if runtime.GOOS == "windows" {
-		ext = ".exe"
-	}
-	want := fmt.Sprintf("agent-notify-%s-%s%s", runtime.GOOS, runtime.GOARCH, ext)
-	for _, a := range rel.Assets {
-		if a.Name == want {
-			info.AssetURL = a.URL
-		}
-	}
+	info.AssetURL = platformAsset(rel.Assets)
 	return info, nil
 }
 
@@ -169,6 +216,7 @@ func applyUpdate(info releaseInfo, restartOK bool) (bool, error) {
 				"launchctl bootstrap gui/%d %q 2>/dev/null || open -b %s 2>/dev/null || (%q daemon >/dev/null 2>&1 &)",
 			os.Getuid(), launchdLabel, os.Getuid(), plist, launchdLabel, target)
 		helper := exec.Command("/bin/sh", "-c", script)
+		detach(helper) // must outlive us: launchd kills our process group on exit
 		if err := helper.Start(); err == nil {
 			go func() {
 				time.Sleep(700 * time.Millisecond)

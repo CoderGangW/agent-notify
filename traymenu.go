@@ -33,6 +33,7 @@ func (s *daemonState) restartSelf() {
 		// its listen-retry loop waits for this port to free up
 		if bin := installDest(); bin != "" {
 			cmd := exec.Command(bin, "daemon")
+			detach(cmd) // survive our exit (launchd kills the process group)
 			if err := cmd.Start(); err == nil {
 				_ = cmd.Process.Release()
 			}

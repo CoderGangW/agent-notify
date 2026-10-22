@@ -70,8 +70,19 @@ html, body {
   overflow: hidden;
 }
 
+/* macOS popover shape (boot.js sets --bump and clips body): the page
+   background moves onto a fixed layer so the clipped-away corners and the
+   strip beside the bump stay see-through */
+body { padding-top: var(--bump, 0px); }
+html.mac, html.mac body { background: transparent; }
+html.mac body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1;
+  background: var(--bg);
+  transition: background 0.25s;
+}
+
 #shell {
-  height: 100vh;
+  height: calc(100vh - var(--bump, 0px));
   display: flex;
   flex-direction: column;
   gap: 10px;

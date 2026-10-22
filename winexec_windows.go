@@ -16,3 +16,7 @@ func hideConsole(cmd *exec.Cmd) {
 		CreationFlags: 0x08000000, // CREATE_NO_WINDOW
 	}
 }
+
+// detach on Windows: a hidden console child already runs independently
+// of the parent's lifetime; no session escape needed.
+func detach(cmd *exec.Cmd) { hideConsole(cmd) }

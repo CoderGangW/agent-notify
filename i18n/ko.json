@@ -59,6 +59,7 @@
   "limits.title": "플랜 한도",
   "menu.updated": "마지막 업데이트 %s",
   "menu.version": "현재 버전 %s",
+  "menu.versions": "다른 버전 설치",
   "notif.attention": "입력 필요",
   "notif.done": "작업 완료",
   "notify.alerts": "알림만",

@@ -59,6 +59,7 @@
   "limits.title": "套餐限额",
   "menu.updated": "最近更新 %s",
   "menu.version": "当前版本 %s",
+  "menu.versions": "安装其他版本",
   "notif.attention": "需要输入",
   "notif.done": "任务完成",
   "notify.alerts": "仅通知",

@@ -59,6 +59,7 @@
   "limits.title": "Plan limits",
   "menu.updated": "Last updated %s",
   "menu.version": "Version %s",
+  "menu.versions": "Install another version",
   "notif.attention": "Input needed",
   "notif.done": "Task complete",
   "notify.alerts": "Alerts only",

@@ -127,6 +127,13 @@ func runDaemon() {
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true,
 		},
+		// macOS: transparent, square-cornered window — the page draws its
+		// own popover shape (rounded body + top-center bump toward the
+		// tray icon, see boot.js)
+		Mac: application.MacWindow{
+			Backdrop:   application.MacBackdropTransparent,
+			CornerType: application.MacWindowCornerTypeSquare,
+		},
 		BackgroundColour: application.NewRGB(20, 18, 16),
 		URL:              "/",
 	})
@@ -134,7 +141,7 @@ func runDaemon() {
 		window.Hide()
 		e.Cancel()
 	})
-	tray.AttachWindow(window).WindowOffset(8)
+	tray.AttachWindow(window).WindowOffset(trayGap())
 	// Left click SHOWS the window — never toggle. Toggling races with
 	// HideOnFocusLost (the tray click first blurs and hides the window,
 	// then the toggle reads it as visible and hides it "again"), which
@@ -258,11 +265,21 @@ func (s *daemonState) animateHeight(target int) {
 	}()
 }
 
+// trayGap is the space between the menu bar / taskbar and the window. On
+// macOS the window's shape carries its own bump up toward the icon, so the
+// gap stays small.
+func trayGap() int {
+	if runtime.GOOS == "darwin" {
+		return 2
+	}
+	return 8
+}
+
 func (s *daemonState) showWindow() {
 	if s.window == nil {
 		return
 	}
-	_ = s.tray.PositionWindow(s.window, 8)
+	_ = s.tray.PositionWindow(s.window, trayGap())
 	s.window.Show().Focus()
 }
 
@@ -478,8 +495,9 @@ func (s *daemonState) assetHandler() http.Handler {
 		page := string(data)
 		for tok, val := range map[string]string{
 			"{{L_VERSION}}": fmt.Sprintf(T("menu.version"), "v"+version),
-			"{{L_UPDATE}}":  T("update.check"),
-			"{{L_RESTART}}": T("tip.restart"),
+			"{{L_UPDATE}}":   T("update.check"),
+			"{{L_VERSIONS}}": T("menu.versions"),
+			"{{L_RESTART}}":  T("tip.restart"),
 			"{{L_QUIT}}":    T("tip.quit"),
 			"{{THEME}}":     loadConfig().Theme,
 		} {
@@ -772,16 +790,57 @@ func (s *daemonState) assetHandler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	})
+	// versions the tray menu's picker can install (downgrade included)
+	mux.HandleFunc("/api/releases", func(w http.ResponseWriter, r *http.Request) {
+		rels, err := listReleases(8)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		type row struct {
+			Version string `json:"version"`
+			Current bool   `json:"current"`
+		}
+		out := make([]row, 0, len(rels))
+		for _, rel := range rels {
+			out = append(out, row{Version: rel.Latest, Current: rel.Latest == version})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"versions": out})
+	})
 	mux.HandleFunc("/api/update-apply", func(w http.ResponseWriter, r *http.Request) {
-		s.mu.Lock()
-		info := s.pendingUpdate
-		s.mu.Unlock()
-		if !info.Available {
-			var err error
-			info, err = checkUpdate()
-			if err != nil || !info.Available {
-				http.Error(w, "no update available", http.StatusConflict)
+		var req struct {
+			Version string `json:"version"` // explicit target (version picker); "" = latest
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		var info releaseInfo
+		if req.Version != "" && req.Version != version {
+			rels, err := listReleases(20)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadGateway)
 				return
+			}
+			for _, rel := range rels {
+				if rel.Latest == req.Version {
+					info = rel
+					break
+				}
+			}
+			if info.AssetURL == "" {
+				http.Error(w, "no such version", http.StatusNotFound)
+				return
+			}
+		} else {
+			s.mu.Lock()
+			info = s.pendingUpdate
+			s.mu.Unlock()
+			if !info.Available {
+				var err error
+				info, err = checkUpdate()
+				if err != nil || !info.Available {
+					http.Error(w, "no update available", http.StatusConflict)
+					return
+				}
 			}
 		}
 		// the window is open (the user clicked the button) — reopen it
@@ -790,7 +849,7 @@ func (s *daemonState) assetHandler() http.Handler {
 			_ = os.WriteFile(filepath.Join(home, ".claude-notify", "reopen"), nil, 0o644)
 		}
 		restarted, err := applyUpdate(info, true)
-		resp := map[string]any{"restarted": restarted, "version": info.Latest}
+		resp := map[string]any{"ok": err == nil, "restarted": restarted, "version": info.Latest}
 		if err != nil {
 			resp["error"] = err.Error()
 		}
@@ -1026,7 +1085,7 @@ func (s *daemonState) assetHandler() http.Handler {
 			return v
 		}
 		if s.menuWindow != nil {
-			s.menuWindow.SetSize(clamp(req.W, 150, 320), clamp(req.H, 120, 400))
+			s.menuWindow.SetSize(clamp(req.W, 150, 320), clamp(req.H, 120, 560))
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
