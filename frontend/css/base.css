@@ -70,7 +70,7 @@ html, body {
   overflow: hidden;
 }
 
-/* macOS popover shape (boot.js sets --bump and clips body): the page
+/* macOS popover shape (js/shape.js sets --bump and clips body): the page
    background moves onto a fixed layer so the clipped-away corners and the
    strip beside the bump stay see-through */
 body { padding-top: var(--bump, 0px); }
@@ -80,6 +80,14 @@ html.mac body::before {
   background: var(--bg);
   transition: background 0.25s;
 }
+/* show/hide: the panel slides down out from under the menu bar (the
+   window's top edge clips it, so the dome emerges first) and slides back
+   up on hide, while the window fades (daemon.go trayWin). The fade is
+   quicker than the slide so the motion stays visible. */
+html.mac body.win-in { animation: win-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+html.mac body.win-out { animation: win-out 0.28s cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes win-in { from { transform: translateY(-18px); } to { transform: none; } }
+@keyframes win-out { from { transform: none; } to { transform: translateY(-14px); } }
 
 #shell {
   height: calc(100vh - var(--bump, 0px));

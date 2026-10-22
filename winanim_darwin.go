@@ -7,6 +7,7 @@ package main
 #cgo LDFLAGS: -framework AppKit -framework QuartzCore
 #import <AppKit/AppKit.h>
 #import <QuartzCore/QuartzCore.h>
+#include <stdbool.h>
 
 // Animate the window to a new height with the top edge pinned. NSWindow
 // frames are bottom-left origin, so the origin shifts to keep the top
@@ -28,6 +29,31 @@ static void anAnimateHeight(void *nsWindow, int target) {
 		}];
 	});
 }
+
+// Window alpha, set synchronously (the show that follows must see it).
+static void anSetAlpha(void *nsWindow, double alpha) {
+	NSWindow *w = (__bridge NSWindow *)nsWindow;
+	void (^apply)(void) = ^{ [w setAlphaValue:alpha]; };
+	if ([NSThread isMainThread]) {
+		apply();
+	} else {
+		dispatch_sync(dispatch_get_main_queue(), apply);
+	}
+}
+
+// Native alpha fade. easeIn: slow start (hides), else slow end (shows).
+static void anFadeAlpha(void *nsWindow, double alpha, double secs, bool easeIn) {
+	NSWindow *w = (__bridge NSWindow *)nsWindow;
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[NSAnimationContext runAnimationGroup:^(NSAnimationContext *ctx) {
+			ctx.duration = secs;
+			ctx.timingFunction = [CAMediaTimingFunction
+			    functionWithName:(easeIn ? kCAMediaTimingFunctionEaseIn
+			                             : kCAMediaTimingFunctionEaseOut)];
+			[[w animator] setAlphaValue:alpha];
+		}];
+	});
+}
 */
 import "C"
 
@@ -40,4 +66,18 @@ func nativeAnimateHeight(ptr unsafe.Pointer, target int) bool {
 	}
 	C.anAnimateHeight(ptr, C.int(target))
 	return true
+}
+
+// nativeSetAlpha / nativeFadeAlpha drive the window's own opacity — the
+// fade half of the show/hide animation (the scale half is page CSS).
+func nativeSetAlpha(ptr unsafe.Pointer, a float64) {
+	if ptr != nil {
+		C.anSetAlpha(ptr, C.double(a))
+	}
+}
+
+func nativeFadeAlpha(ptr unsafe.Pointer, a, secs float64, easeIn bool) {
+	if ptr != nil {
+		C.anFadeAlpha(ptr, C.double(a), C.double(secs), C.bool(easeIn))
+	}
 }

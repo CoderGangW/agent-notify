@@ -13,14 +13,6 @@ import (
 // so the menu is a page we draw ourselves. It hides on focus loss / Esc
 // like the dashboard.
 
-func (s *daemonState) showTrayMenu() {
-	if s.menuWindow == nil {
-		return
-	}
-	_ = s.tray.PositionWindow(s.menuWindow, 8)
-	s.menuWindow.Show().Focus()
-}
-
 // restartSelf hands the daemon off to a fresh process (tray menu and
 // /api/restart share it).
 func (s *daemonState) restartSelf() {

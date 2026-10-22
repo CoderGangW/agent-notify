@@ -27,26 +27,6 @@ $("expand-btn").innerHTML = ICONS.expand;
 $("search-close").innerHTML = ICONS.x;
 $("search-clear").innerHTML = ICONS.x;
 document.querySelector("#search-bar .s-ic").innerHTML = ICONS.search;
-// macOS popover shape: the native window is transparent (daemon.go), so
-// the page clips itself to a rounded rect with a bump at top center
-// pointing up at the tray icon. Re-fit on resize (expand animation).
-// ponytail: bump is always centered; if the window gets clamped at a
-// screen edge it won't sit under the icon — pass the icon x if that bites.
-if (/Mac/.test(navigator.platform)) {
-  const b = 9, r = 12, bw = 22; // bump height, corner radius, bump half-width
-  document.documentElement.classList.add("mac");
-  document.documentElement.style.setProperty("--bump", b + "px");
-  const shape = () => {
-    const w = innerWidth, h = innerHeight, cx = w / 2;
-    document.body.style.clipPath =
-      `path("M${r} ${b}H${cx - bw}C${cx - bw / 2} ${b} ${cx - 5} 0 ${cx} 0` +
-      `C${cx + 5} 0 ${cx + bw / 2} ${b} ${cx + bw} ${b}H${w - r}` +
-      `A${r} ${r} 0 0 1 ${w} ${b + r}V${h - r}A${r} ${r} 0 0 1 ${w - r} ${h}` +
-      `H${r}A${r} ${r} 0 0 1 0 ${h - r}V${b + r}A${r} ${r} 0 0 1 ${r} ${b}Z")`;
-  };
-  shape();
-  addEventListener("resize", shape);
-}
 // pin the boot overlay exactly under the header (CSS guesses 52px)
 {
   const bl = $("boot-loading");

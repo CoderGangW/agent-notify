@@ -34,6 +34,15 @@
   #m-verlist { display: flex; flex-direction: column; gap: 1px; }
   .m-verrow { padding-left: 20px; font-size: 11px; color: var(--dim); }
   .m-verrow:disabled { cursor: default; color: var(--text); }
+  /* loading spinner while /api/releases answers (a div, not an svg:
+     CSS rotation of svg goes off-axis in WebKit) */
+  .m-spin {
+    width: 12px; height: 12px; margin: 6px 0 6px 20px;
+    border: 1.6px solid var(--card-edge); border-top-color: var(--app-accent);
+    border-radius: 50%;
+    animation: m-spin 0.7s linear infinite;
+  }
+  @keyframes m-spin { to { transform: rotate(360deg); } }
   /* "up to date": the label lights up in the app purple once, then
      fades back to "check for updates" */
   .m-item.latest { color: var(--app-accent); animation: m-glow 1.1s ease-out; }
@@ -84,6 +93,7 @@
   <div class="m-sep"></div>
   <button class="m-item danger" id="m-quit">{{L_QUIT}}</button>
 </div>
+<script src="/js/shape.js"></script>
 <script>
 "use strict";
 // tiny standalone i18n: the menu window doesn't share the dashboard's JS
@@ -172,7 +182,7 @@ $id("m-vers").addEventListener("click", async () => {
     fitWindow();
     return;
   }
-  list.textContent = "…";
+  list.innerHTML = '<div class="m-spin"></div>';
   list.hidden = false;
   fitWindow();
   try {
@@ -214,11 +224,13 @@ $id("m-quit").addEventListener("click", () => {
 
 // fit the window to the rendered content (labels differ per language)
 function fitWindow() {
+  // right/bottom, not width/height: on macOS the box sits below the dome
+  // strip (body padding-top from shape.js), which the window must include
   const r = $id("menu").getBoundingClientRect();
   fetch("/api/menu-size", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ w: Math.ceil(r.width), h: Math.ceil(r.height) }),
+    body: JSON.stringify({ w: Math.ceil(r.right), h: Math.ceil(r.bottom) }),
   }).catch(() => {});
 }
 

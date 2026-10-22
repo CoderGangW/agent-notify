@@ -52,7 +52,10 @@ start_dev() {
   fi
   mv -f "$BIN.new" "$BIN"
   kill_daemons
-  AGENT_NOTIFY_DEV=1 "$BIN" daemon >"$LOG" 2>&1 &
+  # footer shows the installed prod version (empty → source version)
+  local prod_ver
+  prod_ver="$("$APP/Contents/MacOS/agent-notify" version 2>/dev/null | awk '{print $2}')"
+  AGENT_NOTIFY_DEV=1 AGENT_NOTIFY_PROD_VERSION="$prod_ver" "$BIN" daemon >"$LOG" 2>&1 &
   disown
   if wait_up; then
     say "dev daemon up (log: $LOG)"

@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -37,6 +38,7 @@ type daemonState struct {
 	tray          *application.SystemTray
 	window        application.Window
 	menuWindow    application.Window // custom right-click tray menu
+	dash, menu    *trayWin           // show/hide state for the two tray windows
 }
 
 func evSource(ev Event) string {
@@ -122,14 +124,14 @@ func runDaemon() {
 		AlwaysOnTop:     true,
 		Hidden:          true,
 		DisableResize:   true,
-		HideOnEscape:    true,
-		HideOnFocusLost: true,
+		HideOnEscape:    !animatedTray, // macOS: trayWin.dismiss animates it
+		HideOnFocusLost: !animatedTray,
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true,
 		},
 		// macOS: transparent, square-cornered window — the page draws its
 		// own popover shape (rounded body + top-center bump toward the
-		// tray icon, see boot.js)
+		// tray icon, see js/shape.js)
 		Mac: application.MacWindow{
 			Backdrop:   application.MacBackdropTransparent,
 			CornerType: application.MacWindowCornerTypeSquare,
@@ -142,11 +144,8 @@ func runDaemon() {
 		e.Cancel()
 	})
 	tray.AttachWindow(window).WindowOffset(trayGap())
-	// Left click SHOWS the window — never toggle. Toggling races with
-	// HideOnFocusLost (the tray click first blurs and hides the window,
-	// then the toggle reads it as visible and hides it "again"), which
-	// made left clicks feel dead. Closing is Esc / clicking elsewhere.
-	// Right click opens OUR menu window (webview): native NSMenuItem
+	// Left click toggles the dashboard (see trayWin.toggle for the
+	// blur-before-click race). Right click opens OUR menu window (webview): native NSMenuItem
 	// images stopped rendering on recent macOS, so the context menu is a
 	// small page we draw ourselves — logo included.
 	s.window = window
@@ -159,10 +158,14 @@ func runDaemon() {
 		AlwaysOnTop:     true,
 		Hidden:          true,
 		DisableResize:   true,
-		HideOnEscape:    true,
-		HideOnFocusLost: true,
+		HideOnEscape:    !animatedTray,
+		HideOnFocusLost: !animatedTray,
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true,
+		},
+		Mac: application.MacWindow{ // dome shape drawn by js/shape.js
+			Backdrop:   application.MacBackdropTransparent,
+			CornerType: application.MacWindowCornerTypeSquare,
 		},
 		BackgroundColour: application.NewRGB(20, 18, 16),
 		URL:              "/menu.html",
@@ -171,9 +174,11 @@ func runDaemon() {
 		s.menuWindow.Hide()
 		e.Cancel()
 	})
-	tray.OnClick(s.showWindow)
-	tray.OnDoubleClick(s.showWindow)
-	tray.OnRightClick(s.showTrayMenu)
+	s.dash = newTrayWin(window, func() { _ = s.tray.PositionWindow(window, trayGap()) })
+	s.menu = newTrayWin(s.menuWindow, func() { _ = s.tray.PositionWindow(s.menuWindow, trayGap()) })
+	tray.OnClick(s.dash.toggle)
+	tray.OnRightClick(s.menu.toggle)
+	tray.OnDoubleClick(s.showWindow) // Windows only; a double click must end shown
 
 	go s.serve()
 	go firstRunSetup() // double-clicked .app installs its own hooks
@@ -226,11 +231,23 @@ func (s *daemonState) animateHeight(target int) {
 		newY = y + (start - target)
 	}
 	if scr, err := s.window.GetScreen(); err == nil && scr != nil && scr.WorkArea.Height > 0 {
-		if bottom := scr.WorkArea.Y + scr.WorkArea.Height; newY+target > bottom {
+		wa := scr.WorkArea
+		// Wails on macOS hands Window.GetScreen() back in device pixels
+		// (getScreenForWindow skips the DPI division the screen manager
+		// does) while Position() is in points — on Retina the menu-bar
+		// clamp below doubled and shoved the window down. Normalize.
+		if runtime.GOOS == "darwin" && scr.ScaleFactor > 1 {
+			f := float64(scr.ScaleFactor)
+			wa = application.Rect{
+				X: int(float64(wa.X) / f), Y: int(float64(wa.Y) / f),
+				Width: int(float64(wa.Width) / f), Height: int(float64(wa.Height) / f),
+			}
+		}
+		if bottom := wa.Y + wa.Height; newY+target > bottom {
 			newY = bottom - target
 		}
-		if newY < scr.WorkArea.Y {
-			newY = scr.WorkArea.Y
+		if newY < wa.Y {
+			newY = wa.Y
 		}
 	}
 
@@ -265,6 +282,17 @@ func (s *daemonState) animateHeight(target int) {
 	}()
 }
 
+// shownVersion is the version the UI displays. tools/dev.sh passes the
+// installed production app's version, so a dev build shows what users
+// actually run (the DEV chip marks it as a dev build) rather than the
+// source constant, which may already be bumped for the next release.
+func shownVersion() string {
+	if v := os.Getenv("AGENT_NOTIFY_PROD_VERSION"); v != "" {
+		return v
+	}
+	return version
+}
+
 // trayGap is the space between the menu bar / taskbar and the window. On
 // macOS the window's shape carries its own bump up toward the icon, so the
 // gap stays small.
@@ -275,12 +303,87 @@ func trayGap() int {
 	return 8
 }
 
-func (s *daemonState) showWindow() {
-	if s.window == nil {
+// animatedTray: macOS tray windows fade + scale in from the dome and back
+// out (native alpha fade, page-CSS scale pivoted on the dome — shape.js).
+// Elsewhere they show and hide natively, unanimated.
+const animatedTray = runtime.GOOS == "darwin"
+
+// trayWin is a window that pops out of the tray icon.
+type trayWin struct {
+	w     application.Window
+	place func()       // position under the tray icon
+	blur  atomic.Int64 // unix nanos of the last focus loss
+	gen   atomic.Int64 // bumped by show/hide; a show cancels a pending hide
+}
+
+func newTrayWin(w application.Window, place func()) *trayWin {
+	t := &trayWin{w: w, place: place}
+	w.OnWindowEvent(events.Common.WindowLostFocus, func(*application.WindowEvent) {
+		t.blur.Store(time.Now().UnixNano())
+		if animatedTray {
+			t.dismiss()
+		}
+	})
+	if animatedTray {
+		w.(*application.WebviewWindow).RegisterKeyBinding("escape", func(application.Window) { t.dismiss() })
+	}
+	return t
+}
+
+func (t *trayWin) present() {
+	t.gen.Add(1)
+	ptr := t.w.NativeWindow()
+	if animatedTray {
+		nativeSetAlpha(ptr, 0) // first frame invisible; the fade reveals it
+	}
+	t.place()
+	t.w.Show().Focus()
+	if animatedTray {
+		// the fade must finish well before the slide does, or the motion
+		// plays out while the window is still nearly invisible
+		t.w.ExecJS("window.winIn && winIn()")
+		nativeFadeAlpha(ptr, 1, 0.2, false)
+	}
+}
+
+func (t *trayWin) dismiss() {
+	if !animatedTray {
+		t.w.Hide()
 		return
 	}
-	_ = s.tray.PositionWindow(s.window, trayGap())
-	s.window.Show().Focus()
+	g := t.gen.Add(1)
+	// ease-in fade: the panel stays visible while it starts sliding up
+	t.w.ExecJS("window.winOut && winOut()")
+	nativeFadeAlpha(t.w.NativeWindow(), 0, 0.26, true)
+	time.AfterFunc(290*time.Millisecond, func() {
+		if t.gen.Load() == g {
+			t.w.Hide()
+			nativeSetAlpha(t.w.NativeWindow(), 1) // never leave a hidden window transparent
+		}
+	})
+}
+
+// toggle opens a closed window and closes an open one. The click on the
+// status item usually steals focus first, so the window is already
+// hiding by the time this runs — one that lost focus a moment ago counts
+// as "was open" and stays shut.
+// ponytail: 300ms heuristic; clicking elsewhere then the icon within that
+// window reads as a close — track the click's own blur if that bites.
+func (t *trayWin) toggle() {
+	if time.Since(time.Unix(0, t.blur.Load())) < 300*time.Millisecond {
+		return
+	}
+	if t.w.IsVisible() {
+		t.dismiss()
+		return
+	}
+	t.present()
+}
+
+func (s *daemonState) showWindow() {
+	if s.dash != nil {
+		s.dash.present()
+	}
 }
 
 // serve accepts events from hook processes on the fixed localhost port.
@@ -494,7 +597,7 @@ func (s *daemonState) assetHandler() http.Handler {
 		}
 		page := string(data)
 		for tok, val := range map[string]string{
-			"{{L_VERSION}}": fmt.Sprintf(T("menu.version"), "v"+version),
+			"{{L_VERSION}}": fmt.Sprintf(T("menu.version"), "v"+shownVersion()),
 			"{{L_UPDATE}}":   T("update.check"),
 			"{{L_VERSIONS}}": T("menu.versions"),
 			"{{L_RESTART}}":  T("tip.restart"),
@@ -536,7 +639,7 @@ func (s *daemonState) assetHandler() http.Handler {
 			AgyQuota    agyQuotaReport `json:"agyQuota"`
 			OcUsage     ocUsageReport  `json:"ocUsage"`
 			Dev         bool           `json:"dev"` // running via tools/dev.sh
-		}{Version: version, Settings: cfg, Setup: computeSetup(),
+		}{Version: shownVersion(), Settings: cfg, Setup: computeSetup(),
 			Dev:    os.Getenv("AGENT_NOTIFY_DEV") != "",
 			Events: s.events, Sessions: s.sessionListLocked(),
 			Unread: s.unreadLocked(), Agents: agentListEnabled(cfg),
@@ -792,10 +895,13 @@ func (s *daemonState) assetHandler() http.Handler {
 	})
 	// versions the tray menu's picker can install (downgrade included)
 	mux.HandleFunc("/api/releases", func(w http.ResponseWriter, r *http.Request) {
-		rels, err := listReleases(8)
+		rels, err := listReleases(8) // fetch a few extra: assetless releases get filtered out
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
+		}
+		if len(rels) > 3 {
+			rels = rels[:3] // picker shows the three most recent
 		}
 		type row struct {
 			Version string `json:"version"`
