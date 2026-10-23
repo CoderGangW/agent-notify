@@ -70,28 +70,34 @@ type cleanerAgent struct {
 	// bytes) so the trash copy can restore it
 	purge  func(items []cleanerSession) (map[string][]byte, []string)
 	resume func(s cleanerSession) []string // nil when it can't be resumed
+	// rename stores a title where the agent itself keeps it, so its own
+	// session picker shows it too; nil when it can't
+	rename func(s cleanerSession, title string) error
+	// detail reads what the inspector shows on demand: the last few
+	// exchanges, model, branch; nil when it can't
+	detail func(s cleanerSession) cleanerDetail
 	// unavailable explains (i18n key) why the agent can't be listed here
 	unavailable func() string
 }
 
 var cleanerAgents = map[string]cleanerAgent{
-	"claude": {scan: scanClaude, purge: purgeClaude, resume: func(s cleanerSession) []string {
-		return []string{"claude", "--resume", s.SID}
-	}},
-	"antigravity": {scan: scanAntigravity, purge: purgeAntigravity, resume: func(s cleanerSession) []string {
-		if s.Source != "cli" {
-			return nil // IDE conversations reopen in the IDE
-		}
-		return []string{"agy", "--conversation", s.SID}
-	}},
-	"codex": {scan: scanCodex, purge: purgeCodex,
+	"claude": {scan: scanClaude, purge: purgeClaude, rename: renameClaude, detail: claudeDetail,
+		resume: func(s cleanerSession) []string { return []string{"claude", "--resume", s.SID} }},
+	"antigravity": {scan: scanAntigravity, purge: purgeAntigravity, rename: renameAntigravity, detail: agyDetail,
+		resume: func(s cleanerSession) []string {
+			if s.Source != "cli" {
+				return nil // IDE conversations reopen in the IDE
+			}
+			return []string{"agy", "--conversation", s.SID}
+		}},
+	"codex": {scan: scanCodex, purge: purgeCodex, rename: renameCodex, detail: codexDetail,
 		resume: func(s cleanerSession) []string { return []string{"codex", "resume", s.SID} }},
 	// Gemini looks the id up within the project it's started in (cwd)
-	"gemini": {scan: scanGemini, purge: purgeGemini,
+	"gemini": {scan: scanGemini, purge: purgeGemini, rename: renameGemini, detail: geminiDetail,
 		resume: func(s cleanerSession) []string { return []string{"gemini", "--resume", s.SID} }},
 	"cursor": {scan: scanCursor,
 		resume: func(s cleanerSession) []string { return []string{"cursor-agent", "--resume", s.SID} }},
-	"opencode": {scan: scanOpencode, purge: purgeOpencode,
+	"opencode": {scan: scanOpencode, purge: purgeOpencode, rename: renameOpencode, detail: opencodeDetail,
 		resume: func(s cleanerSession) []string { return []string{"opencode", "--session", s.SID} },
 		unavailable: func() string {
 			home, _ := os.UserHomeDir()
@@ -351,6 +357,74 @@ func stripJSONLines(path, key string, ids map[string]bool) ([]byte, error) {
 	return removed.Bytes(), replaceFile(path, keep.Bytes())
 }
 
+// cleanerDetail is what one session's files say beyond the list row.
+type cleanerDetail struct {
+	Turns  []cleanerTurn `json:"turns"`
+	Model  string        `json:"model,omitempty"`  // the latest one
+	Branch string        `json:"branch,omitempty"` // git branch it ran on
+}
+
+// cleanerTurn is one exchange: a prompt and the agent's final reply to it.
+type cleanerTurn struct {
+	User      string `json:"user"`
+	Assistant string `json:"assistant"`
+}
+
+// turnLog folds a session's messages, oldest first, into turns.
+type turnLog []cleanerTurn
+
+func (l *turnLog) user(t string) {
+	if t = strings.TrimSpace(t); t != "" {
+		*l = append(*l, cleanerTurn{User: clip(t, 2000)})
+	}
+}
+
+// reply keeps the turn's latest reply: the last one answers the prompt,
+// the ones before it narrate the work. A reply before any prompt (a tail
+// that starts mid-turn) is dropped.
+func (l *turnLog) reply(t string) {
+	if t = strings.TrimSpace(t); t != "" && len(*l) > 0 {
+		(*l)[len(*l)-1].Assistant = clip(t, 4000)
+	}
+}
+
+func (l turnLog) last() []cleanerTurn { return l[max(0, len(l)-3):] }
+
+// appendJSONLine adds v to a JSONL file as one line, first ending the
+// previous line if the file doesn't.
+func appendJSONLine(path string, v any) error {
+	line, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if st, err := f.Stat(); err == nil && st.Size() > 0 {
+		end := make([]byte, 1)
+		if _, err := f.ReadAt(end, st.Size()-1); err == nil && end[0] != '\n' {
+			line = append([]byte("\n"), line...)
+		}
+	}
+	_, err = f.Write(append(line, '\n'))
+	return err
+}
+
+// keepMtime runs write, then puts path's mtime back (mod when the file is
+// new): a rename isn't activity, and a fresh mtime would sort the session
+// to the top and read as running for two minutes.
+func keepMtime(path string, mod time.Time, write func() error) error {
+	if st, err := os.Stat(path); err == nil {
+		mod = st.ModTime()
+	}
+	if err := write(); err != nil {
+		return err
+	}
+	return os.Chtimes(path, time.Now(), mod)
+}
+
 // replaceFile swaps in new content atomically, keeping the file's mode.
 func replaceFile(path string, data []byte) error {
 	st, err := os.Stat(path)
@@ -561,8 +635,9 @@ func (s *daemonState) cleanerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/cleaner/state", func(w http.ResponseWriter, r *http.Request) {
 		cfg := loadConfig()
 		agent := r.URL.Query().Get("agent")
+		a := cleanerAgents[agent]
 		notice := ""
-		if a, ok := cleanerAgents[agent]; ok && a.unavailable != nil {
+		if a.unavailable != nil {
 			notice = a.unavailable()
 		}
 		name := agent
@@ -571,6 +646,7 @@ func (s *daemonState) cleanerRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{
 			"agent": agent, "name": name, "notice": notice,
+			"can":      map[string]bool{"rename": a.rename != nil, "detail": a.detail != nil},
 			"sessions": cleanerScan(agent, home, os.Getenv, cfg, s.liveSessionIDs()),
 			"prefs": map[string]any{
 				"excluded": cfg.CleanerExcluded, "hideExcluded": cfg.CleanerHideExcluded,
@@ -638,6 +714,56 @@ func (s *daemonState) cleanerRoutes(mux *http.ServeMux) {
 		}
 		saveConfig(c)
 		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/cleaner/rename", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Agent string `json:"agent"`
+			ID    string `json:"id"`
+			Title string `json:"title"`
+		}
+		if !decode(w, r, &req) {
+			return
+		}
+		rename := cleanerAgents[req.Agent].rename
+		title := clip(oneLine(req.Title), 200)
+		if rename == nil || title == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		// decide on a fresh scan, like delete: the session may be live again
+		for _, it := range cleanerScan(req.Agent, home, os.Getenv, loadConfig(), s.liveSessionIDs()) {
+			if it.ID != req.ID {
+				continue
+			}
+			// a live agent writes the title it holds back over ours
+			if it.Running || it.Orphan {
+				http.Error(w, "not renamable", http.StatusConflict)
+			} else if err := rename(it, title); err != nil {
+				http.Error(w, err.Error(), http.StatusConflict)
+			} else {
+				w.WriteHeader(http.StatusNoContent)
+			}
+			return
+		}
+		http.NotFound(w, r)
+	})
+	mux.HandleFunc("/api/cleaner/detail", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID string `json:"id"`
+		}
+		if !decode(w, r, &req) {
+			return
+		}
+		var d cleanerDetail
+		if it, ok := lookup(req.ID); ok && !it.Orphan {
+			if read := cleanerAgents[it.Agent].detail; read != nil {
+				d = read(it)
+			}
+		}
+		if d.Turns == nil {
+			d.Turns = []cleanerTurn{}
+		}
+		writeJSON(w, d)
 	})
 	mux.HandleFunc("/api/cleaner/resume", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {

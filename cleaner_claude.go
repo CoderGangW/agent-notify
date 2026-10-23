@@ -203,6 +203,55 @@ func scanClaude(home string, env func(string) string) []cleanerSession {
 	return items
 }
 
+// renameClaude does what /rename does: a custom-title entry at the end of
+// the transcript, where the latest one wins. The custom-title.json some
+// front ends keep beside it is rewritten in place, so its folder's mtime
+// (part of the session's) stays.
+func renameClaude(s cleanerSession, title string) error {
+	err := keepMtime(s.ID, s.Mtime, func() error {
+		return appendJSONLine(s.ID, struct {
+			Type        string `json:"type"`
+			SessionID   string `json:"sessionId"`
+			CustomTitle string `json:"customTitle"`
+		}{"custom-title", s.SID, title})
+	})
+	side := filepath.Join(strings.TrimSuffix(s.ID, ".jsonl"), "custom-title.json")
+	if err == nil && fileExists(side) {
+		data, _ := json.Marshal(map[string]string{"customTitle": title})
+		err = keepMtime(side, s.Mtime, func() error { return os.WriteFile(side, data, 0o600) })
+	}
+	return err
+}
+
+// claudeDetail reads the transcript's last 4MB. Turns start at real
+// prompts: not meta, subagent traffic, tool results or injected <…> text.
+func claudeDetail(s cleanerSession) cleanerDetail {
+	var d cleanerDetail
+	var l turnLog
+	_, tail := headTail(s.ID, 4<<20)
+	for _, line := range bytes.Split(tail, []byte("\n")) {
+		var e rawEntry
+		if json.Unmarshal(line, &e) != nil || e.IsMeta || e.IsSidechain || e.IsCompact {
+			continue
+		}
+		if e.GitBranch != "" {
+			d.Branch = e.GitBranch
+		}
+		t := strings.TrimSpace(contentText(e.Message.Content))
+		switch {
+		case e.Type == "user" && !strings.HasPrefix(t, "<") && !strings.HasPrefix(t, "[Request interrupted"):
+			l.user(t)
+		case e.Type == "assistant" && e.Message.Model != "<synthetic>":
+			if e.Message.Model != "" {
+				d.Model = e.Message.Model
+			}
+			l.reply(t)
+		}
+	}
+	d.Turns = l.last()
+	return d
+}
+
 // purgeClaude drops the sessions' history.jsonl lines and their emptied
 // project folders.
 func purgeClaude(items []cleanerSession) (map[string][]byte, []string) {

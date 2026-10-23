@@ -357,6 +357,83 @@ func scanCodex(home string, env func(string) string) []cleanerSession {
 	return items
 }
 
+// renameCodex adds a thread name to session_index.jsonl, as Codex's own
+// rename does; the last name per id wins.
+func renameCodex(s cleanerSession, title string) error {
+	return appendJSONLine(filepath.Join(s.Root, "session_index.jsonl"), map[string]string{
+		"id": s.SID, "thread_name": title, "updated_at": time.Now().UTC().Format(time.RFC3339Nano),
+	})
+}
+
+// codexDetail reads the newest rollout: user_message / agent_message
+// events (or the item_completed items some builds write instead), the
+// model from turn_context, the branch from session_meta.
+func codexDetail(s cleanerSession) cleanerDetail {
+	var d cleanerDetail
+	path := ""
+	for _, f := range s.Files {
+		if strings.HasSuffix(f.Path, ".jsonl") && codexRollout.MatchString(filepath.Base(f.Path)) {
+			path = f.Path // the walk lists a thread's rollouts oldest first
+		}
+	}
+	head, tail := headTail(path, 4<<20)
+	for _, line := range bytes.Split(head, []byte("\n")) {
+		var e struct {
+			Payload struct {
+				Git struct {
+					Branch string `json:"branch"`
+				} `json:"git"`
+			} `json:"payload"`
+		}
+		if bytes.Contains(line, []byte(`"session_meta"`)) && json.Unmarshal(line, &e) == nil {
+			d.Branch = e.Payload.Git.Branch
+			break
+		}
+	}
+	var events, items turnLog
+	for _, line := range bytes.Split(tail, []byte("\n")) {
+		var e struct {
+			Type    string `json:"type"`
+			Payload struct {
+				Type    string `json:"type"`
+				Message string `json:"message"`
+				Model   string `json:"model"`
+				Item    struct {
+					Type    string `json:"type"`
+					Content []struct {
+						Text string `json:"text"`
+					} `json:"content"`
+				} `json:"item"`
+			} `json:"payload"`
+		}
+		if json.Unmarshal(line, &e) != nil {
+			continue
+		}
+		if e.Type == "turn_context" && e.Payload.Model != "" {
+			d.Model = e.Payload.Model
+		}
+		var parts []string
+		for _, c := range e.Payload.Item.Content {
+			parts = append(parts, c.Text)
+		}
+		switch {
+		case e.Payload.Type == "user_message":
+			events.user(codexPrompt(e.Payload.Message))
+		case e.Payload.Type == "agent_message":
+			events.reply(e.Payload.Message)
+		case e.Payload.Type == "item_completed" && e.Payload.Item.Type == "UserMessage":
+			items.user(codexPrompt(strings.Join(parts, " ")))
+		case e.Payload.Type == "item_completed" && e.Payload.Item.Type == "AgentMessage":
+			items.reply(strings.Join(parts, "\n"))
+		}
+	}
+	if len(events) == 0 {
+		events = items
+	}
+	d.Turns = events.last()
+	return d
+}
+
 func purgeCodex(items []cleanerSession) (map[string][]byte, []string) {
 	saved := map[string][]byte{}
 	errs := purgeByRoot(items, "history.jsonl", "session_id", saved)
@@ -392,7 +469,8 @@ func geminiDir(home string, env func(string) string) string {
 	return filepath.Join(home, ".gemini")
 }
 
-func geminiUserText(raw json.RawMessage) string {
+// geminiText: content is a string or a list of parts.
+func geminiText(raw json.RawMessage) string {
 	var s string
 	if json.Unmarshal(raw, &s) != nil {
 		var parts []struct {
@@ -405,7 +483,12 @@ func geminiUserText(raw json.RawMessage) string {
 		}
 		s = strings.Join(b, " ")
 	}
-	s = strings.TrimSpace(s)
+	return strings.TrimSpace(s)
+}
+
+// geminiUserText is a user message's text, "" for commands and injected context.
+func geminiUserText(raw json.RawMessage) string {
+	s := geminiText(raw)
 	for _, skip := range []string{"/", "?", "<session_context>", "<hook_context>"} {
 		if strings.HasPrefix(s, skip) {
 			return ""
@@ -415,8 +498,10 @@ func geminiUserText(raw json.RawMessage) string {
 }
 
 type geminiMessage struct {
-	Type    string          `json:"type"`
+	ID      string          `json:"id"`
+	Type    string          `json:"type"` // user | gemini | info | error …
 	Content json.RawMessage `json:"content"`
+	Model   string          `json:"model"`
 }
 
 func readGeminiMeta(path string) transcriptMeta {
@@ -560,6 +645,75 @@ func scanGemini(home string, env func(string) string) []cleanerSession {
 		}
 	}
 	return items
+}
+
+// geminiChat is the session's current chat file: the .jsonl copy a resume
+// leaves beside a legacy .json wins.
+func geminiChat(s cleanerSession) string {
+	out := ""
+	for _, f := range s.Files {
+		n := filepath.Base(f.Path)
+		if filepath.Base(filepath.Dir(f.Path)) == "chats" && strings.HasPrefix(n, "session-") && (out == "" || strings.HasSuffix(n, ".jsonl")) {
+			out = f.Path
+		}
+	}
+	return out
+}
+
+// renameGemini names the session the way Gemini does, with a {"$set"} line.
+// ponytail: a chat only in the legacy .json format can't be renamed;
+// rewrite its "summary" field if those still turn up.
+func renameGemini(s cleanerSession, title string) error {
+	p := geminiChat(s)
+	if !strings.HasSuffix(p, ".jsonl") {
+		return errors.New("legacy chat format")
+	}
+	return keepMtime(p, s.Mtime, func() error {
+		return appendJSONLine(p, map[string]map[string]string{"$set": {"summary": title}})
+	})
+}
+
+func geminiDetail(s cleanerSession) cleanerDetail {
+	var msgs []geminiMessage
+	p := geminiChat(s)
+	if strings.HasSuffix(p, ".json") {
+		var r struct {
+			Messages []geminiMessage `json:"messages"`
+		}
+		data, _ := os.ReadFile(p)
+		_ = json.Unmarshal(data, &r)
+		msgs = r.Messages
+	} else {
+		_, tail := headTail(p, 4<<20)
+		at := map[string]int{} // a record written again (same id) replaces its first copy
+		for _, line := range bytes.Split(tail, []byte("\n")) {
+			var m geminiMessage
+			if json.Unmarshal(line, &m) != nil || m.Type == "" {
+				continue
+			}
+			if i, ok := at[m.ID]; ok && m.ID != "" {
+				msgs[i] = m
+				continue
+			}
+			at[m.ID] = len(msgs)
+			msgs = append(msgs, m)
+		}
+	}
+	var d cleanerDetail
+	var l turnLog
+	for _, m := range msgs {
+		switch m.Type {
+		case "user":
+			l.user(geminiUserText(m.Content))
+		case "gemini":
+			l.reply(geminiText(m.Content))
+			if m.Model != "" {
+				d.Model = m.Model
+			}
+		}
+	}
+	d.Turns = l.last()
+	return d
 }
 
 // purgeGemini drops the sessions from each project's logs.json (a JSON
@@ -710,24 +864,77 @@ func agyTitle(root, id string) string {
 	return ""
 }
 
+// agyStep is one line of the brain's transcript log, which only agy (the
+// CLI) keeps: USER_EXPLICIT/USER_INPUT, MODEL/PLANNER_RESPONSE, tool steps.
+type agyStep struct {
+	Source  string `json:"source"`
+	Type    string `json:"type"`
+	Content string `json:"content"`
+}
+
+func agyLog(root, id string) string {
+	return filepath.Join(root, "brain", id, ".system_generated", "logs", "transcript.jsonl")
+}
+
+func (e agyStep) userText() string {
+	if e.Source != "USER_EXPLICIT" || e.Type != "USER_INPUT" {
+		return ""
+	}
+	if m := agyRequest.FindStringSubmatch(e.Content); m != nil {
+		return m[1]
+	}
+	return strings.TrimSpace(e.Content)
+}
+
 // agyTranscriptPrompt: the first explicit user input in the brain's log.
 func agyTranscriptPrompt(root, id string) string {
-	head, _ := headTail(filepath.Join(root, "brain", id, ".system_generated", "logs", "transcript.jsonl"), 256<<10)
+	head, _ := headTail(agyLog(root, id), 256<<10)
 	for _, line := range bytes.Split(head, []byte("\n")) {
-		var e struct {
-			Source  string `json:"source"`
-			Type    string `json:"type"`
-			Content string `json:"content"`
+		var e agyStep
+		if json.Unmarshal(line, &e) == nil && e.userText() != "" {
+			return e.userText()
 		}
-		if json.Unmarshal(line, &e) != nil || e.Source != "USER_EXPLICIT" || e.Type != "USER_INPUT" {
-			continue
-		}
-		if m := agyRequest.FindStringSubmatch(e.Content); m != nil {
-			return m[1]
-		}
-		return strings.TrimSpace(e.Content)
 	}
 	return ""
+}
+
+func agyDetail(s cleanerSession) cleanerDetail {
+	_, tail := headTail(agyLog(s.Root, s.SID), 4<<20)
+	var l turnLog
+	for _, line := range bytes.Split(tail, []byte("\n")) {
+		var e agyStep
+		if json.Unmarshal(line, &e) != nil {
+			continue
+		}
+		if t := e.userText(); t != "" {
+			l.user(t)
+		} else if e.Source == "MODEL" && e.Type == "PLANNER_RESPONSE" {
+			l.reply(e.Content)
+		}
+	}
+	return cleanerDetail{Turns: l.last()}
+}
+
+// renameAntigravity rewrites the annotation's title line, adding one (or
+// the file) when there's none; the rest of the annotation stays.
+func renameAntigravity(s cleanerSession, title string) error {
+	p := filepath.Join(s.Root, "annotations", s.SID+".pbtxt")
+	line := []byte("title:" + strconv.QuoteToGraphic(title))
+	return keepMtime(p, s.Mtime, func() error {
+		d, err := os.ReadFile(p)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		if pbTitle.Match(d) {
+			d = pbTitle.ReplaceAllLiteral(d, line)
+		} else {
+			d = append(append(line, '\n'), d...)
+		}
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			return err
+		}
+		return os.WriteFile(p, d, 0o600)
+	})
 }
 
 func scanAntigravity(home string, _ func(string) string) []cleanerSession {
@@ -957,12 +1164,71 @@ func scanOpencode(home string, env func(string) string) []cleanerSession {
 	return items
 }
 
+// opencodeDBOf: the database a scanned session came from.
+func opencodeDBOf(s cleanerSession) string {
+	if p := os.Getenv("OPENCODE_DB"); p != "" {
+		return p
+	}
+	return filepath.Join(s.Root, "opencode.db")
+}
+
+func renameOpencode(s cleanerSession, title string) error {
+	db := opencodeDBOf(s)
+	schema, _ := opencodeSchema(db)
+	return sqliteExec(db, "UPDATE "+schema.session+" SET title = '"+strings.ReplaceAll(title, "'", "''")+
+		"' WHERE id IN ("+sqlIDs([]string{s.SID})+")")
+}
+
+// opencodeDetail: the session's newest 400 text parts (its subagent child
+// sessions aside), oldest first, and the model of the latest reply.
+func opencodeDetail(s cleanerSession) cleanerDetail {
+	db := opencodeDBOf(s)
+	schema, _ := opencodeSchema(db)
+	id := sqlIDs([]string{s.SID})
+	q := `SELECT json_extract(m.data, '$.role') AS role, json_extract(p.data, '$.text') AS text,
+ json_extract(m.data, '$.modelID') AS model
+FROM part p JOIN message m ON p.message_id = m.id
+WHERE m.session_id IN (` + id + `) AND json_extract(p.data, '$.type') = 'text'
+  AND NOT COALESCE(json_extract(p.data, '$.synthetic'), 0)
+ORDER BY m.time_created DESC, p.id DESC LIMIT 400`
+	if schema.session == "session_v2" {
+		// ponytail: only v2 user rows were seen ($.text); replies are
+		// assumed to be shaped alike and just show empty if they aren't
+		q = `SELECT m.type AS role, json_extract(m.data, '$.text') AS text, json_extract(m.data, '$.modelID') AS model
+FROM session_message m WHERE m.session_id IN (` + id + `) ORDER BY m.seq DESC LIMIT 400`
+	}
+	var rows []struct {
+		Role  string  `json:"role"`
+		Text  *string `json:"text"`
+		Model *string `json:"model"`
+	}
+	var d cleanerDetail
+	if sqliteRows(db, q, &rows) != nil {
+		return d
+	}
+	var l turnLog
+	for i := len(rows) - 1; i >= 0; i-- {
+		text := ""
+		if rows[i].Text != nil {
+			text = *rows[i].Text
+		}
+		switch rows[i].Role {
+		case "user":
+			l.user(text)
+		case "assistant":
+			l.reply(text)
+			if m := rows[i].Model; m != nil && *m != "" {
+				d.Model = *m
+			}
+		}
+	}
+	d.Turns = l.last()
+	return d
+}
+
 func purgeOpencode(items []cleanerSession) (map[string][]byte, []string) {
 	saved := map[string][]byte{}
-	db := filepath.Join(items[0].Root, "opencode.db")
-	if p := os.Getenv("OPENCODE_DB"); p != "" {
-		db = p
-	}
+	db := opencodeDBOf(items[0])
 	ids := make([]string, len(items))
 	for i, it := range items {
 		ids[i] = it.SID

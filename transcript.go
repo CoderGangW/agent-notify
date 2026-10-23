@@ -21,6 +21,7 @@ type rawEntry struct {
 	Type        string    `json:"type"`
 	IsMeta      bool      `json:"isMeta"`
 	IsSidechain bool      `json:"isSidechain"`
+	IsCompact   bool      `json:"isCompactSummary"` // the "continued from a previous conversation" recap
 	Summary     string    `json:"summary"`
 	GitBranch   string    `json:"gitBranch"`
 	Timestamp   time.Time `json:"timestamp"`

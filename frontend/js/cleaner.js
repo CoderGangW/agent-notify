@@ -82,6 +82,15 @@ function fullTime(iso) {
   fmts();
   return dtf.format(ms);
 }
+// the two largest units: "3h 12m", "2d 4h"
+function fmtDur(ms) {
+  if (!(ms >= 0)) return "–";
+  const m = Math.round(ms / 60000);
+  const parts = m >= 1440 ? [[Math.floor(m / 1440), "day"], [Math.floor(m / 60) % 24, "hour"]]
+    : m >= 60 ? [[Math.floor(m / 60), "hour"], [m % 60, "minute"]] : [[Math.max(1, m), "minute"]];
+  return parts.filter(([n]) => n).map(([n, unit]) =>
+    new Intl.NumberFormat(lang, { style: "unit", unit, unitDisplay: "short" }).format(n)).join(" ");
+}
 
 // ---------- session model ----------
 const SRC = {
@@ -103,6 +112,8 @@ const srcIcon = (id, cls) =>
 const isProtected = (s) => s.pinned || !!s.excluded;
 const deletable = (s) => !s.running && !isProtected(s);
 const canResume = (s) => !s.running && !!(s.resume && s.resume.length);
+// a live agent would write its own title back over the new one
+const canRename = (s) => !!(st.can && st.can.rename) && !s.running && !s.orphan;
 const hasKey = (k) => !!(dict[k] || dictEn[k]);
 const titleOf = (s) => (s.orphan ? t("cl.orphanTitle") : s.title || t("cl.emptyTitle"));
 function subOf(s) {
@@ -197,6 +208,28 @@ async function resume(s) {
   if (!(await api("/api/cleaner/resume", { id: s.id }))) flash(t("cl.err.resume"));
 }
 const reveal = (s) => api("/api/cleaner/reveal", { id: s.id });
+
+// what the session's files say beyond its row (recent turns, model,
+// branch), read when it's selected and kept until its mtime moves
+const details = new Map(); // id → { mtime, d }
+function detailOf(s) {
+  const c = details.get(s.id);
+  return c && c.mtime === s.mtime ? c.d : null;
+}
+async function fetchDetail(s) {
+  const r = await api("/api/cleaner/detail", { id: s.id });
+  const d = r ? await r.json().catch(() => null) : null;
+  if (d) details.set(s.id, { mtime: s.mtime, d });
+  return d;
+}
+
+async function doRename(s, title) {
+  title = oneLine(title);
+  if (!title || title === s.title) return;
+  if (!(await api("/api/cleaner/rename", { agent: currentTab, id: s.id, title }))) return flash(t("cl.err.rename"));
+  await load();
+  flash(t("cl.renamed"));
+}
 
 function copy(text) {
   if (!navigator.clipboard) return;
@@ -385,12 +418,74 @@ function renderRows() {
 }
 
 let inspSig = "";
+let inspOf = ""; // the selection the panel shows; a new one starts at the top
 function renderInsp() {
   const sel = selectedList();
   const sig = lang + "|" + sel.map((s) => [s.id, s.mtime, s.size, s.pinned, s.excluded, s.running, s.title].join(":")).join(",");
   if (sig === inspSig) return;
   inspSig = sig;
-  $("insp").firstElementChild.innerHTML = sel.length === 1 ? inspOne(sel[0]) : sel.length ? inspMulti(sel) : inspNone();
+  const inner = $("insp").firstElementChild;
+  inner.innerHTML = sel.length === 1 ? inspOne(sel[0]) : sel.length ? inspMulti(sel) : inspNone();
+  const of = sel.map((s) => s.id).join(",");
+  if (of !== inspOf) {
+    inspOf = of;
+    inner.scrollTop = 0;
+  }
+  if (sel.length === 1) fillDetail(sel[0]);
+}
+
+// a height change eases instead of jumping: measure, change, animate between
+function tweenHeight(el, change) {
+  const h0 = el.offsetHeight;
+  change();
+  const h1 = el.offsetHeight;
+  if (h0 === h1) return;
+  el.style.overflow = "hidden";
+  el.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 300, easing: "cubic-bezier(0.22, 1, 0.36, 1)" })
+    .finished.then(() => (el.style.overflow = ""), () => {});
+}
+
+// the detail block opens on a placeholder; the read fills it in
+async function fillDetail(s) {
+  const box = $("insp").querySelector(".i-detail");
+  if (!box) return;
+  if (detailOf(s)) return markClamped(box);
+  const d = (await fetchDetail(s)) || { turns: [] };
+  if (!box.isConnected) return; // the inspector moved on meanwhile
+  tweenHeight(box, () => (box.innerHTML = '<div class="i-in">' + detailHTML(d) + "</div>"));
+  markClamped(box);
+}
+
+// long messages fold to a few lines; only the folded ones unfold on click
+function markClamped(root) {
+  for (const m of root.querySelectorAll(".t-msg")) m.classList.toggle("more", m.scrollHeight > m.clientHeight + 1);
+}
+
+const irow = (key, val, cls) => "<dt>" + esc(t(key)) + '</dt><dd class="' + (cls || "") + '">' + esc(val) + "</dd>";
+const stat = (val, label, tip) =>
+  '<div class="stat"' + (tip ? ' data-tip="' + esc(tip) + '"' : "") + "><b>" + esc(val) + "</b><span>" + esc(label) + "</span></div>";
+const tmsg = (cls, text) => '<div class="t-msg ' + cls + ' sel" data-act="msg">' + esc(text) + "</div>";
+const turnsBox = (body) => '<div class="i-box"><h4>' + esc(t("cl.turns")) + "</h4>" + body + "</div>";
+
+function detailHTML(d) {
+  const meta = (d.model ? irow("cl.k.model", d.model, "mono sel") : "") + (d.branch ? irow("cl.k.branch", d.branch, "mono sel") : "");
+  return (
+    (meta ? '<dl class="i-grid">' + meta + "</dl>" : "") +
+    turnsBox(
+      d.turns.length
+        ? d.turns.map((x) => '<div class="turn">' + tmsg("t-user", x.user) + (x.assistant ? tmsg("t-bot", x.assistant) : "") + "</div>").join("")
+        : '<p class="t-none">' + esc(t("cl.turns.none")) + "</p>"
+    )
+  );
+}
+
+// the project as a chip under the title; a real folder opens on click
+function projChip(s) {
+  if (s.orphan || !s.project) return "";
+  const inner = (s.excluded ? ICONS.folderMinus : ICONS.folder) + "<span>" + esc(baseName(s.project)) + "</span>";
+  return s.cwd
+    ? '<button class="chip" data-act="open-proj" data-tip="' + esc(short(s.project) + " · " + t("cl.openFolder")) + '">' + inner + "</button>"
+    : '<span class="chip" data-tip="' + esc(short(s.project)) + '">' + inner + "</span>";
 }
 
 function inspNone() {
@@ -403,7 +498,7 @@ function inspOne(s) {
   const loc = s.cwd || s.project;
   const parent = s.root.replace(/[\\/][^\\/]*$/, "");
   const badge = (cls, key) => '<span class="badge ' + cls + '">' + esc(t(key)) + "</span>";
-  const row = (key, val, cls) => "<dt>" + esc(t(key)) + '</dt><dd class="' + (cls || "") + '">' + esc(val) + "</dd>";
+  const d = detailOf(s);
   const files = s.files.map(
     (f) =>
       '<li data-tip="' + esc(f.path) + '">' + (f.dir ? ICONS.folder : ICONS.file) +
@@ -413,23 +508,32 @@ function inspOne(s) {
   return (
     '<div class="i-in">' +
     '<div class="i-head">' + srcIcon(id, "big") + '<div><h2 class="sel">' + esc(titleOf(s)) + "</h2>" +
-    '<div class="i-meta"><span>' + esc(srcLabel(id)) + "</span>" +
+    '<div class="i-meta">' + projChip(s) + "<span>" + esc(srcLabel(id)) + "</span>" +
     (s.running ? badge("run", "cl.badge.running") : "") +
     (s.pinned ? badge("pin", "cl.badge.pinned") : "") +
     (s.excluded ? badge("pin", "cl.badge.excluded") : "") + "</div></div></div>" +
     '<div class="i-actions">' +
     (canResume(s) ? '<button class="btn primary" data-act="resume">' + ICONS.terminal + esc(t("cl.resume")) + "</button>" : "") +
     '<button class="btn" data-act="pin">' + (s.pinned ? ICONS.lockOpen : ICONS.lock) + esc(t(s.pinned ? "cl.unpin" : "cl.pin")) + "</button>" +
+    (canRename(s) ? '<button class="btn" data-act="rename">' + ICONS.pencil + esc(t("cl.rename")) + "</button>" : "") +
+    "</div>" +
+    '<div class="i-stats">' +
+    stat(relTime(s.mtime), t("cl.col.mtime"), fullTime(s.mtime)) +
+    stat(s.started ? fmtDur(Date.parse(s.mtime) - Date.parse(s.started)) : "–", t("cl.stat.dur")) +
+    stat(fmtBytes(s.size), tv("cl.stat.files", { n: s.files.length })) +
     "</div>" +
     '<dl class="i-grid">' +
-    row("cl.k.id", s.sid, "mono sel") +
-    (loc ? row("cl.k.loc", short(loc), "sel") : "") +
-    (s.started ? row("cl.k.started", fullTime(s.started)) : "") +
-    row("cl.k.mtime", fullTime(s.mtime)) +
-    row("cl.k.size", fmtBytes(s.size)) +
-    (s.excluded ? row("cl.k.excluded", short(s.excluded)) : "") +
+    irow("cl.k.id", s.sid, "mono sel") +
+    (loc ? irow("cl.k.loc", short(loc), "sel") : "") +
+    (s.started ? irow("cl.k.started", fullTime(s.started)) : "") +
+    irow("cl.k.mtime", fullTime(s.mtime)) +
+    (s.excluded ? irow("cl.k.excluded", short(s.excluded)) : "") +
     "</dl>" +
-    (s.prompt ? '<div class="i-box"><h4>' + esc(t("cl.prompt")) + '</h4><p class="sel">' + esc(s.prompt) + "</p></div>" : "") +
+    // the tour's mock sessions have nothing on disk to read
+    (!touring && !s.orphan && st.can && st.can.detail
+      ? '<div class="i-detail">' + (d ? detailHTML(d) : turnsBox('<div class="t-skel"><i></i><i></i><i></i></div>')) + "</div>"
+      : "") +
+    (s.prompt ?'<div class="i-box"><h4>' + esc(t("cl.prompt")) + '</h4><p class="sel">' + esc(s.prompt) + "</p></div>" : "") +
     '<div class="i-box"><h4>' + esc(t("cl.files")) + '</h4><ul class="i-files">' + files +
     (hasKey("cl.hist." + s.agent) ? '<li class="hist">' + ICONS.list + "<span>" + esc(t("cl.hist." + s.agent)) + "</span></li>" : "") +
     "</ul></div>" +
@@ -583,6 +687,7 @@ function rowMenu(sel) {
       "sep"
     );
   }
+  if (one && canRename(one)) items.push({ icon: "pencil", label: t("cl.ctx.rename"), act: () => askRename(one) });
   const allPinned = sel.every((s) => s.pinned);
   items.push({ icon: allPinned ? "lockOpen" : "lock", label: t(allPinned ? "cl.unpin" : "cl.pinLong"), act: () => setPinned(sel, !allPinned) });
   if (one && !one.orphan) {
@@ -654,6 +759,18 @@ function askDelete(targets) {
       { label: t("cl.permanent"), kind: "danger", act: () => doDelete(ok, true) },
     ]
   );
+}
+
+function askRename(s) {
+  showModal(t("cl.rename.title"), '<input id="rn-in" class="dlg-in" type="text" maxlength="200" spellcheck="false" autocomplete="off"/>', [
+    { label: t("cl.cancel") },
+    { label: t("cl.rename.save"), kind: "primary", act: () => doRename(s, $("rn-in").value) },
+  ]);
+  const inp = $("rn-in");
+  inp.value = s.title;
+  inp.placeholder = titleOf(s);
+  inp.focus();
+  inp.select();
 }
 
 async function doDelete(list, permanent) {
@@ -821,6 +938,13 @@ $("insp").addEventListener("click", (e) => {
     case "copy-id": return copy(s.sid);
     case "copy-resume": return copy(resumeCmd(s));
     case "delete": return askDelete(sel);
+    case "rename": return askRename(s);
+    case "open-proj": return api("/api/cleaner/reveal", { path: s.project });
+    case "msg":
+      // a drag that selected text isn't a click to unfold
+      if ((b.classList.contains("more") || b.classList.contains("open")) && !String(getSelection())) {
+        tweenHeight(b, () => b.classList.toggle("open"));
+      }
   }
 });
 
@@ -865,8 +989,13 @@ window.addEventListener("focus", () => Date.now() - lastLoad > 4000 && load());
 document.addEventListener("keydown", (e) => {
   if (touring) return; // the tour's overlay only blocks the mouse
   if (modalOpen) {
-    // Return always cancels — a destructive default is one keypress too easy
-    if (e.key === "Escape" || e.key === "Enter") {
+    if (e.isComposing || e.keyCode === 229) return; // IME: Return commits the syllable
+    // Return cancels a confirm — a destructive default is one keypress too
+    // easy — but saves from the rename field
+    if (e.key === "Enter" && e.target.id === "rn-in") {
+      e.preventDefault();
+      $("modal").querySelector(".btn.primary").click();
+    } else if (e.key === "Escape" || e.key === "Enter") {
       e.preventDefault();
       closeModal();
     }
@@ -898,6 +1027,12 @@ document.addEventListener("keydown", (e) => {
   } else if (e.key === "Delete" || e.key === "Backspace") {
     e.preventDefault();
     askDelete(selectedList());
+  } else if ((e.key === "Enter" || e.key === "F2") && e.target.tagName !== "BUTTON") { // Finder's and Explorer's rename keys
+    const sel = selectedList();
+    if (sel.length === 1 && canRename(sel[0])) {
+      e.preventDefault();
+      askRename(sel[0]);
+    }
   } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && visible.length) {
     e.preventDefault();
     let i = visible.findIndex((s) => s.id === anchor);
@@ -928,6 +1063,7 @@ window.switchAgent = (agent) => {
     selection.clear();
     anchor = null;
     st = null;
+    details.clear();
     $("rows-in").innerHTML = "";
     inspSig = "";
     await load();

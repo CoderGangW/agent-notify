@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -393,4 +394,136 @@ func TestCleanerCursor(t *testing.T) {
 	if _, err := os.Stat(dir); err == nil {
 		t.Error("chat folder left behind")
 	}
+}
+
+// renameCheck renames sid through its agent and checks the next scan shows
+// the title while the session's mtime holds still.
+func renameCheck(t *testing.T, agent, home, sid string) cleanerSession {
+	t.Helper()
+	s := scanMap(t, agent, home, nil)[sid]
+	const title = `새 '이름' "q"`
+	if err := cleanerAgents[agent].rename(s, title); err != nil {
+		t.Fatal(err)
+	}
+	got := scanMap(t, agent, home, nil)[sid]
+	if got.Title != title || !got.Mtime.Equal(s.Mtime) {
+		t.Fatalf("after rename: %q %v (mtime was %v)", got.Title, got.Mtime, s.Mtime)
+	}
+	return got
+}
+
+func TestCleanerRenameDetail(t *testing.T) {
+	fixed := []cleanerTurn{{User: "고쳐줘", Assistant: "고쳤어요"}}
+	t.Run("claude", func(t *testing.T) {
+		home := t.TempDir()
+		sid := "11111111-1111-1111-1111-111111111111"
+		lines := []string{`{"type":"user","cwd":"/w","gitBranch":"main","message":{"content":"하나"}}`,
+			`{"type":"assistant","message":{"model":"claude-a","content":[{"type":"text","text":"하나 답"}]}}`}
+		for _, q := range []string{"둘", "셋", "넷"} {
+			lines = append(lines,
+				`{"type":"user","message":{"content":"`+q+`"}}`,
+				`{"type":"assistant","message":{"model":"claude-b","content":[{"type":"text","text":"보는 중"},{"type":"tool_use","id":"x"}]}}`,
+				`{"type":"user","message":{"content":[{"type":"tool_result","content":"out"}]}}`,
+				`{"type":"user","isSidechain":true,"message":{"content":"sub"}}`,
+				`{"type":"user","isMeta":true,"message":{"content":"meta"}}`,
+				`{"type":"user","message":{"content":"<local-command-stdout>x</local-command-stdout>"}}`,
+				`{"type":"assistant","gitBranch":"dev","message":{"model":"claude-b","content":[{"type":"text","text":"`+q+` 답"}]}}`)
+		}
+		writeAll(t, home, map[string]string{
+			".claude/projects/-w/" + sid + ".jsonl":             strings.Join(lines, "\n") + "\n",
+			".claude/projects/-w/" + sid + "/custom-title.json": `{"customTitle":"옛"}`,
+		})
+		s := renameCheck(t, "claude", home, sid)
+		if d, _ := os.ReadFile(filepath.Join(home, ".claude/projects/-w", sid, "custom-title.json")); !strings.Contains(string(d), "이름") {
+			t.Errorf("custom-title.json: %s", d)
+		}
+		d := claudeDetail(s)
+		want := []cleanerTurn{{User: "둘", Assistant: "둘 답"}, {User: "셋", Assistant: "셋 답"}, {User: "넷", Assistant: "넷 답"}}
+		if !reflect.DeepEqual(d.Turns, want) || d.Model != "claude-b" || d.Branch != "dev" {
+			t.Fatalf("detail: %+v", d)
+		}
+	})
+	t.Run("codex", func(t *testing.T) {
+		home := t.TempDir()
+		id := "019a0000-0000-7000-8000-000000000001"
+		writeAll(t, home, map[string]string{
+			".codex/sessions/2026/10/22/rollout-2026-10-22T10-00-00-" + id + ".jsonl": `{"type":"session_meta","payload":{"id":"` + id + `","cwd":"/w","git":{"branch":"feat"}}}
+{"type":"turn_context","payload":{"model":"gpt-x"}}
+{"type":"event_msg","payload":{"type":"user_message","message":"## My request for Codex:\n고쳐줘"}}
+{"type":"event_msg","payload":{"type":"agent_message","message":"보는 중"}}
+{"type":"event_msg","payload":{"type":"agent_message","message":"고쳤어요"}}
+`,
+			".codex/session_index.jsonl": `{"id":"` + id + `","thread_name":"옛","updated_at":"x"}`, // no final newline
+		})
+		d := codexDetail(renameCheck(t, "codex", home, id))
+		if !reflect.DeepEqual(d.Turns, fixed) || d.Model != "gpt-x" || d.Branch != "feat" {
+			t.Fatalf("detail: %+v", d)
+		}
+	})
+	t.Run("gemini", func(t *testing.T) {
+		home := t.TempDir()
+		id := "a1b2c3d4-0000-4000-8000-000000000001"
+		writeAll(t, home, map[string]string{
+			".gemini/tmp/p/.project_root": "/w\n",
+			".gemini/tmp/p/chats/session-2026-10-22T01-00-a1b2c3d4.jsonl": `{"sessionId":"` + id + `","startTime":"t"}
+{"id":"m1","type":"user","content":[{"text":"고쳐줘"}]}
+{"id":"m2","type":"gemini","content":"보는 중","model":"gemini-x"}
+{"id":"m2","type":"gemini","content":[{"text":"고쳤어요"}],"model":"gemini-x"}
+{"$set":{"summary":"옛"}}
+`,
+		})
+		d := geminiDetail(renameCheck(t, "gemini", home, id))
+		if !reflect.DeepEqual(d.Turns, fixed) || d.Model != "gemini-x" {
+			t.Fatalf("detail: %+v", d)
+		}
+	})
+	t.Run("antigravity", func(t *testing.T) {
+		home := t.TempDir()
+		id, bare := "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"
+		cli := ".gemini/antigravity-cli/"
+		writeAll(t, home, map[string]string{
+			cli + "conversations/" + id + ".db":   "db",
+			cli + "annotations/" + id + ".pbtxt":  "title:\"옛\"\nlast_user_view_time:{seconds:1}\n",
+			cli + "conversations/" + bare + ".db": "db",
+			cli + "brain/" + id + "/.system_generated/logs/transcript.jsonl": `{"source":"USER_EXPLICIT","type":"USER_INPUT","content":"<USER_REQUEST>\n고쳐줘\n</USER_REQUEST>\n<ADDITIONAL_METADATA>x</ADDITIONAL_METADATA>"}
+{"source":"MODEL","type":"PLANNER_RESPONSE","content":"보는 중"}
+{"source":"MODEL","type":"PLANNER_RESPONSE"}
+{"source":"MODEL","type":"PLANNER_RESPONSE","content":"고쳤어요"}
+`,
+		})
+		s := renameCheck(t, "antigravity", home, id)
+		renameCheck(t, "antigravity", home, bare) // no annotation yet
+		if d, _ := os.ReadFile(filepath.Join(home, cli, "annotations", id+".pbtxt")); !strings.Contains(string(d), "last_user_view_time") {
+			t.Errorf("annotation lost its other fields: %s", d)
+		}
+		if d := agyDetail(s); !reflect.DeepEqual(d.Turns, fixed) {
+			t.Fatalf("detail: %+v", d)
+		}
+	})
+	t.Run("opencode", func(t *testing.T) {
+		if sqliteBin() == "" {
+			t.Skip("sqlite3 not installed")
+		}
+		home := t.TempDir()
+		dir := filepath.Join(home, ".local/share/opencode")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		err := sqliteExec(filepath.Join(dir, "opencode.db"),
+			"CREATE TABLE session (id text PRIMARY KEY, parent_id text, directory text NOT NULL, title text NOT NULL, time_created integer NOT NULL, time_updated integer NOT NULL)",
+			"CREATE TABLE message (id text PRIMARY KEY, session_id text NOT NULL, time_created integer NOT NULL, data text NOT NULL)",
+			"CREATE TABLE part (id text PRIMARY KEY, message_id text NOT NULL, data text NOT NULL)",
+			"INSERT INTO session VALUES ('ses_a0000001', NULL, '/w', 'Old', 1, 1)",
+			`INSERT INTO message VALUES ('msg_1', 'ses_a0000001', 1, '{"role":"user"}'), ('msg_2', 'ses_a0000001', 2, '{"role":"assistant","modelID":"big"}')`,
+			`INSERT INTO part VALUES ('prt_1', 'msg_1', '{"type":"text","text":"고쳐줘"}'), ('prt_2', 'msg_1', '{"type":"text","text":"ctx","synthetic":true}'),
+				('prt_3', 'msg_2', '{"type":"reasoning","text":"음"}'), ('prt_4', 'msg_2', '{"type":"text","text":"고쳤어요"}')`,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		d := opencodeDetail(renameCheck(t, "opencode", home, "ses_a0000001"))
+		if !reflect.DeepEqual(d.Turns, fixed) || d.Model != "big" {
+			t.Fatalf("detail: %+v", d)
+		}
+	})
 }
