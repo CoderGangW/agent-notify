@@ -934,17 +934,17 @@ func (s *daemonState) assetHandler() http.Handler {
 				return
 			}
 		} else {
-			s.mu.Lock()
-			info = s.pendingUpdate
-			s.mu.Unlock()
-			if !info.Available {
-				var err error
-				info, err = checkUpdate()
-				if err != nil || !info.Available {
-					http.Error(w, "no update available", http.StatusConflict)
-					return
-				}
+			// always re-check: the cached result can be hours old, and
+			// applying it would step through every release in between
+			var err error
+			info, err = checkUpdate()
+			if err != nil || !info.Available {
+				http.Error(w, "no update available", http.StatusConflict)
+				return
 			}
+			s.mu.Lock()
+			s.pendingUpdate = info
+			s.mu.Unlock()
 		}
 		// the window is open (the user clicked the button) — reopen it
 		// after the post-update respawn, ulio-style
