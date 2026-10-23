@@ -73,7 +73,7 @@ func runDaemon() {
 		saveConfig(c)
 	}
 	s := &daemonState{notifyMode: loadConfig().notifyMode()}
-	setupNativeNotify() // no-op unless running from the .app bundle
+	setupNativeNotify()   // no-op unless running from the .app bundle
 	registerURLProtocol() // Windows: agent-notify: scheme for toast clicks (no-op elsewhere)
 
 	// First launch of the bundled app: fire the OS consent prompts up
@@ -509,10 +509,8 @@ func (s *daemonState) refreshBadge() {
 // setupStatus reports what first-run setup accomplished, for the welcome
 // screen's checklist. Cached briefly — it hits a few files.
 type setupStatus struct {
-	Hooks            bool `json:"hooks"` // in-tab claude guide reads this
-	Autostart        bool `json:"autostart"`
-	TerminalNotifier bool `json:"terminalNotifier"`
-	ClaudeCLI        bool `json:"claudeCLI"`
+	Hooks     bool `json:"hooks"` // in-tab claude guide reads this
+	Autostart bool `json:"autostart"`
 	// OS permissions (welcome checklist): 1 granted, 0 denied,
 	// 2 not determined, -1 unsupported on this platform/build
 	NotifPerm  int `json:"notifPerm"`
@@ -567,8 +565,6 @@ func computeSetup() setupStatus {
 			st.Autostart = err == nil
 		}
 	}
-	st.TerminalNotifier = runtime.GOOS != "darwin" || findTerminalNotifier() != ""
-	st.ClaudeCLI = findCLI("claude") != ""
 	st.NotifPerm = notifPermStatus()
 	st.Automation = automationStatus(false) // never prompts from a probe
 	st.DiskAccess = diskAccessStatus()      // silent too: skips folder reads until their prompts fired
@@ -597,12 +593,12 @@ func (s *daemonState) assetHandler() http.Handler {
 		}
 		page := string(data)
 		for tok, val := range map[string]string{
-			"{{L_VERSION}}": fmt.Sprintf(T("menu.version"), "v"+shownVersion()),
+			"{{L_VERSION}}":  fmt.Sprintf(T("menu.version"), "v"+shownVersion()),
 			"{{L_UPDATE}}":   T("update.check"),
 			"{{L_VERSIONS}}": T("menu.versions"),
 			"{{L_RESTART}}":  T("tip.restart"),
-			"{{L_QUIT}}":    T("tip.quit"),
-			"{{THEME}}":     loadConfig().Theme,
+			"{{L_QUIT}}":     T("tip.quit"),
+			"{{THEME}}":      loadConfig().Theme,
 		} {
 			page = strings.ReplaceAll(page, tok, val)
 		}
@@ -610,6 +606,7 @@ func (s *daemonState) assetHandler() http.Handler {
 		_, _ = io.WriteString(w, page)
 	})
 	mux.Handle("/i18n/", http.FileServer(http.FS(i18nFS)))
+	s.cleanerRoutes(mux)
 	mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) {
 		// the welcome checklist polls with fresh=1 so a grant made in
 		// System Settings shows up within one poll, not one cache TTL
@@ -969,7 +966,6 @@ func (s *daemonState) assetHandler() http.Handler {
 			Lang              *string   `json:"lang"`
 			DefaultTab        *string   `json:"defaultTab"`
 			DisableAutoUpdate *bool     `json:"disableAutoUpdate"`
-			DisableAISummary  *bool     `json:"disableAISummary"`
 			DisableLiveStatus *bool     `json:"disableLiveStatus"`
 			Theme             *string   `json:"theme"`
 			Autostart         *bool     `json:"autostart"`
@@ -1010,9 +1006,6 @@ func (s *daemonState) assetHandler() http.Handler {
 		}
 		if req.DisableAutoUpdate != nil {
 			c.DisableAutoUpdate = *req.DisableAutoUpdate
-		}
-		if req.DisableAISummary != nil {
-			c.DisableAISummary = *req.DisableAISummary
 		}
 		if req.DisableLiveStatus != nil {
 			c.DisableLiveStatus = *req.DisableLiveStatus
@@ -1093,17 +1086,6 @@ func (s *daemonState) assetHandler() http.Handler {
 			c.DisableAutostart = false
 			saveConfig(c)
 			err = installAutostart(bin, false)
-		case "notifier":
-			brew := findCLI("brew")
-			if brew == "" {
-				err = fmt.Errorf("homebrew not found")
-			} else {
-				err = exec.Command(brew, "install", "terminal-notifier").Run()
-			}
-		case "cli":
-			// official Anthropic installer, explicitly user-initiated
-			err = exec.Command("/bin/bash", "-c",
-				"curl -fsSL https://claude.ai/install.sh | bash").Run()
 		case "notifperm":
 			// prompts while undecided; once denied only System Settings can
 			// flip it back, so open the Notifications pane

@@ -19,7 +19,7 @@
     display: flex; align-items: center; gap: 7px;
     padding: 4px 6px 6px;
   }
-  .m-head svg { width: 24px; height: 24px; flex-shrink: 0; }
+  .m-head .m-logo { width: 24px; height: 24px; flex-shrink: 0; }
   .m-head .name { font-weight: 700; font-size: 12px; }
   .m-head .ver { color: var(--dim); font-size: 9.5px; margin-top: 1px; }
   .m-sep { height: 1px; background: var(--card-edge); margin: 2px 3px 4px; }
@@ -62,23 +62,7 @@
 <body>
 <div id="menu">
   <div class="m-head">
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <defs>
-        <linearGradient id="m-bg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#8A2BE2"/>
-          <stop offset="1" stop-color="#5D0BCB"/>
-        </linearGradient>
-      </defs>
-      <rect x="0.5" y="0.5" width="23" height="23" rx="6.2" fill="url(#m-bg)"/>
-      <g transform="translate(0.72 0.72) scale(0.94)" stroke="#EBDDF9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
-        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
-        <path d="M10.3 20.2a1.94 1.94 0 0 0 3.4 0"/>
-        <g transform="translate(5.06 3.96) scale(0.52)" stroke-width="3.85">
-          <path d="M6.8 8.8 9.8 12 6.8 15.2"/>
-          <path d="M16.2 12h4.6"/>
-        </g>
-      </g>
-    </svg>
+    <img class="m-logo" src="/logo.svg" alt="" draggable="false"/>
     <div>
       <div class="name">agent-notify</div>
       <div class="ver" id="m-ver">{{L_VERSION}}</div>

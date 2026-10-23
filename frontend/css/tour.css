@@ -1,7 +1,7 @@
 /* ---------- onboarding tour ---------- */
 /* tour chrome is app UI: purple ring, dots, buttons, welcome screen.
    The legend keeps the live accent so it matches the real session list. */
-#tut-hole, #tut-card .row, #welcome-overlay, #greet-ov {
+#tut-hole, #tut-card .tut-row, #welcome-overlay, #greet-ov {
   --accent: var(--app-accent);
   --accent-soft: var(--app-accent-soft);
   --on-accent: #fff;
@@ -34,7 +34,7 @@
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
   opacity: 0;
   transform: translateY(10px);
-  transition: top 0.35s cubic-bezier(0.3, 0.9, 0.3, 1),
+  transition: top 0.35s cubic-bezier(0.3, 0.9, 0.3, 1), left 0.35s cubic-bezier(0.3, 0.9, 0.3, 1),
     opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.15);
 }
 #tut-card.shown { opacity: 1; transform: none; }
@@ -56,7 +56,7 @@
 #tut-card .tut-legend .ic.wait { color: var(--warn); }
 #tut-card .tut-legend .ic.wait svg { animation: wiggle 1.4s ease-in-out infinite; }
 #tut-card .tut-legend .ic.idle { color: var(--dim); }
-#tut-card .row {
+#tut-card .tut-row {
   display: flex; align-items: center; justify-content: space-between;
   margin-top: 11px;
 }

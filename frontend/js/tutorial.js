@@ -9,7 +9,7 @@
 // steps up to the header bell just above them. Keys keep their i18n
 // text; order is array order.
 const TUT_STEPS = [
-  { sel: "#tabs .seg", key: "s1" },
+  { sel: "#tabs", key: "s1" }, // whole row: the pin the text mentions sits outside .seg
   { sel: "#mute-btn", key: "s7" },
   { sel: "#limits-card", key: "s2" },
   { sel: "#usage-card", key: "s3" },
@@ -26,43 +26,44 @@ const TUT_STEPS = [
   { sel: "#events-card", key: "s5", subtab: "events" },
   { sel: "footer", key: "s8" },
 ];
-let tutStep = -1;
-let tutEls = null;
 
 // ---- tour mock data (Claude) ----
 let tourMock = false;
 let tourSavedState = null;
 let tourSavedTab = null;
+let tourSavedSubTab = null;
+let tourSavedAgents = null;
 
+// task/message text goes through t(): the mock must read in the UI language
 function tourMockState() {
   const now = Date.now();
   const iso = (msAgo) => new Date(now - msAgo).toISOString();
   return {
-    setup: { hooks: true, autostart: true, claudeCLI: true },
+    setup: { hooks: true, autostart: true },
     unread: { claude: 2 },
     sessions: [
       { id: "tm1", source: "claude", state: "tool", tool: "Bash", detail: "npm run build",
         title: "claude-notify", cwd: "~/Projects/claude-notify", branch: "main",
-        task: "통계 차트에 드래그 팬 추가", turnStart: iso(4 * 60e3), lastSeen: iso(0) },
+        task: t("tut.mock.task1"), turnStart: iso(4 * 60e3), lastSeen: iso(0) },
       { id: "tm2", source: "claude", state: "working",
         title: "webapp", cwd: "~/Projects/webapp", branch: "feat/auth",
-        task: "로그인 흐름 리팩토링", turnStart: iso(95e3), lastSeen: iso(0) },
+        task: t("tut.mock.task2"), turnStart: iso(95e3), lastSeen: iso(0) },
       { id: "tm3", source: "claude", state: "waiting",
         title: "api-server", cwd: "~/Projects/api", branch: "main",
-        task: "마이그레이션 계획 검토", turnStart: iso(11 * 60e3), lastSeen: iso(30e3) },
+        task: t("tut.mock.task3"), turnStart: iso(11 * 60e3), lastSeen: iso(30e3) },
       { id: "tm4", source: "claude", state: "idle",
         title: "dotfiles", cwd: "~/dotfiles", branch: "",
-        task: "zsh 설정 정리", turnStart: iso(30 * 60e3), lastSeen: iso(8 * 60e3) },
+        task: t("tut.mock.task4"), turnStart: iso(30 * 60e3), lastSeen: iso(8 * 60e3) },
     ],
     events: [
       { kind: "done", source: "claude", time: iso(3 * 60e3), title: "webapp",
-        message: "JWT 갱신 로직 수정, 테스트 12개 통과", cwd: "~/Projects/webapp",
+        message: t("tut.mock.msg1"), cwd: "~/Projects/webapp",
         branch: "feat/auth", model: "opus", durSec: 312, read: false },
       { kind: "attention", source: "claude", time: iso(9 * 60e3), title: "api-server",
-        message: "DB 마이그레이션 실행 전 확인이 필요합니다", cwd: "~/Projects/api",
+        message: t("tut.mock.msg2"), cwd: "~/Projects/api",
         branch: "main", model: "sonnet", durSec: 97, read: false },
       { kind: "done", source: "claude", time: iso(42 * 60e3), title: "claude-notify",
-        message: "릴리스 노트 초안 작성 완료", cwd: "~/Projects/claude-notify",
+        message: t("tut.mock.msg3"), cwd: "~/Projects/claude-notify",
         branch: "main", model: "opus", durSec: 186, read: true },
     ],
     limits: {
@@ -91,9 +92,15 @@ function tourEnterMock() {
   tourMock = true;
   tourSavedState = lastState;
   tourSavedTab = currentTab;
+  tourSavedSubTab = subTab;
+  tourSavedAgents = agents;
+  // the tour walks the Claude tab, so it needs one to point at — a fresh
+  // install (no agents picked) or a user who dropped Claude has none
+  agents = agents.map((a) => (a.id === "claude" ? Object.assign({}, a, { enabled: true }) : a));
   const m = tourMockState();
   lastState = Object.assign({}, tourSavedState || {}, m);
   currentTab = "claude";
+  buildTabs();
   applyTab();
   renderLimits(m.limits);
   renderUsage(m.usage);
@@ -112,6 +119,12 @@ function tourExitMock() {
   tourMock = false;
   lastState = tourSavedState;
   tourSavedState = null;
+  agents = tourSavedAgents;
+  tourSavedAgents = null;
+  // the tour flips to the events sub-tab; hand back whichever was open
+  subTab = tourSavedSubTab;
+  tourSavedSubTab = null;
+  applySubTab();
   // restore the pre-tour tab; a tab whose agent is no longer enabled
   // falls back to the first enabled one (or the pick-agents state)
   const en = enabledAgents();
@@ -120,39 +133,13 @@ function tourExitMock() {
     : en.length ? en[0].id
     : null;
   tourSavedTab = null;
+  buildTabs(); // drops the tour-only Claude tab again
   applyTab();
   refresh(); // repaint real data (also restores badges/cards)
 }
 
-function tutBuild() {
-  const block = document.createElement("div");
-  block.id = "tut-block"; // swallows clicks on the UI under the tour
-  const hole = document.createElement("div");
-  hole.id = "tut-hole";
-  const card = document.createElement("div");
-  card.id = "tut-card";
-  card.innerHTML =
-    '<h3></h3><p></p><ul class="tut-legend"></ul>' +
-    '<div class="row"><span class="dots"></span><span class="btns">' +
-    '<button class="text-btn" id="tut-skip"></button>' +
-    '<button class="text-btn" id="tut-prev"></button>' +
-    '<button class="tut-next" id="tut-next"></button></span></div>';
-  document.body.append(block, hole, card);
-  card.querySelector("#tut-skip").addEventListener("click", tutEnd);
-  card.querySelector("#tut-prev").addEventListener("click", () => tutGo(tutStep - 1));
-  card.querySelector("#tut-next").addEventListener("click", () => {
-    if (tutStep >= TUT_STEPS.length - 1) tutEnd();
-    else tutGo(tutStep + 1);
-  });
-  return { block, hole, card };
-}
-
-function tutGo(i) {
-  const step = TUT_STEPS[i];
-  if (!step) return tutEnd();
-  tutStep = i;
-  if (!tutEls) tutEls = tutBuild();
-  // make sure the highlighted region is actually visible
+// make sure the highlighted region is actually visible
+function tutEnter(step) {
   if (currentTab !== "claude") {
     currentTab = "claude";
     applyTab();
@@ -161,92 +148,24 @@ function tutGo(i) {
     subTab = step.subtab;
     applySubTab();
   }
-  const target = document.querySelector(step.sel);
-  if (!target) return tutEnd();
-  const r = target.getBoundingClientRect();
-  const pad = 6;
-  const { block, hole, card } = tutEls;
-  block.style.display = "block";
-  const first = hole.style.display !== "block"; // entering the tour
-  // clamp the spotlight to the viewport: a target flush with a window
-  // edge must not push the hole (and its glow ring) off screen
-  const hx = Math.max(6, r.left - pad);
-  const hy = Math.max(6, r.top - pad);
-  const hw = Math.min(r.right + pad, window.innerWidth - 6) - hx;
-  const hh = Math.min(r.bottom + pad, window.innerHeight - 6) - hy;
-  hole.style.cssText =
-    `display:block;left:${hx}px;top:${hy}px;` +
-    `width:${hw}px;height:${hh}px;`;
-  card.style.display = "block";
-  card.querySelector("h3").textContent = t("tut." + step.key + ".t");
-  card.querySelector("p").textContent = t("tut." + step.key + ".b");
-  const legend = card.querySelector(".tut-legend");
-  if (step.legend) {
-    legend.innerHTML = step.legend
-      .map(
-        (l) =>
-          '<li><span class="ic ' + l.cls + '">' + ICONS[l.icon] + "</span><span>" +
-          t(l.key) + "</span></li>"
-      )
-      .join("");
-    legend.style.display = "";
-  } else {
-    legend.style.display = "none";
-  }
-  card.querySelector(".dots").innerHTML = TUT_STEPS.map(
-    (_, d) => '<i class="' + (d === i ? "on" : "") + '"></i>'
-  ).join("");
-  card.querySelector("#tut-skip").textContent = t("tut.skip");
-  const prev = card.querySelector("#tut-prev");
-  prev.textContent = t("tut.prev");
-  prev.style.visibility = i === 0 ? "hidden" : "visible";
-  card.querySelector("#tut-next").textContent =
-    i === TUT_STEPS.length - 1 ? t("tut.done") : t("tut.next");
-  // place the card above or below the hole, clamped to the window
-  const ch = card.offsetHeight;
-  let y = r.bottom + pad + 10;
-  if (y + ch > window.innerHeight - 8) y = r.top - pad - ch - 10;
-  card.style.top = Math.max(8, y) + "px";
-  // first frame of the tour eases in instead of popping
-  if (first) {
-    hole.classList.remove("shown");
-    card.classList.remove("shown");
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        hole.classList.add("shown");
-        card.classList.add("shown");
-      })
-    );
-  } else {
-    hole.classList.add("shown");
-    card.classList.add("shown");
-  }
 }
 
-function tutEnd() {
-  tutStep = -1;
+// Skip, Done, or a settings reset. Done (finished) hands the tour on to
+// the session window, whose own Skip/Done closes it and brings this
+// window back (cleaner-tour.js).
+function tutEnd(finished) {
+  spotHide();
   tourExitMock();
-  if (tutEls) {
-    const { block, hole, card } = tutEls;
-    // ease out (the shown class carries the opacity transition), then
-    // actually hide once the fade has finished
-    hole.classList.remove("shown");
-    card.classList.remove("shown");
-    setTimeout(() => {
-      if (tutStep !== -1) return; // a new tour started meanwhile
-      block.style.display = "none";
-      hole.style.display = "none";
-      card.style.display = "none";
-    }, 520);
-  }
   try {
     localStorage.setItem("tutorialDone", "1");
   } catch (_) {}
+  if (finished === true) post("/api/cleaner/open", { agent: "claude", tour: true });
 }
 
 function tutStart() {
   tourEnterMock();
-  tutGo(0);
+  // the last step reads "Next": the tour carries on in the session window
+  spotStart({ steps: TUT_STEPS, enter: tutEnter, end: tutEnd, last: "tut.next" });
 }
 
 $("help-btn").addEventListener("click", tutStart);

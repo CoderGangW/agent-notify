@@ -50,34 +50,6 @@ body[data-agent="antigravity"] #agy-quota-card { display: block; }
 /* opencode has no plan API, but the plugin mirrors its local DB usage */
 #oc-usage-card { display: none; }
 body[data-agent="opencode"] #oc-usage-card { display: block; }
-body[data-agent="claude"] {
-  --accent: var(--claude-accent);
-  --accent-soft: color-mix(in srgb, var(--claude-accent) 15%, transparent);
-  --on-accent: var(--claude-on-accent);
-}
-body[data-agent="codex"] {
-  --accent: var(--codex-accent);
-  --accent-soft: color-mix(in srgb, var(--codex-accent) 13%, transparent);
-  --on-accent: var(--codex-on-accent);
-}
-body[data-agent="gemini"] {
-  --accent: var(--gemini-accent);
-  --accent-soft: color-mix(in srgb, var(--gemini-accent) 14%, transparent);
-}
-body[data-agent="opencode"] {
-  --accent: var(--opencode-accent);
-  --accent-soft: color-mix(in srgb, var(--opencode-accent) 14%, transparent);
-}
-body[data-agent="cursor"] {
-  --accent: var(--cursor-accent);
-  --accent-soft: color-mix(in srgb, var(--cursor-accent) 13%, transparent);
-  --on-accent: var(--cursor-on-accent);
-}
-body[data-agent="antigravity"] {
-  --accent: var(--antigravity-accent);
-  --accent-soft: color-mix(in srgb, var(--antigravity-accent) 14%, transparent);
-  --on-accent: var(--antigravity-on-accent);
-}
 .badge { transition: background 0.3s, color 0.3s; }
 #tab-ink, #tabs .tab, .ev .proj, .more-btn, .text-btn { transition-property: color, background, border-color, transform, width; transition-duration: 0.3s; }
 

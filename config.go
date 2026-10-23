@@ -12,7 +12,6 @@ type config struct {
 	Lang              string   `json:"lang,omitempty"`       // "", "auto", "en", "ko", "zh"
 	DefaultTab        string   `json:"defaultTab,omitempty"` // "claude" (default) | "codex"
 	DisableAutoUpdate bool     `json:"disableAutoUpdate,omitempty"`
-	DisableAISummary  bool     `json:"disableAISummary,omitempty"`  // skip the haiku one-liner
 	DisableLiveStatus bool     `json:"disableLiveStatus,omitempty"` // skip live session updates
 	Theme             string   `json:"theme,omitempty"`             // "auto" (default) | "light" | "dark"
 	DisableAutostart  bool     `json:"disableAutostart,omitempty"`  // don't (re)register login autostart
@@ -20,6 +19,27 @@ type config struct {
 	NotifyMode        string   `json:"notifyMode,omitempty"`        // "on" | "alerts" | "quiet" | "silent"; "" = on
 	PermsRequested    bool     `json:"permsRequested,omitempty"`    // first-run OS permission prompts already fired
 	FolderPermsAsked  bool     `json:"folderPermsAsked,omitempty"`  // Desktop/Documents/Downloads consent dialogs fired (macOS)
+
+	// session cleaner window
+	CleanerPinned       []string `json:"cleanerPinned,omitempty"`       // session ids protected from deletion
+	CleanerExcluded     []string `json:"cleanerExcluded,omitempty"`     // folders whose sessions are protected
+	CleanerHideExcluded bool     `json:"cleanerHideExcluded,omitempty"` // hide excluded sessions from the list
+	CleanerOldDays      int      `json:"cleanerOldDays,omitempty"`      // "old" = idle longer than this; 0 = 30
+	CleanerLargeMB      int      `json:"cleanerLargeMB,omitempty"`      // "large" = at least this; 0 = 50
+}
+
+func (c config) cleanerOldDays() int {
+	if c.CleanerOldDays > 0 {
+		return c.CleanerOldDays
+	}
+	return 30
+}
+
+func (c config) cleanerLargeMB() int {
+	if c.CleanerLargeMB > 0 {
+		return c.CleanerLargeMB
+	}
+	return 50
 }
 
 // notifyMode resolves the 4-level notification mode:

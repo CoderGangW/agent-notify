@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Claude Sessions</title>
+<script>
+  // theme is baked in by the daemon; resolve "auto" before first paint
+  (function () {
+    var th = "{{THEME}}";
+    if (th !== "light" && th !== "dark") {
+      th = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    }
+    document.documentElement.dataset.theme = th;
+  })();
+</script>
+<!-- shared dashboard pieces: icon-btn, boot dots, switch, ctxmenu + tooltip -->
+<link rel="stylesheet" href="/css/base.css"/>
+<link rel="stylesheet" href="/css/header.css"/>
+<link rel="stylesheet" href="/css/cards.css"/>
+<link rel="stylesheet" href="/css/settings.css"/>
+<link rel="stylesheet" href="/css/menus.css"/>
+<link rel="stylesheet" href="/css/tour.css"/>
+<link rel="stylesheet" href="/css/cleaner.css"/>
+</head>
+<body>
+<div id="app">
+  <header id="bar">
+    <div class="title">
+      <h1 id="title"></h1>
+      <span id="subtitle"></span>
+    </div>
+    <div class="tools">
+      <label class="search">
+        <span class="s-ic"></span>
+        <input id="q" type="text" spellcheck="false" autocomplete="off"/>
+        <button id="q-clear" class="icon-btn"></button>
+      </label>
+      <button id="refresh" class="icon-btn"></button>
+      <div class="drop">
+        <button id="bulk" class="tool-btn"><span class="ic"></span><span data-i18n="cl.bulk"></span><span class="chev"></span></button>
+        <div id="bulk-menu" class="menu"></div>
+      </div>
+      <button id="del" class="tool-btn danger"><span class="ic"></span><span class="lbl"></span></button>
+      <button id="help-btn" class="icon-btn"></button>
+      <div class="drop">
+        <button id="gear" class="icon-btn"></button>
+        <div id="set-pop" class="pop">
+          <h4 data-i18n="cl.set.excluded"></h4>
+          <p class="hint" data-i18n="cl.set.excluded.d"></p>
+          <ul id="ex-list"></ul>
+          <div class="set-line">
+            <span data-i18n="cl.set.hide"></span>
+            <button class="switch" id="sw-hide"></button>
+          </div>
+          <div class="set-line">
+            <span data-i18n="cl.set.old"></span>
+            <input id="in-old" type="number" min="1" max="3650"/>
+          </div>
+          <div class="set-line">
+            <span data-i18n="cl.set.large"></span>
+            <input id="in-large" type="number" min="1" max="100000" step="10"/>
+          </div>
+        </div>
+      </div>
+      <button id="insp-btn" class="icon-btn active"></button>
+    </div>
+  </header>
+  <div id="body">
+    <aside id="side"></aside>
+    <main id="main">
+      <div id="thead"></div>
+      <div id="rows" tabindex="0"><div id="rows-in"></div></div>
+      <div id="empty-state"></div>
+    </main>
+    <aside id="insp"><div class="inner"></div></aside>
+  </div>
+  <footer id="status">
+    <span id="st-busy"></span>
+    <span id="st-total"></span>
+    <span id="st-prot"></span>
+    <span id="st-sel"></span>
+    <span id="st-msg"></span>
+  </footer>
+</div>
+<div id="ctxmenu"></div>
+<div id="modal"><div class="dlg"></div></div>
+<div id="boot"><div class="boot-dots"><i></i><i></i><i></i></div></div>
+<!-- shared with the dashboard: $ + tooltips, icons, t()/loadLang, reconcile -->
+<script src="/js/core.js"></script>
+<script src="/js/icons.js"></script>
+<script src="/js/i18n.js"></script>
+<script src="/js/util.js"></script>
+<script src="/js/cleaner.js"></script>
+<script src="/js/spot.js"></script>
+<script src="/js/cleaner-tour.js"></script>
+</body>
+</html>

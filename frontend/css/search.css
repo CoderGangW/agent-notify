@@ -1,7 +1,7 @@
 /* ---------- search & filter ---------- */
 .head-tools { display: flex; align-items: center; gap: 2px; }
 #events-actions { display: flex; }
-#search-btn svg { width: 14px; height: 14px; }
+#search-btn svg, #cleaner-btn svg { width: 14px; height: 14px; }
 #search-btn.active { color: var(--accent); background: var(--accent-soft); }
 /* the card lifts out of the flow and glides to fill the window (FLIP);
    the ghost keeps the flex layout from collapsing underneath it */

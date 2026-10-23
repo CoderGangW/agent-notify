@@ -18,8 +18,8 @@ import (
 // Native UNUserNotificationCenter delivery: notifications posted by the
 // bundled daemon carry the app's own icon, and clicks come back through
 // the delegate so they get the same exact-surface focus as row clicks.
-// Unbundled runs (dev binary, hook fallback) can't use it — the callers
-// fall through to terminal-notifier / beeep.
+// Unbundled runs (dev binary, bare install.sh binary) can't use it and
+// show no notifications.
 
 var nativeNotifyReady = false
 

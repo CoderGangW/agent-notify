@@ -33,7 +33,7 @@ You run several coding agents at once and lose track of which one just finished,
 
 **Know the moment a session is done — or stuck**
 - ✅ Native OS notification when a task completes, 🔔 when the agent is waiting for your input or a permission
-- The notification tells you *which* session: title = the session's own title (including titles set by the VSCode extension), body = a one-line AI summary of what it did (falls back to an excerpt of the last reply)
+- The notification tells you *which* session: title = the session's own title (including titles set by the VSCode extension), body = an excerpt of the session's last reply
 - Four notification modes — **On**, **Alerts only**, **Quiet** (badges, no banners), **Silent**
 
 **Jump straight back to it**
@@ -93,7 +93,7 @@ irm https://raw.githubusercontent.com/CoderGangW/agent-notify/main/install.ps1 |
 
 **macOS, no terminal:** download **agent-notify.app** (signed, universal) from the buttons above and open it — first launch connects Claude Code and registers login autostart by itself, then asks for the notification and folder-access permissions it needs.
 
-With Go: `go install github.com/CoderGangW/agent-notify@latest && agent-notify install`.
+With Go: `go install github.com/CoderGangW/agent-notify@latest && agent-notify install` (on macOS a bare binary shows no notifications — use the app).
 
 Then add other agents from the dashboard's agent picker, or with the `install-*` commands in the table above. `agent-notify uninstall` removes every hook and the autostart entry.
 
@@ -101,12 +101,11 @@ Then add other agents from the dashboard's agent picker, or with the `install-*`
 
 - **macOS** — native notifications with the app's own icon, no extra tools. First launch asks for notification and Desktop/Documents/Downloads access (the latter is what lets a click focus the exact IDE window).
 - **Windows** — toast notifications, no extra dependencies, no console window.
-- **Linux** — notifications via `notify-send`; the dashboard window needs `libgtk-3` and `libwebkit2gtk-4.1`, the tray icon needs `libayatana-appindicator`. Without them you still get hook-driven notifications.
-- **AI summaries** use your existing `claude` CLI login (Haiku, a few tokens per notification). Turn them off in Settings or with `CLAUDE_NOTIFY_NO_AI=1`.
+- **Linux** — notifications via `notify-send`; the dashboard window needs `libgtk-3` and `libwebkit2gtk-4.1`, the tray icon needs `libayatana-appindicator`.
 
 ## Privacy
 
-Everything stays on your machine. Token usage is computed from your local transcripts; plan limits are read with the credentials Claude Code already stores, read-only — nothing is refreshed, modified or uploaded. The only network calls are the ones you can see: the limit check, the optional AI summary, and the release check for updates.
+Everything stays on your machine. Token usage is computed from your local transcripts; plan limits are read with the credentials Claude Code already stores, read-only — nothing is refreshed, modified or uploaded. The only network calls are the ones you can see: the limit check and the release check for updates.
 
 ## Roadmap
 

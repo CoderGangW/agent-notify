@@ -3,7 +3,7 @@
 package main
 
 // non-darwin: no native notification center integration; deliverNotification
-// uses beeep directly.
+// uses the Windows toast or beeep.
 
 func setupNativeNotify() {}
 

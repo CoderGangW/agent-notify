@@ -22,8 +22,6 @@ func main() {
 		runDaemon()
 	case "hook":
 		runHook()
-	case "summarize-notify": // detached child spawned by `hook`
-		runSummarizeNotify()
 	case "install":
 		runInstall()
 	case "install-codex":

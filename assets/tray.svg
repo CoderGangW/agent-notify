@@ -1,0 +1,13 @@
+<!-- agent-notify menu-bar template icon (macOS). Source of truth: edit here, then run tools/icon.sh -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="176 196 672 640"><g fill="none" stroke="#000" stroke-width="48.07692307692307"
+     stroke-linecap="round" stroke-linejoin="round"
+     transform="translate(512 500) scale(1.04) translate(-512 -500)">
+    <g transform="rotate(-12 512 470)">
+      <path d="M306 642 C352 606 358 550 358 480 V416 A154 154 0 0 1 666 416 V480 C666 550 672 606 718 642 Z"/>
+      <path d="M280 642 H744"/>
+      <path d="M474 698 C474 754 550 754 550 698"/>
+      <path d="M412.64 440.32 L469.68 490 L412.64 539.68"/>
+          <path d="M521.2 539.68 H611.36"/>
+    </g>
+    <path d="M232 352 Q204 424 226 500" stroke-width="40"/>
+    <path d="M796 300 Q828 372 808 446" stroke-width="40"/></g></svg>

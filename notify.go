@@ -10,40 +10,24 @@ import (
 	"github.com/gen2brain/beeep"
 )
 
-// deliverNotification shows one native notification for an event.
+// deliverNotification shows one native notification for an event. Only
+// the daemon calls it: with the daemon down, hooks stay silent.
 //
-// The bundled daemon posts through UNUserNotificationCenter: the banner
-// carries the app's own icon and a click focuses the exact session
-// surface. Unbundled contexts (hook fallback while the daemon is down,
-// dev binaries) can't use it, so they degrade to terminal-notifier when
-// installed (-activate at least focuses the hosting app; its icon is
-// unavoidably terminal-notifier's own) and finally to beeep.
+// macOS posts through UNUserNotificationCenter, which needs the .app
+// bundle — a bare-binary daemon shows nothing (no terminal-notifier or
+// osascript fallback; beeep would shell out to both). Windows uses its
+// own toast with click-to-focus; beeep (D-Bus on Linux) covers the rest.
 func deliverNotification(ev Event) {
 	title, body := notificationText(ev)
 	subtitle := shortPath(ev.CWD)
 
-	if runtime.GOOS == "windows" && windowsToastNotify(ev, title, subtitle, body) {
-		return // toast click focuses the session via the agent-notify: protocol
-	}
-
-	if runtime.GOOS == "darwin" {
-		if nativeNotify(ev, title, subtitle, body) {
-			return
-		}
-		if tn := findTerminalNotifier(); tn != "" {
-			args := []string{"-title", title, "-message", body}
-			if subtitle != "" {
-				args = append(args, "-subtitle", subtitle)
-			}
-			if ev.SessionID != "" {
-				args = append(args, "-group", "claude-notify-"+ev.SessionID)
-			}
-			if ev.Activate != "" {
-				args = append(args, "-activate", ev.Activate)
-			}
-			if exec.Command(tn, args...).Run() == nil {
-				return
-			}
+	switch runtime.GOOS {
+	case "darwin":
+		nativeNotify(ev, title, subtitle, body)
+		return
+	case "windows":
+		if windowsToastNotify(ev, title, subtitle, body) {
+			return // toast click focuses the session via the agent-notify: protocol
 		}
 	}
 
@@ -73,8 +57,6 @@ func findCLI(name string) string {
 	}
 	return ""
 }
-
-func findTerminalNotifier() string { return findCLI("terminal-notifier") }
 
 func notificationText(ev Event) (title, body string) {
 	name := ev.Title

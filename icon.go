@@ -9,9 +9,11 @@ import (
 	"runtime"
 )
 
-// Tray icons are embedded at build time — swap the files in assets/ and
-// rebuild to change them. icon_mac.png should stay monochrome: macOS
-// treats it as a template image and tints it to match the menu bar.
+// Tray icons are embedded at build time. They are rendered from the SVG
+// masters (assets/appicon.svg, frontend/logo.svg, assets/tray.svg) by
+// tools/icon.sh — edit an SVG, rerun it, rebuild. icon_mac.png stays
+// monochrome: macOS treats it as a template image and tints it to match
+// the menu bar.
 var (
 	//go:embed assets/icon.png
 	iconColor []byte

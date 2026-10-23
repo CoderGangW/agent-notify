@@ -38,6 +38,7 @@ function applyI18n() {
   $("settings-btn").dataset.tip = t("tip.settings");
   $("stats-btn").dataset.tip = t("tip.stats");
   $("search-btn").dataset.tip = t("tip.search");
+  $("cleaner-btn").dataset.tip = t("tip.cleaner");
   $("expand-btn").dataset.tip = t(winTall ? "tip.collapse" : "tip.expand");
   $("search-close").dataset.tip = t("search.close");
   $("search-input").placeholder = t("search.placeholder");

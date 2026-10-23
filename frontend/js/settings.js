@@ -168,7 +168,6 @@ function renderSettings(cfg) {
   const nm = cfg.notifyMode || (cfg.muted ? "quiet" : "on");
   ddNotify.set(nm);
   updateNotifyDesc(nm);
-  $("sw-ai").classList.toggle("on", !cfg.disableAISummary);
   $("sw-live").classList.toggle("on", !cfg.disableLiveStatus);
   $("sw-update").classList.toggle("on", !cfg.disableAutoUpdate);
   $("sw-autostart").classList.toggle("on", !cfg.disableAutostart);
@@ -205,7 +204,6 @@ function bindSwitch(id, build) {
     post("/api/settings", build(el.classList.contains("on")));
   });
 }
-bindSwitch("sw-ai", (on) => ({ disableAISummary: !on }));
 bindSwitch("sw-live", (on) => ({ disableLiveStatus: !on }));
 bindSwitch("sw-update", (on) => ({ disableAutoUpdate: !on }));
 bindSwitch("sw-autostart", (on) => ({ autostart: on }));
