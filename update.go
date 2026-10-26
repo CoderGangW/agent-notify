@@ -178,6 +178,7 @@ func applyUpdate(info releaseInfo, restartOK bool) (bool, error) {
 		_ = os.Rename(target, old)
 	}
 	if err := os.Rename(tmp, target); err != nil {
+		_ = os.Rename(target+".old", target) // Windows: put the old one back
 		return false, err
 	}
 	// launchd may exec the app-bundle copy (nicer Login Items entry):
@@ -198,6 +199,20 @@ func applyUpdate(info releaseInfo, restartOK bool) (bool, error) {
 
 	self, _ := os.Executable()
 	self, _ = filepath.EvalSymlinks(self)
+	if restartOK && runtime.GOOS == "windows" && strings.EqualFold(self, target) { // EvalSymlinks normalizes case
+		// The running exe now sits at .old; hand off to the new one, whose
+		// listen-retry loop waits for this port to free up.
+		cmd := exec.Command(target, "daemon")
+		detach(cmd)
+		if err := cmd.Start(); err == nil {
+			_ = cmd.Process.Release()
+			go func() {
+				time.Sleep(700 * time.Millisecond)
+				os.Exit(0)
+			}()
+			return true, nil
+		}
+	}
 	if restartOK && runtime.GOOS == "darwin" && (self == target || self == appBundleBin) {
 		// Hand the relaunch to a detached helper. Reload the launchd job
 		// (bootout + bootstrap) rather than kickstart: our exit(0) below

@@ -31,8 +31,10 @@ import (
 //     as hooked and nothing is rewritten — and codex-hook must NOT relay
 //     to the helper, or helper → us → helper would recurse forever.
 
-func codexConfigPath() string { return homePath(".codex", "config.toml") }
-func codexChainPath() string  { return homePath(".claude-notify", "codex-chain.json") }
+func codexConfigPath() string {
+	return filepath.Join(codexHome(homePath(), os.Getenv), "config.toml") // honors CODEX_HOME
+}
+func codexChainPath() string { return homePath(".claude-notify", "codex-chain.json") }
 
 // codexRelayEnv marks a helper process we spawned; the helper's own
 // --previous-notify callback inherits it, and that callback must not
@@ -108,7 +110,9 @@ func chainCodexNotify(payload string) {
 	if !codexOwnsSlot() {
 		return
 	}
-	if !fileExists(argv[0]) {
+	// only absolute paths can go stale; a bare name (powershell, uv)
+	// resolves through PATH at Start
+	if filepath.IsAbs(argv[0]) && !fileExists(argv[0]) {
 		return // app updated past this path; the next repair re-captures it
 	}
 	args := append(append([]string{}, argv[1:]...), payload)
@@ -209,7 +213,10 @@ var codexNotifyKey = regexp.MustCompile(`^\s*notify\s*=`)
 // or any other table is not the one Codex reads.
 func readCodexNotify() (lines []string, notifyIdx, headerIdx int, argv []string, parseErr error) {
 	data, _ := os.ReadFile(codexConfigPath())
-	lines = strings.Split(string(data), "\n")
+	// Windows editors (PowerShell 5.1 -Encoding UTF8, old Notepad) prepend
+	// a BOM that Codex's parser skips; unstripped, line 1 never matches and
+	// we'd add a second notify key — invalid TOML, Codex won't start
+	lines = strings.Split(strings.TrimPrefix(string(data), "\ufeff"), "\n")
 	notifyIdx, headerIdx = -1, -1
 	for i, l := range lines {
 		t := strings.TrimSpace(l)

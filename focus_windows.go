@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -16,7 +17,7 @@ import (
 )
 
 // Windows click-to-focus. Toasts activate the agent-notify: URL protocol,
-// which relaunches this binary ("openurl") to POST /api/focus-notify at
+// which relaunches this binary ("openurl") to POST /focus-notify at
 // the daemon; the daemon then raises the session's window via win32.
 
 // windowsToastNotify posts a toast whose click focuses the session.
@@ -47,7 +48,9 @@ func toastIconPath() string {
 		return ""
 	}
 	p = filepath.Join(filepath.Dir(p), "icon.png")
-	if _, err := os.Stat(p); err != nil {
+	// rewrite on mismatch: a stat-only check kept the old art forever
+	// after an app icon change
+	if b, err := os.ReadFile(p); err != nil || !bytes.Equal(b, iconLogo) {
 		if os.MkdirAll(filepath.Dir(p), 0o755) != nil ||
 			os.WriteFile(p, iconLogo, 0o644) != nil {
 			return ""
@@ -159,7 +162,9 @@ func focusNativeWindow(cwd, title string) bool {
 		folder = strings.ToLower(filepath.Base(cwd))
 	}
 	sess := strings.ToLower(strings.TrimSpace(title))
-	if len(sess) < 4 {
+	if r := []rune(sess); len(r) > 30 {
+		sess = string(r[:30]) // terminals truncate long titles (opencode: 37 chars + …)
+	} else if len(r) < 4 {
 		sess = "" // too short to be a meaningful needle
 	}
 	if folder == "" && sess == "" {

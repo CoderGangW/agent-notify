@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,9 +21,10 @@ type agentDef struct {
 	Beta bool
 	Bin  string // CLI binary for install detection
 
-	InstallCmd string // shown to the user; we never run it
-	LoginCmd   string // run in the user's terminal on request
-	Site       string // docs / download page
+	InstallCmd    string // shown to the user; we never run it
+	InstallCmdWin string // Windows override (PowerShell installer); "" = InstallCmd works there too
+	LoginCmd      string // run in the user's terminal on request
+	Site          string // docs / download page
 
 	// loggedIn reports whether CLI credentials exist. nil = unknown,
 	// treated as logged in (never block a working setup on a bad guess).
@@ -89,9 +91,10 @@ func fileExists(path string) bool {
 var agentDefs = []agentDef{
 	{
 		ID: "claude", Name: "Claude", Bin: "claude",
-		InstallCmd: "npm install -g @anthropic-ai/claude-code",
-		LoginCmd:   "claude /login",
-		Site:       "https://claude.com/claude-code",
+		InstallCmd:    "npm install -g @anthropic-ai/claude-code",
+		InstallCmdWin: `powershell -ExecutionPolicy ByPass -c "irm https://claude.ai/install.ps1 | iex"`,
+		LoginCmd:      "claude /login",
+		Site:          "https://claude.com/claude-code",
 		loggedIn: func() bool {
 			return fileExists(homePath(".claude", ".credentials.json")) ||
 				fileExists(homePath(".claude.json")) // API-key / config login
@@ -99,13 +102,14 @@ var agentDefs = []agentDef{
 	},
 	{
 		ID: "codex", Name: "Codex", Bin: "codex",
-		InstallCmd:  "npm install -g @openai/codex",
-		LoginCmd:    "codex login",
-		Site:        "https://developers.openai.com/codex/cli",
-		loggedIn:    func() bool { return fileExists(homePath(".codex", "auth.json")) },
-		hooked:      codexHooked,
-		installHook: installCodexHook,
-		repair:      codexRepairHook,
+		InstallCmd:    "npm install -g @openai/codex",
+		InstallCmdWin: `powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"`,
+		LoginCmd:      "codex login",
+		Site:          "https://developers.openai.com/codex/cli",
+		loggedIn:      func() bool { return fileExists(filepath.Join(codexHome(homePath(), os.Getenv), "auth.json")) },
+		hooked:        codexHooked,
+		installHook:   installCodexHook,
+		repair:        codexRepairHook,
 	},
 	{
 		// Personal-account OAuth was cut off 2026-06-18 (migrated to
@@ -119,22 +123,43 @@ var agentDefs = []agentDef{
 			// oauth_creds.json alone no longer proves a working login —
 			// personal OAuth is dead — so only count API-key style auth
 			// (plus Vertex ADC via GOOGLE_APPLICATION_CREDENTIALS).
-			return os.Getenv("GEMINI_API_KEY") != "" || os.Getenv("GOOGLE_API_KEY") != "" ||
+			if os.Getenv("GEMINI_API_KEY") != "" || os.Getenv("GOOGLE_API_KEY") != "" ||
 				os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != "" ||
-				fileExists(homePath(".gemini", ".env"))
+				fileExists(filepath.Join(geminiDir(homePath(), os.Getenv), ".env")) {
+				return true
+			}
+			// an auth type picked in Gemini's own dialog — e.g. an API key
+			// it keeps in the OS keychain / Windows Credential Manager;
+			// "oauth-personal" stays ambiguous for the reason above
+			var s struct {
+				Security struct {
+					Auth struct {
+						SelectedType string `json:"selectedType"`
+					} `json:"auth"`
+				} `json:"security"`
+			}
+			data, _ := os.ReadFile(geminiSettingsPath())
+			t := ""
+			if json.Unmarshal(data, &s) == nil {
+				t = s.Security.Auth.SelectedType
+			}
+			return t != "" && t != "oauth-personal"
 		},
 		hooked:      geminiHooked,
 		installHook: installGeminiHook,
+		repair:      geminiRepairHook,
 	},
 	{
 		ID: "antigravity", Name: "Antigravity", Beta: true, Bin: "agy",
-		InstallCmd: "curl -fsSL https://antigravity.google/cli/install.sh | bash",
-		LoginCmd:   "agy", // first run opens the browser login
-		Site:       "https://antigravity.google",
+		InstallCmd:    "curl -fsSL https://antigravity.google/cli/install.sh | bash",
+		InstallCmdWin: `powershell -ExecutionPolicy ByPass -c "irm https://antigravity.google/cli/install.ps1 | iex"`,
+		LoginCmd:      "agy", // first run opens the browser login
+		Site:          "https://antigravity.google",
 		// credentials live in the OS keyring — no file to probe, so
 		// loggedIn stays nil (treated as logged in)
 		hooked:      antigravityHooked,
 		installHook: installAntigravityHook,
+		repair:      antigravityRepairHook,
 	},
 	{
 		ID: "opencode", Name: "opencode", Beta: true, Bin: "opencode",
@@ -152,12 +177,14 @@ var agentDefs = []agentDef{
 	},
 	{
 		ID: "cursor", Name: "Cursor", Beta: true, Bin: "cursor-agent",
-		InstallCmd:  "curl https://cursor.com/install -fsS | bash",
-		LoginCmd:    "cursor-agent login",
-		Site:        "https://cursor.com/docs/cli",
-		loggedIn:    cursorLoggedIn,
-		hooked:      cursorHooked,
-		installHook: installCursorHook,
+		InstallCmd:    "curl https://cursor.com/install -fsS | bash",
+		InstallCmdWin: `powershell -ExecutionPolicy ByPass -c "irm 'https://cursor.com/install?win32=true' | iex"`,
+		LoginCmd:      "cursor-agent login",
+		Site:          "https://cursor.com/docs/cli",
+		loggedIn:      cursorLoggedIn,
+		hooked:        cursorHooked,
+		repair:        cursorRepairHook,
+		installHook:   installCursorHook,
 	},
 }
 
@@ -188,9 +215,13 @@ func agentList() []agentPublic {
 	}
 	out := make([]agentPublic, 0, len(agentDefs))
 	for _, a := range agentDefs {
+		install := a.InstallCmd
+		if runtime.GOOS == "windows" && a.InstallCmdWin != "" {
+			install = a.InstallCmdWin
+		}
 		p := agentPublic{
 			ID: a.ID, Name: a.Name, Beta: a.Beta,
-			InstallCmd: a.InstallCmd, LoginCmd: a.LoginCmd, Site: a.Site,
+			InstallCmd: install, LoginCmd: a.LoginCmd, Site: a.Site,
 			Installed: findCLI(a.Bin) != "",
 			LoggedIn:  true,
 			Hooked:    true,
@@ -221,7 +252,14 @@ func invalidateAgentCache() {
 // openLoginTerminal runs the agent's login command in the user's
 // terminal — login flows are interactive (browser round-trip, prompts),
 // so the daemon can't run them headless.
-func openLoginTerminal(cmd string) error {
+func openLoginTerminal(cmd, bin string) error {
+	// the daemon's PATH may predate the CLI's install; the new terminal
+	// inherits ours, so lead it to the binary we found (macOS Terminal
+	// starts a fresh login shell instead and ignores this)
+	env := os.Environ()
+	if bin != "" {
+		env = append(env, "PATH="+filepath.Dir(bin)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	}
 	switch runtime.GOOS {
 	case "darwin":
 		osascript(`tell application "Terminal"
@@ -230,11 +268,17 @@ func openLoginTerminal(cmd string) error {
 end tell`)
 		return nil
 	case "windows":
-		return exec.Command("cmd", "/c", "start", "cmd", "/k", cmd).Start()
+		// hide only the outer cmd; `start` still opens the visible one
+		c := exec.Command("cmd", "/c", "start", "cmd", "/k", cmd)
+		c.Env = env
+		hideConsole(c)
+		return c.Start()
 	default:
 		for _, term := range []string{"x-terminal-emulator", "gnome-terminal", "konsole", "xterm"} {
-			if bin := findCLI(term); bin != "" {
-				return exec.Command(bin, "-e", cmd).Start()
+			if t := findCLI(term); t != "" {
+				c := exec.Command(t, "-e", cmd)
+				c.Env = env
+				return c.Start()
 			}
 		}
 		return os.ErrNotExist

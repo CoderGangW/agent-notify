@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -12,6 +13,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,6 +28,9 @@ type hookInput struct {
 	Prompt         string          `json:"prompt"`
 	TranscriptPath string          `json:"transcript_path"`
 	StopHookActive bool            `json:"stop_hook_active"`
+	// Stop: the turn's final reply. The transcript is written async and
+	// may not hold it yet when the hook fires (per the hooks docs).
+	LastAssistantMessage string `json:"last_assistant_message"`
 }
 
 // toolDetail condenses a tool_input into a one-line "what is it doing"
@@ -82,7 +87,7 @@ func runHook() {
 		return
 	}
 
-	data, err := io.ReadAll(os.Stdin)
+	data, err := readHookStdin()
 	if err != nil {
 		return
 	}
@@ -191,7 +196,11 @@ func runHook() {
 	})
 
 	if kind == "done" && ev.Message == "" {
-		ev.Message = condense(info.LastAssistant, 180)
+		last := in.LastAssistantMessage
+		if last == "" { // older Claude Code without the field
+			last = info.LastAssistant
+		}
+		ev.Message = condense(last, 180)
 	}
 	deliver(ev)
 }
@@ -207,6 +216,75 @@ func cleanPrompt(s string) string {
 		s = s[:i]
 	}
 	return strings.TrimSpace(s)
+}
+
+var utf8BOM = []byte("\xef\xbb\xbf")
+
+// readHookStdin reads a hook's JSON payload. Windows PowerShell 5.1 hook
+// wrappers (Cursor, Gemini) prefix a UTF-8 BOM that json.Unmarshal rejects.
+func readHookStdin() ([]byte, error) {
+	data, err := io.ReadAll(os.Stdin)
+	return bytes.TrimPrefix(data, utf8BOM), err
+}
+
+// psHookCommand is the hook command for agents that run hooks through
+// PowerShell on Windows (Gemini, Cursor): an unquoted path breaks on a
+// profile like C:\Users\John Smith, a quoted one needs the call operator,
+// and piping keeps PowerShell waiting on our GUI-subsystem exe and handing
+// it the event JSON on stdin.
+func psHookCommand(exe, sub string) string {
+	return "& '" + strings.ReplaceAll(exe, "'", "''") + "' " + sub + " | Out-Null"
+}
+
+// repairHookFile reinstalls when path holds an entry of ours whose command
+// isn't want — the pre-fix Windows form was unquoted and broke on paths
+// with spaces. The user opted in earlier; without this the broken entry
+// would stay until a manual re-setup. Windows only: elsewhere the command
+// format never changed, so there's nothing to repoint.
+func repairHookFile(path, want string, install func() error) {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || !containsOurCommand(string(data)) {
+		return
+	}
+	var doc any
+	if json.Unmarshal(bytes.TrimPrefix(data, utf8BOM), &doc) == nil && !jsonHasString(doc, want) {
+		reinstallOnce(path, install)
+	}
+}
+
+var reinstalled sync.Map // config path → true
+
+// reinstallOnce runs install at most once per daemon run per config file:
+// repairs are polled every agent-status refresh, and an install that keeps
+// failing (or writing a path that never matches) must not loop.
+func reinstallOnce(path string, install func() error) {
+	if _, done := reinstalled.LoadOrStore(path, true); !done {
+		_ = install()
+	}
+}
+
+// jsonHasString reports whether s appears as a string value anywhere in v.
+func jsonHasString(v any, s string) bool {
+	switch t := v.(type) {
+	case string:
+		return t == s
+	case []any:
+		for _, e := range t {
+			if jsonHasString(e, s) {
+				return true
+			}
+		}
+	case map[string]any:
+		for _, e := range t {
+			if jsonHasString(e, s) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func deliver(ev Event) {
@@ -264,14 +342,22 @@ func reviveDaemon() {
 	}
 }
 
+// hookClient talks to the daemon. Loopback connects are instant when it's
+// up, but Windows retries a refused connect for ~2s instead of failing
+// fast — the short dial timeout keeps a dead daemon from adding that to
+// every synchronous tool hook.
+var hookClient = &http.Client{
+	Timeout:   700 * time.Millisecond,
+	Transport: &http.Transport{DialContext: (&net.Dialer{Timeout: 150 * time.Millisecond}).DialContext},
+}
+
 // postSession best-effort delivers a live-status update; no daemon, no problem.
 func postSession(u sessionUpdate) {
 	buf, err := json.Marshal(u)
 	if err != nil {
 		return
 	}
-	client := http.Client{Timeout: 700 * time.Millisecond}
-	resp, err := client.Post(
+	resp, err := hookClient.Post(
 		fmt.Sprintf("http://127.0.0.1:%d/session", daemonPort),
 		"application/json", bytes.NewReader(buf))
 	if err != nil {
@@ -285,8 +371,7 @@ func postToDaemon(ev Event) bool {
 	if err != nil {
 		return false
 	}
-	client := http.Client{Timeout: 700 * time.Millisecond}
-	resp, err := client.Post(
+	resp, err := hookClient.Post(
 		fmt.Sprintf("http://127.0.0.1:%d/event", daemonPort),
 		"application/json", bytes.NewReader(buf))
 	if err != nil {

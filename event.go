@@ -3,9 +3,11 @@ package main
 import "time"
 
 // daemonPort is the fixed localhost port the tray daemon listens on.
-// Hooks POST events here; if the daemon is down they fall back to a
-// direct OS notification.
-const daemonPort = 49517
+// Hooks POST events here; if the daemon is down they stay silent.
+// Kept below 32768, outside every OS's ephemeral range: the old 49517
+// sat in Windows' dynamic range, where Hyper-V/WSL2/Docker reserve
+// random blocks at boot — a hit there stopped the daemon from starting.
+const daemonPort = 28517
 
 // Event is what a hook sends to the daemon.
 type Event struct {

@@ -1,13 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -19,11 +20,51 @@ import (
 
 var cursorHookEvents = []string{"beforeSubmitPrompt", "stop", "sessionEnd"}
 
+// cursorEvents is what we register on this OS. Windows skips
+// beforeSubmitPrompt: launched from Git Bash, Cursor runs its PowerShell
+// hook wrapper through bash, which crashes with exit 2 — Cursor's "block"
+// code — so every prompt would be refused (forum.cursor.com/t/168129).
+// stop/sessionEnd just fail there, harmlessly.
+func cursorEvents() []string {
+	if runtime.GOOS == "windows" {
+		return cursorHookEvents[1:]
+	}
+	return cursorHookEvents
+}
+
+// cursorHookCommand: Cursor runs hooks through PowerShell on Windows.
+func cursorHookCommand(exe string) string {
+	if runtime.GOOS == "windows" {
+		return psHookCommand(exe, "cursor-hook")
+	}
+	return fmt.Sprintf("%s cursor-hook", exe)
+}
+
+func cursorRepairHook() {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	var doc struct {
+		Hooks map[string][]any `json:"hooks"`
+	}
+	data, err := os.ReadFile(cursorHooksPath())
+	if err != nil || json.Unmarshal(bytes.TrimPrefix(data, utf8BOM), &doc) != nil {
+		return
+	}
+	for _, e := range doc.Hooks["beforeSubmitPrompt"] {
+		if buf, _ := json.Marshal(e); containsOurCommand(string(buf)) {
+			reinstallOnce(cursorHooksPath(), installCursorHook) // drops it
+			return
+		}
+	}
+	repairHookFile(cursorHooksPath(), cursorHookCommand(installDest()), installCursorHook)
+}
+
 // runCursorHook is invoked by Cursor CLI. Print nothing to stdout
 // (Cursor parses it as a hook response) and always exit 0.
 func runCursorHook() {
 	defer os.Exit(0)
-	data, err := io.ReadAll(os.Stdin)
+	data, err := readHookStdin()
 	if err != nil {
 		return
 	}
@@ -41,6 +82,17 @@ func runCursorHook() {
 	cwd := ""
 	if len(in.WorkspaceRoots) > 0 {
 		cwd = in.WorkspaceRoots[0]
+		// Windows roots can arrive as "/d:/code/proj/" — make it D:\code\proj
+		// so it matches other agents' cwds and shortPath's home prefix
+		if runtime.GOOS == "windows" && cwd != "" {
+			if len(cwd) > 2 && cwd[0] == '/' && cwd[2] == ':' {
+				cwd = cwd[1:]
+			}
+			if len(cwd) > 1 && cwd[1] == ':' {
+				cwd = strings.ToUpper(cwd[:1]) + cwd[1:]
+			}
+			cwd = filepath.Clean(cwd)
+		}
 	}
 	if cwd == "" {
 		cwd, _ = os.Getwd()
@@ -96,7 +148,7 @@ func installCursorHook() error {
 	}
 	exe, _ = filepath.EvalSymlinks(exe)
 	exe = installBinary(exe)
-	command := fmt.Sprintf("%s cursor-hook", exe)
+	command := cursorHookCommand(exe)
 
 	path := cursorHooksPath()
 	doc := map[string]any{}
@@ -112,21 +164,28 @@ func installCursorHook() error {
 	if hooks == nil {
 		hooks = map[string]any{}
 	}
-	for _, ev := range cursorHookEvents {
-		entries, _ := hooks[ev].([]any)
-		replaced := false
-		for i, e := range entries {
-			buf, _ := json.Marshal(e)
-			if containsOurCommand(string(buf)) {
-				entries[i] = map[string]any{"command": command}
-				replaced = true
-				break
+	// drop our entries everywhere first: events we no longer register on
+	// this OS (Windows beforeSubmitPrompt) must not keep a stale copy
+	for ev, v := range hooks {
+		entries, ok := v.([]any)
+		if !ok {
+			continue // not an event list; leave it alone
+		}
+		var kept []any
+		for _, e := range entries {
+			if buf, _ := json.Marshal(e); !containsOurCommand(string(buf)) {
+				kept = append(kept, e)
 			}
 		}
-		if !replaced {
-			entries = append(entries, map[string]any{"command": command})
+		if len(kept) > 0 {
+			hooks[ev] = kept
+		} else {
+			delete(hooks, ev)
 		}
-		hooks[ev] = entries
+	}
+	for _, ev := range cursorEvents() {
+		entries, _ := hooks[ev].([]any)
+		hooks[ev] = append(entries, map[string]any{"command": command})
 	}
 	doc["hooks"] = hooks
 

@@ -20,7 +20,7 @@ import (
 
 // opencodePluginVersion is embedded in the generated file; bumping it
 // makes opencodeHooked() report false so the plugin gets rewritten.
-const opencodePluginVersion = "v2"
+const opencodePluginVersion = "v3"
 
 func opencodePluginPath() string {
 	return homePath(".config", "opencode", "plugins", "agent-notify.js")
@@ -60,10 +60,13 @@ export const AgentNotify = async ({ directory }) => {
       }).catch(() => {});
     } catch (_) {}
   };
+  // titles arrive via session.updated; the terminal shows "OC | <title>",
+  // which is what a Windows notification click matches to find the window
+  const titles = {};
   const session = (id, kind) =>
-    post("/session", { session_id: String(id || ""), source: "opencode", cwd: directory, kind });
+    post("/session", { session_id: String(id || ""), source: "opencode", cwd: directory, kind, title: titles[id] || "" });
   const notify = (id, kind) =>
-    post("/event", { session_id: String(id || ""), source: "opencode", cwd: directory, kind });
+    post("/event", { session_id: String(id || ""), source: "opencode", cwd: directory, kind, title: titles[id] || "" });
 
   // ---- usage sync: aggregate the local opencode.db and hand the daemon
   // per-day/per-model token totals plus the latest sessions. bun:sqlite is
@@ -76,7 +79,7 @@ export const AgentNotify = async ({ directory }) => {
     lastSync = now;
     try {
       const { Database } = await import("bun:sqlite");
-      const home = process.env.HOME || process.env.USERPROFILE || "";
+      const home = (await import("node:os")).homedir(); // what opencode itself uses (USERPROFILE on Windows)
       const roots = [];
       if (process.env.XDG_DATA_HOME) roots.push(process.env.XDG_DATA_HOME + "/opencode");
       if (home) roots.push(home + "/.local/share/opencode");
@@ -119,6 +122,10 @@ export const AgentNotify = async ({ directory }) => {
         const p = (event && event.properties) || {};
         const id = p.sessionID || (p.info && p.info.id) || "";
         if (!id) return;
+        if (event.type === "session.updated" && p.info && p.info.title) {
+          titles[id] = p.info.title;
+          return;
+        }
         const idle =
           event.type === "session.idle" ||
           (event.type === "session.status" && p.status && p.status.type === "idle");

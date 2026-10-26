@@ -229,7 +229,9 @@ func claudeCLIVersion() string {
 		if claude == "" {
 			return
 		}
-		out, err := exec.Command(claude, "--version").Output()
+		cmd := exec.Command(claude, "--version")
+		hideConsole(cmd) // GUI-subsystem daemon: a console child would flash a window
+		out, err := cmd.Output()
 		if err != nil {
 			return
 		}

@@ -70,7 +70,9 @@ func muxFocus(m muxRef) {
 	}
 	run := func(name string, args ...string) {
 		if bin := findCLI(name); bin != "" {
-			_ = exec.Command(bin, args...).Run()
+			cmd := exec.Command(bin, args...)
+			hideConsole(cmd) // `wezterm cli` from the GUI daemon would flash a console
+			_ = cmd.Run()
 		}
 	}
 	switch m.Kind {

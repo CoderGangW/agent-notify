@@ -72,6 +72,16 @@ func runDaemon() {
 		c.Agents = []string{}
 		saveConfig(c)
 	}
+	// A hook may have spawned us (reviveDaemon): drop the agent-session
+	// markers it handed down, or every terminal we open later (resume,
+	// login) inherits them — Claude Code then treats that claude as a
+	// nested session and hides it from --resume and history, and a
+	// leftover CURSOR_VERSION makes our own Claude hook skip its work.
+	for _, k := range []string{"CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_ENTRYPOINT",
+		"CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_BRIDGE_SESSION_ID",
+		"CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CURSOR_VERSION"} {
+		os.Unsetenv(k)
+	}
 	s := &daemonState{notifyMode: loadConfig().notifyMode()}
 	setupNativeNotify()   // no-op unless running from the .app bundle
 	registerURLProtocol() // Windows: agent-notify: scheme for toast clicks (no-op elsewhere)
@@ -393,7 +403,38 @@ func (s *daemonState) serve() {
 		fmt.Fprintln(w, "ok")
 	})
 	mux.HandleFunc("/show", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+			return
+		}
 		s.showWindow()
+		w.WriteHeader(http.StatusNoContent)
+	})
+	// focus-notify serves Windows toast clicks: the agent-notify: protocol
+	// relaunches the binary (`openurl`), which calls back here with the
+	// session id. Finished sessions may already be gone from the live map,
+	// so fall back to the newest event that carries the same id.
+	mux.HandleFunc("/focus-notify", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+		if r.Method != http.MethodPost || id == "" {
+			http.Error(w, "POST ?id= only", http.StatusBadRequest)
+			return
+		}
+		s.mu.Lock()
+		var info sessionInfo
+		if p := s.sessions[id]; p != nil {
+			info = *p
+		} else {
+			for _, ev := range s.events { // newest first
+				if ev.SessionID == id {
+					info = sessionInfo{Activate: ev.Activate, CWD: ev.CWD,
+						Surface: ev.Surface, Mux: ev.Mux, Title: ev.Title}
+					break
+				}
+			}
+		}
+		s.mu.Unlock()
+		focusTarget(info.Activate, info.Mux, info.Surface, info.CWD, info.Title)
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
@@ -468,7 +509,25 @@ func (s *daemonState) serve() {
 		log.Printf("listen failed (already running?): %v", err)
 		os.Exit(1)
 	}
-	log.Fatal(http.Serve(ln, mux))
+	log.Fatal(http.Serve(ln, localOnly(mux)))
+}
+
+// localOnly rejects browser-originated requests. Any web page can make
+// the browser hit 127.0.0.1 (fake notifications, popping the window),
+// and DNS rebinding can even make that same-origin. Hooks, the CLI and
+// the opencode plugin are plain HTTP clients: they never send Origin or
+// Sec-Fetch-*, and always address 127.0.0.1 — browsers can't avoid
+// sending those headers, and a rebound page carries its own Host.
+// Check Sec-Fetch-Site, not Sec-Fetch-Mode: Node's fetch sends Mode too.
+func localOnly(h http.Handler) http.Handler {
+	want := fmt.Sprintf("127.0.0.1:%d", daemonPort)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Host != want || r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 func (s *daemonState) add(ev Event) {
@@ -537,7 +596,8 @@ func computeSetup() setupStatus {
 		var settings struct {
 			Hooks map[string][]struct {
 				Hooks []struct {
-					Command string `json:"command"`
+					Command string   `json:"command"`
+					Args    []string `json:"args"`
 				} `json:"hooks"`
 			} `json:"hooks"`
 		}
@@ -545,7 +605,7 @@ func computeSetup() setupStatus {
 			for _, entries := range settings.Hooks {
 				for _, e := range entries {
 					for _, h := range e.Hooks {
-						if isOurCommand(h.Command) {
+						if isOurCommand(strings.TrimSpace(h.Command + " " + strings.Join(h.Args, " "))) {
 							st.Hooks = true
 						}
 					}
@@ -559,7 +619,8 @@ func computeSetup() setupStatus {
 			_, err := os.Stat(filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist"))
 			st.Autostart = err == nil
 		case "windows":
-			st.Autostart = true // registry write never fails silently in install
+			// firstRunSetup rewrites the Run entry every start while enabled
+			st.Autostart = !loadConfig().DisableAutostart
 		default:
 			_, err := os.Stat(filepath.Join(home, ".config", "autostart", "agent-notify.desktop"))
 			st.Autostart = err == nil
@@ -796,33 +857,6 @@ func (s *daemonState) assetHandler() http.Handler {
 		focusTarget(info.Activate, info.Mux, info.Surface, info.CWD, info.Title)
 		w.WriteHeader(http.StatusNoContent)
 	})
-	// focus-notify serves Windows toast clicks: the agent-notify: protocol
-	// relaunches the binary, which calls back here with the session id.
-	// Finished sessions may already be gone from the live map, so fall
-	// back to the newest event that carries the same id.
-	mux.HandleFunc("/api/focus-notify", func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Query().Get("id")
-		if id == "" {
-			http.Error(w, "missing id", http.StatusBadRequest)
-			return
-		}
-		s.mu.Lock()
-		var info sessionInfo
-		if p := s.sessions[id]; p != nil {
-			info = *p
-		} else {
-			for _, ev := range s.events { // newest first
-				if ev.SessionID == id {
-					info = sessionInfo{Activate: ev.Activate, CWD: ev.CWD,
-						Surface: ev.Surface, Mux: ev.Mux, Title: ev.Title}
-					break
-				}
-			}
-		}
-		s.mu.Unlock()
-		focusTarget(info.Activate, info.Mux, info.Surface, info.CWD, info.Title)
-		w.WriteHeader(http.StatusNoContent)
-	})
 	mux.HandleFunc("/api/agent-hook", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ID string `json:"id"`
@@ -856,7 +890,7 @@ func (s *daemonState) assetHandler() http.Handler {
 			http.Error(w, "unknown agent", http.StatusBadRequest)
 			return
 		}
-		if err := openLoginTerminal(a.LoginCmd); err != nil {
+		if err := openLoginTerminal(a.LoginCmd, findCLI(a.Bin)); err != nil {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
@@ -1076,7 +1110,7 @@ func (s *daemonState) assetHandler() http.Handler {
 			if _, statErr := os.Stat(bin); statErr != nil {
 				bin, _ = os.Executable()
 			}
-			registerHooks(fmt.Sprintf("%q hook", bin))
+			registerHooks(bin)
 		case "autostart":
 			bin := installDest()
 			if _, statErr := os.Stat(bin); statErr != nil {

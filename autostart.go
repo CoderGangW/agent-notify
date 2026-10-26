@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -88,7 +89,13 @@ func installAutostart(exe string, start bool) error {
 			"/v", "agent-notify", "/t", "REG_SZ",
 			"/d", fmt.Sprintf(`"%s" daemon`, exe), "/f")
 		hideConsole(cmd)
-		return cmd.Run()
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+		if start {
+			return startDaemonIfDown(exe)
+		}
+		return nil
 
 	default: // Linux desktop environments honor XDG autostart
 		home, err := os.UserHomeDir()
@@ -109,6 +116,9 @@ X-GNOME-Autostart-enabled=true
 			return err
 		}
 		installLinuxMenuEntry(home, exe)
+		if start {
+			return startDaemonIfDown(exe)
+		}
 		return nil
 	}
 }
@@ -215,9 +225,29 @@ func autostartHealthy() bool {
 		_, err = os.Stat(prog)
 		return err == nil
 	case "windows":
-		return true // registry entry never goes stale by path swap
+		// Always rewrite: `reg add /f` is idempotent and cheap, and a
+		// double-clicked download never ran `install`, so without this
+		// it would never get a Run entry at all. A Task Manager "Disable"
+		// lives in StartupApproved and survives the rewrite.
+		return false
 	default:
 		_, err := os.Stat(filepath.Join(home, ".config", "autostart", "agent-notify.desktop"))
 		return err == nil
 	}
+}
+
+// startDaemonIfDown launches the daemon detached unless one already holds
+// the port (a re-install) — a second instance would flash a duplicate tray
+// icon and exit once its listen retries run out.
+func startDaemonIfDown(exe string) error {
+	if c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", daemonPort), 300*time.Millisecond); err == nil {
+		c.Close()
+		return nil
+	}
+	cmd := exec.Command(exe, "daemon")
+	detach(cmd)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
 }

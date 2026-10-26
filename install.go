@@ -51,6 +51,29 @@ func saveSettings(path string, settings map[string]any) {
 	}
 }
 
+// claudeHookEntry is our settings.json hook for exe. Windows gets exec
+// form (command + args, no shell, Claude Code ≥2.1.139): without Git for
+// Windows, Claude Code runs shell-form hooks in PowerShell, where a quoted
+// path followed by an argument is a parse error — and since 2.1.299 a
+// failing PreToolUse hook blocks every tool call.
+func claudeHookEntry(exe string) map[string]any {
+	if runtime.GOOS == "windows" {
+		return map[string]any{"type": "command", "command": exe, "args": []any{"hook"}}
+	}
+	return map[string]any{"type": "command", "command": fmt.Sprintf("%q hook", exe)}
+}
+
+// isOurHook reports whether a settings.json hook (shell or exec form) is ours.
+func isOurHook(hm map[string]any) bool {
+	cmd, _ := hm["command"].(string)
+	args, _ := hm["args"].([]any)
+	for _, a := range args {
+		s, _ := a.(string)
+		cmd += " " + s
+	}
+	return isOurCommand(cmd)
+}
+
 // isOurCommand reports whether a hook command string belongs to claude-notify.
 func isOurCommand(cmd string) bool {
 	return (strings.Contains(cmd, "agent-notify") || strings.Contains(cmd, "claude-notify")) &&
@@ -89,9 +112,16 @@ func installBinary(exe string) string {
 	if err := os.WriteFile(tmp, data, 0o755); err != nil {
 		return exe
 	}
-	// Atomic swap: safe even while the old binary at dest is running.
+	// Atomic swap. Windows can't replace a running exe (the daemon, during
+	// a re-install), only rename it away — otherwise the swap fails and
+	// hooks get registered at the download path instead.
+	if runtime.GOOS == "windows" {
+		_ = os.Remove(dest + ".old")
+		_ = os.Rename(dest, dest+".old")
+	}
 	if err := os.Rename(tmp, dest); err != nil {
 		os.Remove(tmp)
+		_ = os.Rename(dest+".old", dest) // Windows: put the old one back
 		return exe
 	}
 	// The source may carry the app bundle's Apple Development signature,
@@ -118,9 +148,11 @@ func installBinary(exe string) string {
 	return dest
 }
 
-// registerHooks points the Stop/Notification hooks at command, returning
-// how many entries were added or repointed (0,0 = already correct).
-func registerHooks(command string) (added, updated int) {
+// registerHooks points our hooks at exe, returning how many entries were
+// added or repointed (0,0 = already correct).
+func registerHooks(exe string) (added, updated int) {
+	want := claudeHookEntry(exe)
+	wantJSON, _ := json.Marshal(want)
 	path := settingsPath()
 	settings := loadSettings(path)
 
@@ -138,20 +170,27 @@ func registerHooks(command string) (added, updated int) {
 			inner, _ := m["hooks"].([]any)
 			for _, h := range inner {
 				hm, _ := h.(map[string]any)
-				cmd, _ := hm["command"].(string)
-				if !isOurCommand(cmd) {
+				if !isOurHook(hm) {
 					continue
 				}
 				found = true
-				if cmd != command { // repoint an old binary path at this one
-					hm["command"] = command
+				// repoint an old binary path or command form at this one
+				cur := map[string]any{"type": hm["type"], "command": hm["command"]}
+				if a, ok := hm["args"]; ok {
+					cur["args"] = a
+				}
+				if b, _ := json.Marshal(cur); string(b) != string(wantJSON) {
+					delete(hm, "args")
+					for k, v := range want {
+						hm[k] = v
+					}
 					updated++
 				}
 			}
 		}
 		if !found {
 			entries = append(entries, map[string]any{
-				"hooks": []any{map[string]any{"type": "command", "command": command}},
+				"hooks": []any{claudeHookEntry(exe)},
 			})
 			hooks[event] = entries
 			added++
@@ -171,14 +210,13 @@ func runInstall() {
 	}
 	exe, _ = filepath.EvalSymlinks(exe)
 	exe = installBinary(exe)
-	command := fmt.Sprintf("%q hook", exe)
 
-	added, updated := registerHooks(command)
+	added, updated := registerHooks(exe)
 	if added == 0 && updated == 0 {
 		fmt.Printf(T("install.already")+"\n", settingsPath())
 	} else {
 		fmt.Printf(T("install.hooks")+"\n", added, updated, settingsPath())
-		fmt.Printf(T("install.command")+"\n", command)
+		fmt.Printf(T("install.command")+"\n", fmt.Sprintf("%q hook", exe))
 	}
 
 	// explicit install = explicit opt back in
@@ -203,14 +241,14 @@ func firstRunSetup() {
 		return
 	}
 	exe, _ = filepath.EvalSymlinks(exe)
+	syncBundleIcon(exe)
 	installed := installBinary(exe)
 	// Claude hooks are NOT auto-registered anymore: agent wiring is the
 	// user's explicit choice via the in-tab setup guide (/api/setup-fix).
 	// EXCEPT when hooks are already ours from a previous version — then
 	// keep them pointing at the freshly installed binary.
 	if computeSetup().Hooks {
-		command := fmt.Sprintf("%q hook", installed)
-		added, updated := registerHooks(command)
+		added, updated := registerHooks(installed) // also migrates Windows entries to exec form
 		if added > 0 || updated > 0 {
 			fmt.Printf(T("install.hooks")+"\n", added, updated, settingsPath())
 		}
@@ -246,8 +284,7 @@ func runUninstall() {
 			var keptInner []any
 			for _, h := range inner {
 				hm, _ := h.(map[string]any)
-				cmd, _ := hm["command"].(string)
-				if isOurCommand(cmd) {
+				if isOurHook(hm) {
 					removed++
 					continue
 				}

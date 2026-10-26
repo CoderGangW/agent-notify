@@ -3,10 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -36,7 +36,7 @@ func runAntigravityHook() {
 		return
 	}
 	event := os.Args[2]
-	data, err := io.ReadAll(os.Stdin)
+	data, err := readHookStdin()
 	if err != nil {
 		return
 	}
@@ -89,7 +89,8 @@ func runAntigravityHook() {
 		session("idle", sessionUpdate{})
 		kind := "done"
 		msg := ""
-		if in.TerminationReason == "error" { // stopped mid-task — worth a look
+		// agy ≥1.4 sends the enum name ("ERROR"); older builds lowercase
+		if strings.EqualFold(in.TerminationReason, "error") { // stopped mid-task — worth a look
 			kind = "attention"
 			msg = condense(in.Error, 180)
 		}
@@ -108,6 +109,13 @@ func antigravityHooksPath() string { return homePath(".gemini", "config", "hooks
 // our first installer); agy never reads it.
 func antigravityLegacyPath() string { return homePath(".gemini", "antigravity-cli", "hooks.json") }
 
+// antigravityRepairHook repoints Windows entries written before paths
+// with spaces were made cmd-safe.
+func antigravityRepairHook() {
+	want := fmt.Sprintf("%s antigravity-hook Stop", cmdSafePath(installDest()))
+	repairHookFile(antigravityHooksPath(), want, installAntigravityHook)
+}
+
 func antigravityHooked() bool {
 	data, _ := os.ReadFile(antigravityHooksPath())
 	return containsOurCommand(string(data))
@@ -116,6 +124,7 @@ func antigravityHooked() bool {
 // antigravityHookSpec builds our named-hook entry. Tool events need the
 // matcher+hooks wrapper; lifecycle events take flat handler lists.
 func antigravityHookSpec(exe string) map[string]any {
+	exe = cmdSafePath(exe) // agy runs hooks via `cmd /c` on Windows
 	cmd := func(ev string) string { return fmt.Sprintf("%s antigravity-hook %s", exe, ev) }
 	handler := func(ev string) map[string]any {
 		return map[string]any{"type": "command", "command": cmd(ev), "timeout": 10}

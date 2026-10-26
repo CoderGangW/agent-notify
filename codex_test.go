@@ -27,6 +27,7 @@ func setupCodexHome(t *testing.T, config string) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows; else tests clobber the real ~\.codex
 	t.Setenv("LOCALAPPDATA", "")
 	if config != "" {
 		if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {

@@ -40,19 +40,38 @@ func deliverNotification(ev Event) {
 
 // findCLI resolves a command via PATH plus the usual install locations —
 // a launchd daemon's PATH is just /usr/bin:/bin and misses homebrew and
-// ~/.local/bin.
+// ~/.local/bin; a Windows daemon's PATH is frozen at login, so a CLI
+// installed afterwards only shows up through its install dir.
 func findCLI(name string) string {
 	if p, err := exec.LookPath(name); err == nil {
-		return p
+		// an old Claude Desktop registers a Claude.exe execution alias that
+		// outranks the CLI on PATH — running it opens the desktop app
+		if !(runtime.GOOS == "windows" && name == "claude" &&
+			strings.Contains(strings.ToLower(p), `\windowsapps\`)) {
+			return p
+		}
 	}
 	dirs := []string{"/opt/homebrew/bin", "/usr/local/bin"}
 	if home, err := os.UserHomeDir(); err == nil {
-		dirs = append([]string{filepath.Join(home, ".local", "bin"), filepath.Join(home, ".claude", "local")}, dirs...)
+		dirs = append([]string{filepath.Join(home, ".local", "bin"), filepath.Join(home, ".claude", "local"),
+			filepath.Join(home, ".opencode", "bin")}, dirs...) // opencode's install script
+	}
+	exts := []string{""}
+	if runtime.GOOS == "windows" {
+		local := os.Getenv("LOCALAPPDATA")
+		dirs = append(dirs,
+			filepath.Join(os.Getenv("APPDATA"), "npm"),                 // npm -g shims
+			filepath.Join(local, "Programs", "OpenAI", "Codex", "bin"), // Codex installer
+			filepath.Join(local, "agy", "bin"),                         // Antigravity installer
+			filepath.Join(local, "cursor-agent"))                       // Cursor installer (.cmd shims)
+		exts = []string{".exe", ".cmd"}
 	}
 	for _, d := range dirs {
-		p := filepath.Join(d, name)
-		if st, err := os.Stat(p); err == nil && !st.IsDir() {
-			return p
+		for _, ext := range exts {
+			p := filepath.Join(d, name+ext)
+			if st, err := os.Stat(p); err == nil && !st.IsDir() {
+				return p
+			}
 		}
 	}
 	return ""

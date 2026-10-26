@@ -9,7 +9,6 @@ import (
 	"errors"
 	"io"
 	"io/fs"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -837,8 +836,9 @@ func agyWorkspaces(root string) map[string]string {
 	out := map[string]string{}
 	for id, v := range c.Conversations {
 		if len(v.Summary.WorkspaceURIs) > 0 {
-			if u, err := url.Parse(v.Summary.WorkspaceURIs[0]); err == nil && u.Scheme == "file" {
-				out[id] = u.Path
+			// fileURIPath: Windows URIs carry /C:/x/proj, which must read C:\x\proj
+			if p := fileURIPath(v.Summary.WorkspaceURIs[0]); p != "" {
+				out[id] = p
 			}
 		}
 	}

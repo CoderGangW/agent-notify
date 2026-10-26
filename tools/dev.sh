@@ -17,7 +17,7 @@ MODE="${1:-dev}"
 BIN="/tmp/agent-notify-dev"
 LOG="/tmp/agent-notify-dev.log"
 APP="/Applications/agent-notify.app"
-PORT=49517
+PORT=28517
 
 say() { printf '\033[1;33m[dev.sh]\033[0m %s\n' "$*"; }
 

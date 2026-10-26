@@ -328,6 +328,8 @@ func canonPath(p string) string {
 }
 
 func pathsEqual(a, b string) bool {
+	// Clean also unifies / and \ on Windows: opencode stores C:/x/proj
+	a, b = filepath.Clean(a), filepath.Clean(b)
 	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		return strings.EqualFold(a, b)
 	}

@@ -16,6 +16,11 @@ func main() {
 	cmd := "daemon"
 	if len(os.Args) > 1 {
 		cmd = os.Args[1]
+	} else if os.Getenv("CLAUDECODE") != "" || os.Getenv("CURSOR_VERSION") != "" {
+		// a bare run from inside an agent is a hook whose args were
+		// dropped (Claude Code before exec form, Cursor importing it) —
+		// starting a daemon there would stall the hook
+		cmd = "hook"
 	}
 	switch cmd {
 	case "daemon":
@@ -107,7 +112,7 @@ func runOpenURL(raw string) {
 	if id == "" {
 		return
 	}
-	resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/api/focus-notify?id=%s",
+	resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/focus-notify?id=%s",
 		daemonPort, url.QueryEscape(id)), "", nil)
 	if err == nil {
 		resp.Body.Close()

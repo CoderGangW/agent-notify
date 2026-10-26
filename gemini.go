@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -27,7 +26,7 @@ var geminiHookEvents = []string{
 // and always exit 0.
 func runGeminiHook() {
 	defer os.Exit(0)
-	data, err := io.ReadAll(os.Stdin)
+	data, err := readHookStdin()
 	if err != nil {
 		return
 	}
@@ -104,7 +103,22 @@ func runGeminiHook() {
 }
 
 // geminiSettingsPath is ~/.gemini/settings.json (user scope).
-func geminiSettingsPath() string { return homePath(".gemini", "settings.json") }
+func geminiSettingsPath() string {
+	return filepath.Join(geminiDir(homePath(), os.Getenv), "settings.json") // honors GEMINI_CLI_HOME
+}
+
+// geminiHookCommand is the settings.json command for exe; Gemini runs
+// hooks through PowerShell -Command on Windows.
+func geminiHookCommand(exe string) string {
+	if runtime.GOOS == "windows" {
+		return psHookCommand(exe, "gemini-hook")
+	}
+	return fmt.Sprintf("%s gemini-hook", exe)
+}
+
+func geminiRepairHook() {
+	repairHookFile(geminiSettingsPath(), geminiHookCommand(installDest()), installGeminiHook)
+}
 
 // geminiHooked reports whether our hook command is present in the user
 // settings.
@@ -126,7 +140,7 @@ func installGeminiHook() error {
 	}
 	exe, _ = filepath.EvalSymlinks(exe)
 	exe = installBinary(exe)
-	command := fmt.Sprintf("%s gemini-hook", exe)
+	command := geminiHookCommand(exe)
 
 	path := geminiSettingsPath()
 	settings := map[string]any{}

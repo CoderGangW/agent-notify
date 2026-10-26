@@ -258,6 +258,13 @@ func agyPoolKey(id string) string {
 // (flat token) is the file fallback.
 func agyKeyringCredential() (refresh, email string) {
 	var blobs [][]byte
+	if runtime.GOOS == "windows" {
+		// go-keyring's Windows backend: a generic credential named
+		// "<service>:<account>" in Credential Manager
+		if b := credRead("gemini:antigravity"); len(b) > 0 {
+			blobs = append(blobs, b)
+		}
+	}
 	if runtime.GOOS == "darwin" {
 		// agy stores its token via go-keyring under service "gemini",
 		// account "antigravity" (verified on-device).
@@ -312,18 +319,25 @@ func agyParseToken(data []byte) (refresh, email string) {
 var (
 	agyClientRE    = regexp.MustCompile(`[0-9]{10,}-[a-z0-9]{16,}\.apps\.googleusercontent\.com`)
 	agySecretRE    = regexp.MustCompile(`GOCSPX-[A-Za-z0-9_-]{28}`)
-	agyClientsOnce sync.Once
+	agyClientsMu   sync.Mutex
+	agyClientsDone bool
 	agyClientsMemo []agyOAuthClient
 )
 
 // agyOAuthClients scans the installed agy binary once for its embedded
 // OAuth client ids and secrets, returning every id×secret combination.
 func agyOAuthClients() []agyOAuthClient {
-	agyClientsOnce.Do(func() {
+	agyClientsMu.Lock()
+	defer agyClientsMu.Unlock()
+	if agyClientsDone {
+		return agyClientsMemo
+	}
+	func() {
 		bin := findCLI("agy")
 		if bin == "" {
-			return
+			return // not installed yet: retry next call instead of caching the miss
 		}
+		agyClientsDone = true
 		data, err := os.ReadFile(bin)
 		if err != nil {
 			return
@@ -335,7 +349,7 @@ func agyOAuthClients() []agyOAuthClient {
 				agyClientsMemo = append(agyClientsMemo, agyOAuthClient{id: id, secret: sec})
 			}
 		}
-	})
+	}()
 	return agyClientsMemo
 }
 
