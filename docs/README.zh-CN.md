@@ -53,7 +53,7 @@
 | 代理 | 任务完成 | 需要输入 | 实时会话状态 | 用量与额度 | 接入命令 |
 |---|:-:|:-:|:-:|---|---|
 | **Claude Code** | ✅ | ✅ | ✅ | token 用量 + 套餐额度 | `agent-notify install` |
-| **Codex CLI** | ✅ | — | — | — | `agent-notify install-codex` |
+| **Codex CLI** | ✅ | ✅（批准请求，Codex ≥ 0.129） | — | — | `agent-notify install-codex` |
 | **Gemini CLI**（测试版） | ✅ | ✅ | ✅ | — | `agent-notify install-gemini` |
 | **Antigravity CLI**（测试版） | ✅ | — | ✅ | 模型配额仪表 | `agent-notify install-antigravity` |
 | **opencode**（测试版） | ✅ | ✅（权限请求） | ✅ | token 与费用用量 | `agent-notify install-opencode` |

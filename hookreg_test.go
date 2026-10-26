@@ -26,4 +26,11 @@ func TestRegisterHooks(t *testing.T) {
 	if isOurHook(map[string]any{"command": `C:\x\agent-notify.exe`, "args": []any{"daemon"}}) {
 		t.Fatal("non-hook exec form recognized as ours")
 	}
+	// Windows registers the prompt/pre-tool events as http hooks
+	if !isOurHook(map[string]any{"type": "http", "url": claudeHookURL(), "timeout": 5}) {
+		t.Fatal("http-form hook not recognized")
+	}
+	if isOurHook(map[string]any{"type": "http", "url": "http://127.0.0.1:9/elsewhere"}) {
+		t.Fatal("foreign http hook recognized as ours")
+	}
 }

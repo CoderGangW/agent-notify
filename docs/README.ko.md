@@ -53,7 +53,7 @@
 | 에이전트 | 작업 완료 | 입력 필요 | 실시간 세션 상태 | 사용량·한도 | 연결 명령 |
 |---|:-:|:-:|:-:|---|---|
 | **Claude Code** | ✅ | ✅ | ✅ | 토큰 사용량 + 플랜 한도 | `agent-notify install` |
-| **Codex CLI** | ✅ | — | — | — | `agent-notify install-codex` |
+| **Codex CLI** | ✅ | ✅ (승인 요청, Codex 0.129 이상) | — | — | `agent-notify install-codex` |
 | **Gemini CLI** (베타) | ✅ | ✅ | ✅ | — | `agent-notify install-gemini` |
 | **Antigravity CLI** (베타) | ✅ | — | ✅ | 모델 쿼터 게이지 | `agent-notify install-antigravity` |
 | **opencode** (베타) | ✅ | ✅ (권한 요청) | ✅ | 토큰·비용 사용량 | `agent-notify install-opencode` |

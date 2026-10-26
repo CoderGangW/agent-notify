@@ -53,7 +53,7 @@ You run several coding agents at once and lose track of which one just finished,
 | Agent | Task complete | Input needed | Live session status | Usage & limits | Set up with |
 |---|:-:|:-:|:-:|---|---|
 | **Claude Code** | ✅ | ✅ | ✅ | Token usage + plan limits | `agent-notify install` |
-| **Codex CLI** | ✅ | — | — | — | `agent-notify install-codex` |
+| **Codex CLI** | ✅ | ✅ (approval requests, Codex ≥ 0.129) | — | — | `agent-notify install-codex` |
 | **Gemini CLI** (beta) | ✅ | ✅ | ✅ | — | `agent-notify install-gemini` |
 | **Antigravity CLI** (beta) | ✅ | — | ✅ | Model quota meter | `agent-notify install-antigravity` |
 | **opencode** (beta) | ✅ | ✅ (permission requests) | ✅ | Token & cost usage | `agent-notify install-opencode` |

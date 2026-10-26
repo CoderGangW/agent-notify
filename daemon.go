@@ -479,6 +479,20 @@ func (s *daemonState) serve() {
 		s.add(ev)
 		w.WriteHeader(http.StatusNoContent)
 	})
+	// claude-hook serves Claude Code's http-type hooks (the Windows prompt
+	// and pre-tool events; see claudeHookEntry) — the same JSON a command
+	// hook reads from stdin. Always an empty 2xx: Claude Code reads that as
+	// success, so this can never block a prompt or a tool call.
+	mux.HandleFunc("/claude-hook", func(w http.ResponseWriter, r *http.Request) {
+		var in hookInput
+		if r.Method == http.MethodPost && json.NewDecoder(r.Body).Decode(&in) == nil &&
+			!loadConfig().DisableLiveStatus {
+			if u, ok := claudeLiveUpdate(in, "", muxRef{}); ok {
+				s.applySessionUpdate(u)
+			}
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	// token/cost aggregates posted by the opencode plugin (see opencode.go)
 	mux.HandleFunc("/opencode-usage", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -532,6 +546,14 @@ func localOnly(h http.Handler) http.Handler {
 
 func (s *daemonState) add(ev Event) {
 	s.mu.Lock()
+	if ev.Turn != "" { // one turn, two reporters (Codex notify + hook while migrating)
+		for _, e := range s.events {
+			if e.Turn == ev.Turn && e.SessionID == ev.SessionID && e.Source == ev.Source {
+				s.mu.Unlock()
+				return
+			}
+		}
+	}
 	mode := s.notifyMode
 	s.events = append([]Event{ev}, s.events...)
 	if len(s.events) > maxEvents {
@@ -598,6 +620,7 @@ func computeSetup() setupStatus {
 				Hooks []struct {
 					Command string   `json:"command"`
 					Args    []string `json:"args"`
+					URL     string   `json:"url"`
 				} `json:"hooks"`
 			} `json:"hooks"`
 		}
@@ -605,7 +628,7 @@ func computeSetup() setupStatus {
 			for _, entries := range settings.Hooks {
 				for _, e := range entries {
 					for _, h := range e.Hooks {
-						if isOurCommand(strings.TrimSpace(h.Command + " " + strings.Join(h.Args, " "))) {
+						if isOurHookFields(h.Command, h.Args, h.URL) {
 							st.Hooks = true
 						}
 					}

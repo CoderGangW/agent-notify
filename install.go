@@ -51,27 +51,50 @@ func saveSettings(path string, settings map[string]any) {
 	}
 }
 
-// claudeHookEntry is our settings.json hook for exe. Windows gets exec
-// form (command + args, no shell, Claude Code ≥2.1.139): without Git for
-// Windows, Claude Code runs shell-form hooks in PowerShell, where a quoted
-// path followed by an argument is a parse error — and since 2.1.299 a
-// failing PreToolUse hook blocks every tool call.
-func claudeHookEntry(exe string) map[string]any {
+// claudeHookEvents are the Claude Code events we register.
+var claudeHookEvents = []string{"Stop", "Notification", "UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionEnd"}
+
+// claudeHookEntry is our settings.json hook for exe on event.
+//
+// Windows gets exec form (command + args, no shell, Claude Code ≥2.1.139):
+// without Git for Windows, Claude Code runs shell-form hooks in
+// PowerShell, where a quoted path followed by an argument is a parse
+// error — and since 2.1.299 a failing PreToolUse hook blocks every tool
+// call. The two events that can block go further, as http hooks
+// (≥2.1.63): Cursor CLI imports Claude hooks and, launched from Git Bash,
+// crashes its own hook wrapper with exit 2 — "block" for prompts and tool
+// calls — but it skips entries without a command. They also spare a
+// process spawn on every tool call. A failed http hook never blocks.
+func claudeHookEntry(exe, event string) map[string]any {
 	if runtime.GOOS == "windows" {
+		if event == "UserPromptSubmit" || event == "PreToolUse" {
+			return map[string]any{"type": "http", "url": claudeHookURL(), "timeout": 5}
+		}
 		return map[string]any{"type": "command", "command": exe, "args": []any{"hook"}}
 	}
 	return map[string]any{"type": "command", "command": fmt.Sprintf("%q hook", exe)}
 }
 
-// isOurHook reports whether a settings.json hook (shell or exec form) is ours.
+func claudeHookURL() string { return fmt.Sprintf("http://127.0.0.1:%d/claude-hook", daemonPort) }
+
+// isOurHook reports whether a settings.json hook (shell, exec or http
+// form) is ours.
 func isOurHook(hm map[string]any) bool {
 	cmd, _ := hm["command"].(string)
-	args, _ := hm["args"].([]any)
-	for _, a := range args {
+	url, _ := hm["url"].(string)
+	var args []string
+	for _, a := range func() []any { v, _ := hm["args"].([]any); return v }() {
 		s, _ := a.(string)
-		cmd += " " + s
+		args = append(args, s)
 	}
-	return isOurCommand(cmd)
+	return isOurHookFields(cmd, args, url)
+}
+
+func isOurHookFields(cmd string, args []string, url string) bool {
+	if strings.HasPrefix(url, "http://127.0.0.1:") && strings.HasSuffix(url, "/claude-hook") {
+		return true
+	}
+	return isOurCommand(strings.TrimSpace(cmd + " " + strings.Join(args, " ")))
 }
 
 // isOurCommand reports whether a hook command string belongs to claude-notify.
@@ -151,8 +174,6 @@ func installBinary(exe string) string {
 // registerHooks points our hooks at exe, returning how many entries were
 // added or repointed (0,0 = already correct).
 func registerHooks(exe string) (added, updated int) {
-	want := claudeHookEntry(exe)
-	wantJSON, _ := json.Marshal(want)
 	path := settingsPath()
 	settings := loadSettings(path)
 
@@ -162,7 +183,9 @@ func registerHooks(exe string) (added, updated int) {
 		settings["hooks"] = hooks
 	}
 
-	for _, event := range []string{"Stop", "Notification", "UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionEnd"} {
+	for _, event := range claudeHookEvents {
+		want := claudeHookEntry(exe, event)
+		wantJSON, _ := json.Marshal(want)
 		entries := hookEntries(hooks, event)
 		found := false
 		for _, e := range entries {
@@ -174,13 +197,11 @@ func registerHooks(exe string) (added, updated int) {
 					continue
 				}
 				found = true
-				// repoint an old binary path or command form at this one
-				cur := map[string]any{"type": hm["type"], "command": hm["command"]}
-				if a, ok := hm["args"]; ok {
-					cur["args"] = a
-				}
-				if b, _ := json.Marshal(cur); string(b) != string(wantJSON) {
-					delete(hm, "args")
+				// repoint an old binary path or hook form at this one
+				if b, _ := json.Marshal(hm); string(b) != string(wantJSON) {
+					for k := range hm {
+						delete(hm, k)
+					}
 					for k, v := range want {
 						hm[k] = v
 					}
@@ -190,7 +211,7 @@ func registerHooks(exe string) (added, updated int) {
 		}
 		if !found {
 			entries = append(entries, map[string]any{
-				"hooks": []any{claudeHookEntry(exe)},
+				"hooks": []any{want},
 			})
 			hooks[event] = entries
 			added++
@@ -265,6 +286,9 @@ func runUninstall() {
 	if uninstallCodexHook() {
 		fmt.Printf(T("codex.uninstalled")+"\n", codexConfigPath())
 	}
+	if uninstallCodexHooks() {
+		fmt.Printf(T("codex.uninstalled")+"\n", codexHooksPath())
+	}
 
 	path := settingsPath()
 	settings := loadSettings(path)
@@ -275,7 +299,7 @@ func runUninstall() {
 	}
 
 	removed := 0
-	for _, event := range []string{"Stop", "Notification", "UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionEnd"} {
+	for _, event := range claudeHookEvents {
 		entries := hookEntries(hooks, event)
 		var kept []any
 		for _, e := range entries {

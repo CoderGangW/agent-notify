@@ -29,6 +29,9 @@ func setupCodexHome(t *testing.T, config string) string {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows; else tests clobber the real ~\.codex
 	t.Setenv("LOCALAPPDATA", "")
+	t.Setenv("CODEX_HOME", "")
+	codexMode = "notify" // these cover the legacy notify path; codexhooks_test.go the hooks one
+	t.Cleanup(func() { codexMode = "" })
 	if config != "" {
 		if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
 			t.Fatal(err)

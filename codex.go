@@ -44,7 +44,11 @@ const codexRelayEnv = "AGENT_NOTIFY_CODEX_RELAY"
 // runCodexHook is invoked by Codex as `agent-notify codex-hook <json>`.
 func runCodexHook() {
 	defer os.Exit(0)
-	if len(os.Args) < 3 || os.Getenv(codexRelayEnv) != "" {
+	if os.Getenv(codexRelayEnv) != "" {
+		return
+	}
+	if len(os.Args) < 3 { // hooks.json mode: the event JSON is on stdin
+		runCodexStdinHook()
 		return
 	}
 	payload := os.Args[2]
@@ -55,6 +59,7 @@ func runCodexHook() {
 	var n struct {
 		Type          string   `json:"type"`
 		ThreadID      string   `json:"thread-id"`
+		TurnID        string   `json:"turn-id"`
 		CWD           string   `json:"cwd"`
 		InputMessages []string `json:"input-messages"`
 		Last          string   `json:"last-assistant-message"`
@@ -86,6 +91,7 @@ func runCodexHook() {
 		// thread-id keys the event like a session id: the Windows toast
 		// click-to-focus path looks the event up by it
 		SessionID: n.ThreadID,
+		Turn:      n.TurnID, // a hook for the same turn may report too while migrating
 		CWD:       cwd,
 		Kind:      "done",
 		Source:    "codex",
@@ -243,9 +249,13 @@ func writeCodexConfig(lines []string) error {
 	return os.WriteFile(codexConfigPath(), []byte(out), 0o644)
 }
 
-// codexHooked reports whether ~/.codex/config.toml's top-level notify slot
-// runs our hook.
+// codexHooked reports whether Codex calls us: our hooks.json handler, or
+// the config.toml notify slot.
 func codexHooked() bool {
+	return codexHooksInstalled() || codexNotifyHooked()
+}
+
+func codexNotifyHooked() bool {
 	_, idx, _, argv, err := readCodexNotify()
 	return idx >= 0 && err == nil && (isOurCodexArgv(argv) || codexWrapsUs(argv))
 }
@@ -259,6 +269,14 @@ func installCodexHook() error {
 	}
 	exe, _ = filepath.EvalSymlinks(exe)
 	exe = installBinary(exe)
+	if codexHooksCapable() {
+		if err := installCodexHooks(exe); err != nil {
+			return err
+		}
+		// hand the notify slot back: with both, every turn would notify twice
+		uninstallCodexHook()
+		return nil
+	}
 	ourArgv := []string{exe, "codex-hook"}
 	line := codexNotifyValue(ourArgv)
 
@@ -321,6 +339,18 @@ var (
 )
 
 func codexRepairHook() {
+	if codexHooksInstalled() {
+		// hooks mode: an untrusted hook silently never runs — re-trust it
+		// after a config.toml rewrite or a regrouped hooks.json
+		if !codexTrustOK() {
+			reinstallOnce(codexHooksPath(), installCodexHook)
+		}
+		return
+	}
+	if codexNotifyHooked() && codexHooksCapable() {
+		reinstallOnce(codexConfigPath(), installCodexHook) // notify → hooks, once
+		return
+	}
 	_, idx, _, argv, err := readCodexNotify()
 	if idx < 0 || err != nil || len(argv) == 0 {
 		return // slot empty or unparsable: nothing to reclaim safely

@@ -115,36 +115,8 @@ func runHook() {
 			return
 		}
 	}
-	// UserPromptSubmit is once per user message, so it can afford the same
-	// title resolution the notifications use.
-	switch in.HookEventName {
-	case "PreToolUse", "PostToolUse", "SessionEnd":
-		kind := map[string]string{
-			"PreToolUse":  "pretool",
-			"PostToolUse": "posttool",
-			"SessionEnd":  "end",
-		}[in.HookEventName]
-		postSession(sessionUpdate{
-			SessionID: in.SessionID, CWD: in.CWD, Kind: kind,
-			Tool: in.ToolName, Detail: toolDetail(in.ToolInput),
-			Activate: hostBundle,
-		})
-		return
-	case "UserPromptSubmit":
-		pInfo := transcriptInfo(in.TranscriptPath)
-		pTitle := pInfo.Title
-		if vs, _ := vscodeTitle(in.SessionID); vs != "" {
-			pTitle = vs
-		}
-		if n := sessionName(in.SessionID); n != "" {
-			pTitle = n
-		}
-		postSession(sessionUpdate{
-			SessionID: in.SessionID, CWD: in.CWD, Kind: "prompt",
-			Prompt: cleanPrompt(in.Prompt), Activate: hostBundle,
-			Title: pTitle, Branch: pInfo.Branch, Model: pInfo.Model,
-			Mux: mux,
-		})
+	if u, ok := claudeLiveUpdate(in, hostBundle, mux); ok {
+		postSession(u)
 		return
 	}
 
@@ -219,6 +191,43 @@ func cleanPrompt(s string) string {
 }
 
 var utf8BOM = []byte("\xef\xbb\xbf")
+
+// claudeLiveUpdate maps a live-status event (prompt, tool use, session
+// end) to its session update; ok=false for every other event. Shared by
+// the command hook and the daemon's /claude-hook endpoint (http hooks).
+func claudeLiveUpdate(in hookInput, hostBundle string, mux muxRef) (sessionUpdate, bool) {
+	switch in.HookEventName {
+	case "PreToolUse", "PostToolUse", "SessionEnd":
+		kind := map[string]string{
+			"PreToolUse":  "pretool",
+			"PostToolUse": "posttool",
+			"SessionEnd":  "end",
+		}[in.HookEventName]
+		return sessionUpdate{
+			SessionID: in.SessionID, CWD: in.CWD, Kind: kind,
+			Tool: in.ToolName, Detail: toolDetail(in.ToolInput),
+			Activate: hostBundle,
+		}, true
+	case "UserPromptSubmit":
+		// once per user message, so it can afford the same title
+		// resolution the notifications use
+		pInfo := transcriptInfo(in.TranscriptPath)
+		pTitle := pInfo.Title
+		if vs, _ := vscodeTitle(in.SessionID); vs != "" {
+			pTitle = vs
+		}
+		if n := sessionName(in.SessionID); n != "" {
+			pTitle = n
+		}
+		return sessionUpdate{
+			SessionID: in.SessionID, CWD: in.CWD, Kind: "prompt",
+			Prompt: cleanPrompt(in.Prompt), Activate: hostBundle,
+			Title: pTitle, Branch: pInfo.Branch, Model: pInfo.Model,
+			Mux: mux,
+		}, true
+	}
+	return sessionUpdate{}, false
+}
 
 // readHookStdin reads a hook's JSON payload. Windows PowerShell 5.1 hook
 // wrappers (Cursor, Gemini) prefix a UTF-8 BOM that json.Unmarshal rejects.
