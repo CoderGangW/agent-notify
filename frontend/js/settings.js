@@ -169,6 +169,7 @@ function renderSettings(cfg) {
   ddNotify.set(nm);
   updateNotifyDesc(nm);
   $("sw-live").classList.toggle("on", !cfg.disableLiveStatus);
+  $("sw-traybadge").classList.toggle("on", !cfg.disableTrayBadge);
   $("sw-update").classList.toggle("on", !cfg.disableAutoUpdate);
   $("sw-autostart").classList.toggle("on", !cfg.disableAutostart);
 }
@@ -205,6 +206,7 @@ function bindSwitch(id, build) {
   });
 }
 bindSwitch("sw-live", (on) => ({ disableLiveStatus: !on }));
+bindSwitch("sw-traybadge", (on) => ({ disableTrayBadge: !on }));
 bindSwitch("sw-update", (on) => ({ disableAutoUpdate: !on }));
 bindSwitch("sw-autostart", (on) => ({ autostart: on }));
 $("reset-onboarding").addEventListener("click", () => {

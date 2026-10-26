@@ -45,7 +45,7 @@ async function refresh() {
       const b = $("badge-" + a.id);
       if (!b) continue;
       const n = (st.unread || {})[a.id] || 0;
-      const txt = badgesOn() && n > 0 ? String(n) : "";
+      const txt = badgesOn() && n > 0 ? badgeText(n) : "";
       if (b.textContent !== txt) {
         b.textContent = txt;
         badgeChanged = true;

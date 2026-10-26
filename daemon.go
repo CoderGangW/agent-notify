@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -567,7 +566,7 @@ func (s *daemonState) add(ev Event) {
 	s.refreshBadge()
 }
 
-// refreshBadge mirrors the unread count next to the macOS tray icon.
+// refreshBadge mirrors the unread count as a red chip on the macOS tray icon.
 func (s *daemonState) refreshBadge() {
 	if runtime.GOOS != "darwin" {
 		return
@@ -580,11 +579,10 @@ func (s *daemonState) refreshBadge() {
 	for _, n := range unread {
 		total += n
 	}
-	label := ""
-	if total > 0 && modeBadges(mode) {
-		label = strconv.Itoa(total)
+	if !modeBadges(mode) || loadConfig().DisableTrayBadge {
+		total = 0
 	}
-	s.tray.SetLabel(label)
+	nativeTrayBadge(total) // red count chip on the menu-bar icon
 }
 
 // setupStatus reports what first-run setup accomplished, for the welcome
@@ -1020,6 +1018,7 @@ func (s *daemonState) assetHandler() http.Handler {
 		var req struct {
 			Muted             *bool     `json:"muted"`      // legacy on/off
 			NotifyMode        *string   `json:"notifyMode"` // 4-level mode
+			DisableTrayBadge  *bool     `json:"disableTrayBadge"`
 			Lang              *string   `json:"lang"`
 			DefaultTab        *string   `json:"defaultTab"`
 			DisableAutoUpdate *bool     `json:"disableAutoUpdate"`
@@ -1039,6 +1038,10 @@ func (s *daemonState) assetHandler() http.Handler {
 				m = "quiet"
 			}
 			req.NotifyMode = &m
+		}
+		if req.DisableTrayBadge != nil {
+			c.DisableTrayBadge = *req.DisableTrayBadge
+			defer s.refreshBadge() // deferred: runs after saveConfig below
 		}
 		if req.NotifyMode != nil {
 			switch *req.NotifyMode {

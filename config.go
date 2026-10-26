@@ -15,6 +15,7 @@ type config struct {
 	DisableLiveStatus bool     `json:"disableLiveStatus,omitempty"` // skip live session updates
 	Theme             string   `json:"theme,omitempty"`             // "auto" (default) | "light" | "dark"
 	DisableAutostart  bool     `json:"disableAutostart,omitempty"`  // don't (re)register login autostart
+	DisableTrayBadge  bool     `json:"disableTrayBadge,omitempty"`  // no red unread chip on the menu-bar icon (macOS)
 	Agents            []string `json:"agents"`                      // enabled agent tabs; nil = legacy default pair, [] = none chosen
 	NotifyMode        string   `json:"notifyMode,omitempty"`        // "on" | "alerts" | "quiet" | "silent"; "" = on
 	PermsRequested    bool     `json:"permsRequested,omitempty"`    // first-run OS permission prompts already fired

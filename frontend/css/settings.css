@@ -97,3 +97,6 @@
 .switch.on { background: var(--accent); }
 .switch.on::after { transform: translateX(14px); background: var(--on-accent); }
 #settings-btn.active { color: var(--accent); background: var(--accent-soft); }
+
+/* the menu-bar chip only exists on macOS (html.mac set by js/shape.js) */
+html:not(.mac) #row-traybadge { display: none; }

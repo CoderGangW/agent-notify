@@ -1,5 +1,8 @@
 "use strict";
 
+// badge counts cap at one digit ("9+"), like the menu-bar chip
+const badgeText = (n) => (n > 9 ? "9+" : String(n));
+
 function fmtTokens(n) {
   if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";
   if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";

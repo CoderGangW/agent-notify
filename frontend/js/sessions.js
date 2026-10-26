@@ -64,7 +64,7 @@ function renderSessions(all) {
   );
   $("sess-badge").textContent = "";
   const busy = sessions.filter((s) => s.state === "tool" || s.state === "working").length;
-  if (busy > 0) $("sess-badge").textContent = String(busy);
+  if (busy > 0) $("sess-badge").textContent = badgeText(busy);
   if (subTab !== "sessions") return;
   const total = sessions.length; // badge/empty-copy still speak for the full list
   if (searchOpen) sessions = sessions.filter(sessSearchPass);

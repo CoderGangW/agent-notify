@@ -213,6 +213,8 @@
   "set.tab": "默认标签",
   "set.theme": "主题",
   "set.title": "设置",
+  "set.traybadge": "菜单栏徽标",
+  "set.traybadge.d": "在菜单栏图标上以红色徽标显示未读数",
   "set.update": "更新通知",
   "set.update.d": "定期检查新版本并通知（安装需手动）",
   "state.idle": "空闲",

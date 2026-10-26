@@ -2,7 +2,7 @@
 
 function renderEvents(events, unread) {
   const tabUnread = (unread || {})[currentTab || "claude"] || 0;
-  $("done-badge").textContent = badgesOn() && tabUnread > 0 ? String(tabUnread) : "";
+  $("done-badge").textContent = badgesOn() && tabUnread > 0 ? badgeText(tabUnread) : "";
   if (subTab !== "events") return;
   const list = $("events");
   const empty = $("empty");

@@ -213,6 +213,8 @@
   "set.tab": "Default tab",
   "set.theme": "Theme",
   "set.title": "Settings",
+  "set.traybadge": "Menu bar badge",
+  "set.traybadge.d": "Show the unread count as a red chip on the menu bar icon",
   "set.update": "Update notifications",
   "set.update.d": "Check for new releases periodically and notify (installing stays manual)",
   "state.idle": "idle",

@@ -213,6 +213,8 @@
   "set.tab": "기본 탭",
   "set.theme": "테마",
   "set.title": "설정",
+  "set.traybadge": "메뉴바 알림 칩",
+  "set.traybadge.d": "미확인 알림 개수를 메뉴바 아이콘 위 빨간 칩으로 표시",
   "set.update": "업데이트 알림",
   "set.update.d": "주기적으로 새 릴리즈를 확인해 알립니다 (설치는 수동)",
   "state.idle": "대기",
