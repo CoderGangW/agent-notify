@@ -14,15 +14,25 @@ package main
 
 // Our status item's button. Wails keeps the NSStatusItem private, but
 // status items live in NSStatusBarWindow instances owned by this app,
-// and we only ever create one.
+// and we only ever create one. The button sits at varying depth (macOS
+// 27.2: NSStatusBarContentView > NSView > NSStatusBarButton), so search
+// the whole subtree.
+// ponytail: only the real item on the main display gets the chip — the
+// system-drawn replicas on other displays' menu bars don't.
+static NSStatusBarButton *findButton(NSView *v) {
+	if ([v isKindOfClass:[NSStatusBarButton class]]) return (NSStatusBarButton *)v;
+	for (NSView *sub in v.subviews) {
+		NSStatusBarButton *b = findButton(sub);
+		if (b != nil) return b;
+	}
+	return nil;
+}
+
 static NSStatusBarButton *trayButton(void) {
 	for (NSWindow *w in [NSApp windows]) {
 		if (![NSStringFromClass([w class]) containsString:@"StatusBarWindow"]) continue;
-		NSView *v = w.contentView;
-		if ([v isKindOfClass:[NSStatusBarButton class]]) return (NSStatusBarButton *)v;
-		for (NSView *sub in v.subviews) {
-			if ([sub isKindOfClass:[NSStatusBarButton class]]) return (NSStatusBarButton *)sub;
-		}
+		NSStatusBarButton *b = findButton(w.contentView);
+		if (b != nil) return b;
 	}
 	return nil;
 }

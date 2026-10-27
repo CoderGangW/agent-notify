@@ -7,7 +7,10 @@
   letter-spacing: 0.06em; padding: 0 0 2px;
   border-bottom: 2px solid transparent;
   transition: color 0.2s, border-color 0.2s;
+  white-space: nowrap; flex-shrink: 0; /* never wrap the label onto two lines */
 }
+/* no live status for this agent (tabs.js applyTab): no session list */
+body.no-live .subtab[data-subtab="sessions"] { display: none; }
 .subtab.active { color: var(--text); border-color: var(--accent); }
 /* loader rotation lives inside the SVG (SMIL animateTransform) —
    see ICONS.loader; CSS transforms on svg rotate off-axis in WebKit */

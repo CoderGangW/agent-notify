@@ -19,7 +19,10 @@ type agentDef struct {
 	ID   string // event Source / tab id
 	Name string // display name
 	Beta bool
-	Bin  string // CLI binary for install detection
+	// NoLive: the integration only reports finished turns / requests, no
+	// prompt or tool events — there is no live session list to show.
+	NoLive bool
+	Bin    string // CLI binary for install detection
 
 	InstallCmd    string // shown to the user; we never run it
 	InstallCmdWin string // Windows override (PowerShell installer); "" = InstallCmd works there too
@@ -46,6 +49,7 @@ type agentPublic struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
 	Beta       bool   `json:"beta"`
+	Live       bool   `json:"live"`    // reports live session status (sessions sub-tab)
 	Enabled    bool   `json:"enabled"` // user-picked tab (settings)
 	Installed  bool   `json:"installed"`
 	LoggedIn   bool   `json:"loggedIn"`
@@ -102,6 +106,7 @@ var agentDefs = []agentDef{
 	},
 	{
 		ID: "codex", Name: "Codex", Bin: "codex",
+		NoLive:        true, // hooks only Stop + PermissionRequest
 		InstallCmd:    "npm install -g @openai/codex",
 		InstallCmdWin: `powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"`,
 		LoginCmd:      "codex login",
@@ -220,7 +225,7 @@ func agentList() []agentPublic {
 			install = a.InstallCmdWin
 		}
 		p := agentPublic{
-			ID: a.ID, Name: a.Name, Beta: a.Beta,
+			ID: a.ID, Name: a.Name, Beta: a.Beta, Live: !a.NoLive,
 			InstallCmd: install, LoginCmd: a.LoginCmd, Site: a.Site,
 			Installed: findCLI(a.Bin) != "",
 			LoggedIn:  true,

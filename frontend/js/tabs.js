@@ -121,9 +121,26 @@ $("tab-next").addEventListener("click", () => stepTabs(1));
 document.querySelector("#tabs .seg").addEventListener("scroll", updateTabArrows);
 window.addEventListener("resize", updateCarousel);
 
+// true while a no-live agent forced the events sub-tab
+let subTabForced = false;
+
 function applyTab() {
   // "" = no agent chosen: agent-scoped cards hide, the pick prompt shows
   document.body.dataset.agent = currentTab || "";
+  // agents without live status (Codex: only finished turns are hooked)
+  // have no session list — hide that sub-tab and land on events
+  const ag = agentById(currentTab);
+  const noLive = !!ag && ag.live === false;
+  document.body.classList.toggle("no-live", noLive);
+  if (noLive && subTab === "sessions") {
+    subTab = "events";
+    subTabForced = true;
+    applySubTab();
+  } else if (!noLive && subTabForced) {
+    subTabForced = false; // back on a live agent: restore the user's pick
+    subTab = "sessions";
+    applySubTab();
+  }
   const seg = document.querySelector("#tabs .seg");
   for (const b of seg.querySelectorAll(".tab")) {
     b.classList.toggle("active", b.dataset.tab === currentTab);
@@ -167,8 +184,8 @@ function renderAgentSetup() {
     !hooked ? "hook" : "";
   card.classList.toggle("setup-mode", !!mode);
   panel.classList.toggle("hidden", !mode);
-  // every non-Claude agent is beta: tag the card, not the tab button
-  $("beta-chip").classList.toggle("hidden", !a || a.id === "claude");
+  // BETA follows the registry flag (Codex isn't beta), shown in the card
+  $("beta-chip").classList.toggle("hidden", !a || !a.beta);
   if (!mode) {
     panel.dataset.mode = "";
     return;
@@ -203,7 +220,7 @@ function renderAgentSetup() {
   const title = document.createElement("div");
   title.className = "setup-title";
   title.textContent = t("agent." + mode).replace("{name}", a.name);
-  if (a.id !== "claude") {
+  if (a.beta) {
     const bc = document.createElement("span");
     bc.className = "beta-chip";
     bc.textContent = "BETA";

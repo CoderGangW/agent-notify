@@ -80,6 +80,8 @@
 <script src="/js/shape.js"></script>
 <script>
 "use strict";
+// see js/core.js: no Wails runtime here, so announce ready for ExecJS
+(window.webkit?.messageHandlers?.external || window.chrome?.webview)?.postMessage("wails:runtime:ready");
 // tiny standalone i18n: the menu window doesn't share the dashboard's JS
 let mdict = {};
 const mt = (k) => mdict[k] || k;

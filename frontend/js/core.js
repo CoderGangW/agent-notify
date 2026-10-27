@@ -1,5 +1,11 @@
 "use strict";
 
+// We don't load the Wails JS runtime, and it's the runtime that normally
+// announces "wails:runtime:ready" — until that message arrives Wails parks
+// every Go-side ExecJS in a queue that never drains (winIn/winOut, cleaner
+// window reuse, …). Announce it ourselves, same as the runtime does.
+(window.webkit?.messageHandlers?.external || window.chrome?.webview)?.postMessage("wails:runtime:ready");
+
 const $ = (id) => document.getElementById(id);
 
 // ---- custom tooltip: near-instant, animated, viewport-clamped ----
