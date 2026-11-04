@@ -62,6 +62,14 @@ func (s *daemonState) unreadLocked() map[string]int {
 }
 
 func runDaemon() {
+	// Single instance, checked BEFORE the tray exists. Two launch paths
+	// can overlap (launchd job + a LaunchServices open of the .app); the
+	// loser used to show a second tray icon, fail to bind for ~5s, exit 1,
+	// and get respawned by KeepAlive — a menu bar icon blinking forever.
+	// Exit 0 so KeepAlive (SuccessfulExit=false) leaves it down.
+	if otherDaemonAlive() {
+		os.Exit(0)
+	}
 	// fresh install (no config yet): start with no agents chosen — the
 	// window shows the pick-your-agents state and the tour runs on mock
 	// data. Upgraders (config without the agents key) keep the legacy
@@ -395,6 +403,29 @@ func (s *daemonState) showWindow() {
 	}
 }
 
+// otherDaemonAlive reports a live agent-notify already answering /ping.
+// A restart handoff spawns us while the old process is still exiting, so
+// only a peer that keeps answering for ~2s counts; the first miss means
+// the port is (about to be) free and serve's bind-retry takes over.
+func otherDaemonAlive() bool {
+	client := http.Client{Timeout: 400 * time.Millisecond}
+	for i := 0; i < 4; i++ {
+		if i > 0 {
+			time.Sleep(500 * time.Millisecond)
+		}
+		resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/ping", daemonPort))
+		if err != nil {
+			return false
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if strings.TrimSpace(string(body)) != "ok" {
+			return false
+		}
+	}
+	return true
+}
+
 // serve accepts events from hook processes on the fixed localhost port.
 func (s *daemonState) serve() {
 	mux := http.NewServeMux()
@@ -637,8 +668,7 @@ func computeSetup() setupStatus {
 	if home, err := os.UserHomeDir(); err == nil {
 		switch runtime.GOOS {
 		case "darwin":
-			_, err := os.Stat(filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist"))
-			st.Autostart = err == nil
+			st.Autostart = macAutostartOn()
 		case "windows":
 			// firstRunSetup rewrites the Run entry every start while enabled
 			st.Autostart = !loadConfig().DisableAutostart
@@ -698,6 +728,11 @@ func (s *daemonState) assetHandler() http.Handler {
 			setupMu.Unlock()
 		}
 		cfg := loadConfig()
+		if runtime.GOOS == "darwin" {
+			// the toggle mirrors System Settings, not just our config: a
+			// user can switch the agent off under Allow in the Background
+			cfg.DisableAutostart = !macAutostartOn()
+		}
 		s.mu.Lock()
 		resp := struct {
 			Events      []Event        `json:"events"`
@@ -1107,6 +1142,11 @@ func (s *daemonState) assetHandler() http.Handler {
 				if bin := installDest(); bin != "" {
 					_ = installAutostart(bin, false)
 				}
+				// switched off in System Settings: only the user can flip it
+				// back there, so take them to the switch
+				if runtime.GOOS == "darwin" && !macAutostartOn() {
+					openLoginItems()
+				}
 			} else {
 				removeAutostartFiles()
 			}
@@ -1115,6 +1155,10 @@ func (s *daemonState) assetHandler() http.Handler {
 			setupMu.Unlock()
 		}
 		saveConfig(c)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/login-items", func(w http.ResponseWriter, r *http.Request) {
+		openLoginItems()
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
@@ -1146,6 +1190,9 @@ func (s *daemonState) assetHandler() http.Handler {
 			c.DisableAutostart = false
 			saveConfig(c)
 			err = installAutostart(bin, false)
+			if err == nil && runtime.GOOS == "darwin" && !macAutostartOn() {
+				openLoginItems()
+			}
 		case "notifperm":
 			// prompts while undecided; once denied only System Settings can
 			// flip it back, so open the Notifications pane

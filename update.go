@@ -53,7 +53,18 @@ func (s *daemonState) autoUpdateLoop() {
 type releaseInfo struct {
 	Latest    string // version without the v prefix
 	AssetURL  string // download url for this platform, "" if missing
+	AppZipURL string // macOS: the signed .app bundle zip, "" if missing
 	Available bool
+}
+
+// appZipAsset picks the signed macOS bundle out of a release's assets.
+func appZipAsset(assets []releaseAsset) string {
+	for _, a := range assets {
+		if a.Name == "agent-notify-macos-universal.app.zip" {
+			return a.URL
+		}
+	}
+	return ""
 }
 
 // platformAsset picks this platform's binary out of a release's assets.
@@ -105,8 +116,9 @@ func listReleases(limit int) ([]releaseInfo, error) {
 	out := make([]releaseInfo, 0, len(rels))
 	for _, rel := range rels {
 		info := releaseInfo{
-			Latest:   strings.TrimPrefix(rel.TagName, "v"),
-			AssetURL: platformAsset(rel.Assets),
+			Latest:    strings.TrimPrefix(rel.TagName, "v"),
+			AssetURL:  platformAsset(rel.Assets),
+			AppZipURL: appZipAsset(rel.Assets),
 		}
 		if info.AssetURL != "" {
 			out = append(out, info)
@@ -141,6 +153,7 @@ func checkUpdate() (releaseInfo, error) {
 	info.Latest = strings.TrimPrefix(rel.TagName, "v")
 	info.Available = versionNewer(info.Latest, version)
 	info.AssetURL = platformAsset(rel.Assets)
+	info.AppZipURL = appZipAsset(rel.Assets)
 	return info, nil
 }
 
@@ -182,15 +195,24 @@ func applyUpdate(info releaseInfo, restartOK bool) (bool, error) {
 		return false, err
 	}
 	// launchd may exec the app-bundle copy (nicer Login Items entry):
-	// keep it in sync and ad-hoc re-sign so the bundle stays launchable.
+	// keep it in sync. Swap in the release's signed bundle whole; only if
+	// that fails, patch the binary in and ad-hoc re-sign (which drops the
+	// release signature — see swapAppBundle).
 	if runtime.GOOS == "darwin" {
 		if _, err := os.Stat(appBundleBin); err == nil {
-			if data, err := os.ReadFile(target); err == nil {
-				btmp := appBundleBin + ".new"
-				if os.WriteFile(btmp, data, 0o755) == nil && os.Rename(btmp, appBundleBin) == nil {
-					_ = exec.Command("codesign", "--force", "-s", "-",
-						"--identifier", "com.codergangw.claude-notify",
-						"/Applications/agent-notify.app").Run()
+			swapErr := fmt.Errorf("release has no app bundle")
+			if info.AppZipURL != "" {
+				swapErr = swapAppBundle(info.AppZipURL, info.Latest, appBundlePath())
+			}
+			if swapErr != nil {
+				fmt.Println("bundle swap failed, patching in place:", swapErr)
+				if data, err := os.ReadFile(target); err == nil {
+					btmp := appBundleBin + ".new"
+					if os.WriteFile(btmp, data, 0o755) == nil && os.Rename(btmp, appBundleBin) == nil {
+						_ = exec.Command("codesign", "--force", "-s", "-",
+							"--identifier", "com.codergangw.claude-notify",
+							appBundlePath()).Run()
+					}
 				}
 			}
 		}
@@ -241,6 +263,49 @@ func applyUpdate(info releaseInfo, restartOK bool) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// appBundlePath is the installed bundle, /Applications/agent-notify.app.
+func appBundlePath() string {
+	return filepath.Dir(filepath.Dir(filepath.Dir(appBundleBin)))
+}
+
+// swapAppBundle replaces bundle with the release's signed .app. Taking
+// the bundle whole keeps the release signature and its team ID: patching
+// the binary inside and ad-hoc re-signing dropped it, so the TCC identity
+// shifted every update and Login Items listed "Unknown Developer".
+func swapAppBundle(zipURL, want, bundle string) error {
+	parent := filepath.Dir(bundle) // stage beside it so the swap is a rename
+	zip, err := downloadTo(zipURL, parent)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(zip)
+	stage, err := os.MkdirTemp(parent, ".agent-notify-update-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(stage) // takes the old bundle with it
+	if out, err := exec.Command("ditto", "-x", "-k", zip, stage).CombinedOutput(); err != nil {
+		return fmt.Errorf("unzip: %v: %s", err, out)
+	}
+	fresh := filepath.Join(stage, "agent-notify.app")
+	if out, err := exec.Command("codesign", "--verify", "--strict", fresh).CombinedOutput(); err != nil {
+		return fmt.Errorf("bundle signature: %v: %s", err, out)
+	}
+	out, err := exec.Command(filepath.Join(fresh, "Contents", "MacOS", "agent-notify"), "version").Output()
+	if err != nil || !strings.Contains(string(out), want) {
+		return fmt.Errorf("bundle failed verification (%v: %q)", err, out)
+	}
+	old := filepath.Join(stage, "old.app")
+	if err := os.Rename(bundle, old); err != nil {
+		return err
+	}
+	if err := os.Rename(fresh, bundle); err != nil {
+		_ = os.Rename(old, bundle)
+		return err
+	}
+	return nil
 }
 
 // installDest mirrors installBinary's target path.

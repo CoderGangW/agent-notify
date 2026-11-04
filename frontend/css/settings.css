@@ -44,6 +44,15 @@
 .set-row small {
   display: block; color: var(--dim); font-size: 10px; margin-top: 1px;
 }
+.mac-only { display: none !important; }
+html.mac .mac-only { display: block !important; }
+.link-btn {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--accent); font-size: inherit;
+  text-decoration: underline; text-underline-offset: 2px;
+  transition: opacity 0.15s;
+}
+.link-btn:hover { opacity: 0.75; }
 /* custom dropdown */
 .dd { position: relative; }
 .dd-btn {

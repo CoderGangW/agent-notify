@@ -201,6 +201,8 @@
   "set.agents.d": "탭으로 표시할 에이전트 선택 (최소 1개)",
   "set.autostart": "로그인 시 자동 시작",
   "set.autostart.d": "로그인하면 데몬을 자동으로 실행합니다",
+  "set.autostart.mac": "시스템 설정 → 로그인 항목 → 백그라운드에서 허용에 표시됩니다.",
+  "set.autostart.open": "열기",
   "set.lang": "언어",
   "set.live": "실시간 세션 추적",
   "set.live.d": "활성 세션 탭의 상태 업데이트",

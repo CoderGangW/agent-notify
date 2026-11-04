@@ -201,6 +201,8 @@
   "set.agents.d": "Choose which agents get a tab (at least one)",
   "set.autostart": "Start at login",
   "set.autostart.d": "Launch the daemon automatically when you log in",
+  "set.autostart.mac": "Listed in System Settings → Login Items → Allow in the Background.",
+  "set.autostart.open": "Open",
   "set.lang": "Language",
   "set.live": "Live session tracking",
   "set.live.d": "Status updates for the Active sessions tab",

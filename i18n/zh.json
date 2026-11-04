@@ -201,6 +201,8 @@
   "set.agents.d": "选择显示为标签的代理（至少一个）",
   "set.autostart": "登录时自动启动",
   "set.autostart.d": "登录后自动运行守护进程",
+  "set.autostart.mac": "显示在 系统设置 → 登录项 → 允许在后台。",
+  "set.autostart.open": "打开",
   "set.lang": "语言",
   "set.live": "实时会话跟踪",
   "set.live.d": "活跃会话标签的状态更新",

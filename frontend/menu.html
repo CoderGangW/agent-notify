@@ -210,9 +210,13 @@ $id("m-quit").addEventListener("click", () => {
 
 // fit the window to the rendered content (labels differ per language)
 function fitWindow() {
-  // right/bottom, not width/height: on macOS the box sits below the dome
-  // strip (body padding-top from shape.js), which the window must include
-  const r = $id("menu").getBoundingClientRect();
+  // size + layout offset, so the dome strip above the box (body padding-top
+  // from shape.js) is included. Not rect.right/bottom: those move with the
+  // show/hide slide (body transform), and focus fires this mid-animation —
+  // the window came out short and clipped the last row.
+  const m = $id("menu");
+  const box = m.getBoundingClientRect();
+  const r = { right: m.offsetLeft + box.width, bottom: m.offsetTop + box.height };
   fetch("/api/menu-size", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

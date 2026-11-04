@@ -209,6 +209,7 @@ bindSwitch("sw-live", (on) => ({ disableLiveStatus: !on }));
 bindSwitch("sw-traybadge", (on) => ({ disableTrayBadge: !on }));
 bindSwitch("sw-update", (on) => ({ disableAutoUpdate: !on }));
 bindSwitch("sw-autostart", (on) => ({ autostart: on }));
+$("login-items-btn").addEventListener("click", () => post("/api/login-items"));
 $("reset-onboarding").addEventListener("click", () => {
   try {
     localStorage.removeItem("tutorialDone");

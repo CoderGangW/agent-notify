@@ -37,6 +37,13 @@ func installAutostart(exe string, start bool) error {
 		plist := filepath.Join(dir, launchdLabel+".plist")
 		logPath := filepath.Join(home, ".claude-notify", "daemon.log")
 		_ = os.MkdirAll(filepath.Dir(logPath), 0o755)
+		// Ties the agent to the app bundle so Login Items → Allow in the
+		// Background shows the app's name and icon (macOS 13+), not a
+		// bare-executable placeholder.
+		assoc := ""
+		if exe == appBundleBin {
+			assoc = "\n\t<key>AssociatedBundleIdentifiers</key><array><string>" + launchdLabel + "</string></array>"
+		}
 		// KeepAlive on crash only: quitting from the tray (exit 0) stays quit.
 		content := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -52,10 +59,10 @@ func installAutostart(exe string, start bool) error {
 	<key>KeepAlive</key>
 	<dict><key>SuccessfulExit</key><false/></dict>
 	<key>StandardOutPath</key><string>%s</string>
-	<key>StandardErrorPath</key><string>%s</string>
+	<key>StandardErrorPath</key><string>%s</string>%s
 </dict>
 </plist>
-`, launchdLabel, exe, logPath, logPath)
+`, launchdLabel, exe, logPath, logPath, assoc)
 		if err := os.WriteFile(plist, []byte(content), 0o644); err != nil {
 			return err
 		}
@@ -213,17 +220,25 @@ func autostartHealthy() bool {
 			return false
 		}
 		s := string(data)
+		// first <string> inside ProgramArguments (Label's comes earlier)
 		i := strings.Index(s, "<array>")
-		j := strings.Index(s, "</string>")
-		if i < 0 || j < 0 || j < i {
+		if i < 0 {
 			return false
 		}
-		prog := s[i:j]
+		prog := s[i:]
+		j := strings.Index(prog, "</string>")
+		if j < 0 {
+			return false
+		}
+		prog = prog[:j]
 		if k := strings.LastIndex(prog, "<string>"); k >= 0 {
 			prog = prog[k+len("<string>"):]
 		}
-		_, err = os.Stat(prog)
-		return err == nil
+		if _, err := os.Stat(prog); err != nil {
+			return false
+		}
+		// pre-AssociatedBundleIdentifiers plists get rewritten once
+		return prog != appBundleBin || strings.Contains(s, "AssociatedBundleIdentifiers")
 	case "windows":
 		// Always rewrite: `reg add /f` is idempotent and cheap, and a
 		// double-clicked download never ran `install`, so without this
@@ -234,6 +249,17 @@ func autostartHealthy() bool {
 		_, err := os.Stat(filepath.Join(home, ".config", "autostart", "agent-notify.desktop"))
 		return err == nil
 	}
+}
+
+// macAutostartOn reports the LaunchAgent as the user sees it in System
+// Settings: the plist exists AND its Allow in the Background switch is
+// on (switched off, BTM reports requiresApproval and launchd skips it).
+func macAutostartOn() bool {
+	p := homePath("Library", "LaunchAgents", launchdLabel+".plist")
+	if !fileExists(p) {
+		return false
+	}
+	return legacyAgentStatus(p) != loginItemOff
 }
 
 // startDaemonIfDown launches the daemon detached unless one already holds
