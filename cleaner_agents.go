@@ -367,7 +367,7 @@ func renameCodex(s cleanerSession, title string) error {
 // codexDetail reads the newest rollout: user_message / agent_message
 // events (or the item_completed items some builds write instead), the
 // model from turn_context, the branch from session_meta.
-func codexDetail(s cleanerSession) cleanerDetail {
+func codexDetail(s cleanerSession, all bool) cleanerDetail {
 	var d cleanerDetail
 	path := ""
 	for _, f := range s.Files {
@@ -375,7 +375,7 @@ func codexDetail(s cleanerSession) cleanerDetail {
 			path = f.Path // the walk lists a thread's rollouts oldest first
 		}
 	}
-	head, tail := headTail(path, 4<<20)
+	head, _ := headTail(path, 1<<20)
 	for _, line := range bytes.Split(head, []byte("\n")) {
 		var e struct {
 			Payload struct {
@@ -390,10 +390,13 @@ func codexDetail(s cleanerSession) cleanerDetail {
 		}
 	}
 	var events, items turnLog
+	tail, cut := logTail(path, all)
+	d.More = cut
 	for _, line := range bytes.Split(tail, []byte("\n")) {
 		var e struct {
-			Type    string `json:"type"`
-			Payload struct {
+			Timestamp string `json:"timestamp"`
+			Type      string `json:"type"`
+			Payload   struct {
 				Type    string `json:"type"`
 				Message string `json:"message"`
 				Model   string `json:"model"`
@@ -417,11 +420,11 @@ func codexDetail(s cleanerSession) cleanerDetail {
 		}
 		switch {
 		case e.Payload.Type == "user_message":
-			events.user(codexPrompt(e.Payload.Message))
+			events.user(codexPrompt(e.Payload.Message), e.Timestamp)
 		case e.Payload.Type == "agent_message":
 			events.reply(e.Payload.Message)
 		case e.Payload.Type == "item_completed" && e.Payload.Item.Type == "UserMessage":
-			items.user(codexPrompt(strings.Join(parts, " ")))
+			items.user(codexPrompt(strings.Join(parts, " ")), e.Timestamp)
 		case e.Payload.Type == "item_completed" && e.Payload.Item.Type == "AgentMessage":
 			items.reply(strings.Join(parts, "\n"))
 		}
@@ -429,7 +432,7 @@ func codexDetail(s cleanerSession) cleanerDetail {
 	if len(events) == 0 {
 		events = items
 	}
-	d.Turns = events.last()
+	events.fill(&d, all)
 	return d
 }
 
@@ -497,10 +500,11 @@ func geminiUserText(raw json.RawMessage) string {
 }
 
 type geminiMessage struct {
-	ID      string          `json:"id"`
-	Type    string          `json:"type"` // user | gemini | info | error …
-	Content json.RawMessage `json:"content"`
-	Model   string          `json:"model"`
+	ID        string          `json:"id"`
+	Timestamp string          `json:"timestamp"`
+	Type      string          `json:"type"` // user | gemini | info | error …
+	Content   json.RawMessage `json:"content"`
+	Model     string          `json:"model"`
 }
 
 func readGeminiMeta(path string) transcriptMeta {
@@ -672,7 +676,8 @@ func renameGemini(s cleanerSession, title string) error {
 	})
 }
 
-func geminiDetail(s cleanerSession) cleanerDetail {
+func geminiDetail(s cleanerSession, all bool) cleanerDetail {
+	var d cleanerDetail
 	var msgs []geminiMessage
 	p := geminiChat(s)
 	if strings.HasSuffix(p, ".json") {
@@ -683,7 +688,8 @@ func geminiDetail(s cleanerSession) cleanerDetail {
 		_ = json.Unmarshal(data, &r)
 		msgs = r.Messages
 	} else {
-		_, tail := headTail(p, 4<<20)
+		var tail []byte
+		tail, d.More = logTail(p, all)
 		at := map[string]int{} // a record written again (same id) replaces its first copy
 		for _, line := range bytes.Split(tail, []byte("\n")) {
 			var m geminiMessage
@@ -698,12 +704,11 @@ func geminiDetail(s cleanerSession) cleanerDetail {
 			msgs = append(msgs, m)
 		}
 	}
-	var d cleanerDetail
 	var l turnLog
 	for _, m := range msgs {
 		switch m.Type {
 		case "user":
-			l.user(geminiUserText(m.Content))
+			l.user(geminiUserText(m.Content), m.Timestamp)
 		case "gemini":
 			l.reply(geminiText(m.Content))
 			if m.Model != "" {
@@ -711,7 +716,7 @@ func geminiDetail(s cleanerSession) cleanerDetail {
 			}
 		}
 	}
-	d.Turns = l.last()
+	l.fill(&d, all)
 	return d
 }
 
@@ -898,8 +903,10 @@ func agyTranscriptPrompt(root, id string) string {
 	return ""
 }
 
-func agyDetail(s cleanerSession) cleanerDetail {
-	_, tail := headTail(agyLog(s.Root, s.SID), 4<<20)
+func agyDetail(s cleanerSession, all bool) cleanerDetail {
+	var d cleanerDetail
+	var tail []byte
+	tail, d.More = logTail(agyLog(s.Root, s.SID), all)
 	var l turnLog
 	for _, line := range bytes.Split(tail, []byte("\n")) {
 		var e agyStep
@@ -907,12 +914,13 @@ func agyDetail(s cleanerSession) cleanerDetail {
 			continue
 		}
 		if t := e.userText(); t != "" {
-			l.user(t)
+			l.user(t, "") // the steps carry no time
 		} else if e.Source == "MODEL" && e.Type == "PLANNER_RESPONSE" {
 			l.reply(e.Content)
 		}
 	}
-	return cleanerDetail{Turns: l.last()}
+	l.fill(&d, all)
+	return d
 }
 
 // renameAntigravity rewrites the annotation's title line, adding one (or
@@ -1179,33 +1187,39 @@ func renameOpencode(s cleanerSession, title string) error {
 		"' WHERE id IN ("+sqlIDs([]string{s.SID})+")")
 }
 
-// opencodeDetail: the session's newest 400 text parts (its subagent child
+// opencodeDetail: the session's newest text parts (its subagent child
 // sessions aside), oldest first, and the model of the latest reply.
-func opencodeDetail(s cleanerSession) cleanerDetail {
+func opencodeDetail(s cleanerSession, all bool) cleanerDetail {
 	db := opencodeDBOf(s)
 	schema, _ := opencodeSchema(db)
 	id := sqlIDs([]string{s.SID})
+	limit := 400
+	if all {
+		limit = 8000
+	}
 	q := `SELECT json_extract(m.data, '$.role') AS role, json_extract(p.data, '$.text') AS text,
- json_extract(m.data, '$.modelID') AS model
+ json_extract(m.data, '$.modelID') AS model, m.time_created AS at
 FROM part p JOIN message m ON p.message_id = m.id
 WHERE m.session_id IN (` + id + `) AND json_extract(p.data, '$.type') = 'text'
   AND NOT COALESCE(json_extract(p.data, '$.synthetic'), 0)
-ORDER BY m.time_created DESC, p.id DESC LIMIT 400`
+ORDER BY m.time_created DESC, p.id DESC LIMIT ` + strconv.Itoa(limit)
 	if schema.session == "session_v2" {
-		// ponytail: only v2 user rows were seen ($.text); replies are
-		// assumed to be shaped alike and just show empty if they aren't
+		// ponytail: only v2 user rows were seen ($.text, no time); replies
+		// are assumed to be shaped alike and just show empty if they aren't
 		q = `SELECT m.type AS role, json_extract(m.data, '$.text') AS text, json_extract(m.data, '$.modelID') AS model
-FROM session_message m WHERE m.session_id IN (` + id + `) ORDER BY m.seq DESC LIMIT 400`
+FROM session_message m WHERE m.session_id IN (` + id + `) ORDER BY m.seq DESC LIMIT ` + strconv.Itoa(limit)
 	}
 	var rows []struct {
 		Role  string  `json:"role"`
 		Text  *string `json:"text"`
 		Model *string `json:"model"`
+		At    int64   `json:"at"`
 	}
 	var d cleanerDetail
 	if sqliteRows(db, q, &rows) != nil {
 		return d
 	}
+	d.More = len(rows) == limit
 	var l turnLog
 	for i := len(rows) - 1; i >= 0; i-- {
 		text := ""
@@ -1214,7 +1228,11 @@ FROM session_message m WHERE m.session_id IN (` + id + `) ORDER BY m.seq DESC LI
 		}
 		switch rows[i].Role {
 		case "user":
-			l.user(text)
+			at := ""
+			if t := msTime(rows[i].At); !t.IsZero() {
+				at = t.Format(time.RFC3339)
+			}
+			l.user(text, at)
 		case "assistant":
 			l.reply(text)
 			if m := rows[i].Model; m != nil && *m != "" {
@@ -1222,7 +1240,7 @@ FROM session_message m WHERE m.session_id IN (` + id + `) ORDER BY m.seq DESC LI
 			}
 		}
 	}
-	d.Turns = l.last()
+	l.fill(&d, all)
 	return d
 }
 

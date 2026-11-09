@@ -80,7 +80,7 @@ svg { display: block; }
 .drop.open > .icon-btn { color: var(--accent); background: var(--accent-soft); }
 .menu { min-width: 280px; padding: 4px; }
 .menu .ctx-item { font-size: 12px; padding: 7px 9px; }
-.menu .ctx-item small { margin-left: auto; padding-left: 12px; color: var(--dim); font-size: 11px; }
+.menu .ctx-item small, #ctxmenu .ctx-item small { margin-left: auto; padding-left: 12px; color: var(--dim); font-size: 11px; }
 .ctx-item:disabled { opacity: 0.4; cursor: default; background: none; }
 .ctx-item.danger { color: var(--bad); }
 .ctx-item.danger svg { color: var(--bad); }
@@ -178,6 +178,9 @@ svg { display: block; }
 #thead .arr svg { width: 10px; height: 10px; }
 #thead button.on .arr { opacity: 1; }
 #thead button.asc .arr { transform: rotate(180deg); }
+/* select-all check over the rows' checks: same 18px inset as theirs */
+#thead .h-first { display: flex; align-items: center; gap: 10px; height: 100%; min-width: 0; padding-left: 6px; }
+#thead .h-first button { padding-left: 0; }
 
 #rows { flex: 1; overflow-y: auto; outline: none; padding: 4px 6px 12px; }
 /* virtualized: only rows near the viewport exist, placed by --y (cleaner.js) */
@@ -201,6 +204,26 @@ svg { display: block; }
 .row.on:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
 .row > div { padding: 0 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row .c-title { display: flex; align-items: center; gap: 10px; }
+/* selection check: a ring that fills in and pops a tick, Photos-style */
+.ck {
+  position: relative; flex-shrink: 0; width: 16px; height: 16px; border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--dim) 60%, transparent);
+  cursor: pointer; opacity: 0.5;
+  transition: opacity 0.15s, border-color 0.15s, background 0.18s, transform 0.12s;
+}
+.ck::after {
+  content: ""; position: absolute; left: 4px; top: 1.5px; width: 3.5px; height: 7.5px;
+  border: solid var(--on-accent); border-width: 0 1.8px 1.8px 0;
+  transform: rotate(45deg) scale(0); opacity: 0;
+  transition: transform 0.3s var(--spring), opacity 0.12s;
+}
+.row:hover .ck, #thead:hover .ck { opacity: 1; }
+.ck:hover { border-color: var(--accent); }
+.ck:active { transform: scale(0.86); }
+.row.on .ck, .ck.on, .ck.mixed { opacity: 1; background: var(--accent); border-color: var(--accent); }
+.row.on .ck::after, .ck.on::after { transform: rotate(45deg) scale(1); opacity: 1; }
+/* some rows: a dash instead of the tick */
+.ck.mixed::after { left: 3px; top: 5.6px; width: 7px; height: 0; border-width: 0 0 1.8px; transform: none; opacity: 1; }
 .src-ic {
   display: grid; place-items: center; flex-shrink: 0;
   width: 24px; height: 24px; border-radius: 7px;
@@ -229,7 +252,20 @@ svg { display: block; }
 .lock { color: var(--warn); flex-shrink: 0; }
 .lock svg { width: 11px; height: 11px; }
 .c-proj, .c-time { color: var(--dim); }
-.c-proj { direction: rtl; text-align: left; } /* ellipsis eats the path head, keeps the folder name */
+/* the project as a quiet chip (the inspector's is the loud one) */
+.pchip {
+  display: inline-flex; align-items: center; gap: 5px; max-width: 100%; vertical-align: middle;
+  height: 20px; padding: 0 8px 0 6px; border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--text); font-size: 11px; font-weight: 600;
+  transition: background 0.14s;
+}
+.pchip .pi { display: flex; color: var(--dim); }
+.pchip .pi svg { width: 11px; height: 11px; }
+.pchip .pn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row.on .pchip { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.c-proj.none .pchip { background: none; padding: 0; color: var(--dim); }
+.c-proj.none .pi { display: none; }
 .c-src { color: var(--c); font-weight: 600; }
 .c-size { text-align: right; font-variant-numeric: tabular-nums; }
 /* one source only (every agent but Claude): its column says nothing */
@@ -344,7 +380,21 @@ button.chip:active { transform: scale(0.96); }
 .t-skel i:nth-child(3) { width: 72%; }
 @keyframes skel { from { opacity: 0.45; } to { opacity: 1; } }
 .i-box { margin-top: 16px; background: var(--card); border: 1px solid var(--card-edge); border-radius: 10px; padding: 10px 11px; }
-.i-box h4 { font-size: 11px; font-weight: 700; color: var(--dim); margin-bottom: 7px; }
+.i-box h4 { display: flex; align-items: center; font-size: 11px; font-weight: 700; color: var(--dim); margin-bottom: 7px; }
+.h4-act {
+  display: inline-flex; align-items: center; gap: 2px; margin-left: auto; padding: 0;
+  border: none; background: none; color: var(--accent); font: inherit; cursor: pointer;
+}
+.h4-act svg { width: 10px; height: 10px; transform: rotate(-90deg); transition: transform 0.15s; }
+.h4-act:hover svg { transform: rotate(-90deg) translateY(2px); }
+/* a path that opens its folder */
+.link {
+  padding: 0; border: none; background: none; font: inherit; color: var(--text);
+  text-align: left; word-break: break-all; cursor: pointer;
+  text-decoration: underline dotted color-mix(in srgb, var(--dim) 70%, transparent); text-underline-offset: 3px;
+  transition: color 0.15s, text-decoration-color 0.15s;
+}
+.link:hover { color: var(--accent); text-decoration-color: var(--accent); }
 .i-box p { font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow-y: auto; }
 .i-files { list-style: none; display: flex; flex-direction: column; gap: 5px; }
 .i-files li { display: flex; align-items: center; gap: 6px; font-size: 11px; min-width: 0; }
@@ -413,6 +463,41 @@ button.chip:active { transform: scale(0.96); }
   color: var(--text); font: inherit; font-size: 13px; outline: none; transition: border-color 0.15s;
 }
 .dlg-in:focus { border-color: var(--accent); }
+
+/* ---------- conversation viewer ---------- */
+#convo {
+  position: fixed; inset: 0; z-index: 55; display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.38);
+  opacity: 0; pointer-events: none; transition: opacity 0.22s ease;
+}
+#convo.show { opacity: 1; pointer-events: auto; }
+.cv {
+  width: min(760px, calc(100vw - 48px)); height: calc(100vh - 56px);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--bg); border: 1px solid var(--card-edge); border-radius: 16px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.45);
+  transform: translateY(10px) scale(0.97);
+  transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+#convo.show .cv { transform: none; }
+.cv-head { display: flex; align-items: center; gap: 12px; padding: 14px 14px 12px 22px; border-bottom: 1px solid var(--card-edge); }
+.cv-t { flex: 1; min-width: 0; }
+.cv-t h3 { font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-meta { margin-top: 3px; color: var(--dim); font-size: 11.5px; }
+.cv-body { flex: 1; overflow-y: auto; padding: 18px 22px 28px; outline: none; }
+.cv-body .t-skel { max-width: 480px; }
+.cv-more { text-align: center; color: var(--dim); font-size: 11px; margin-bottom: 16px; }
+.cv-turn + .cv-turn { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--card-edge); }
+.cv-who { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; font-size: 10.5px; font-weight: 700; color: var(--dim); }
+.cv-who time { font-weight: 500; }
+.cv-q { display: flex; flex-direction: column; align-items: flex-end; }
+.cv-bubble {
+  max-width: 82%; padding: 9px 13px; border-radius: 14px 14px 4px 14px;
+  background: var(--accent-soft); color: var(--text);
+  font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+}
+.cv-a { margin-top: 12px; }
+.cv-text { font-size: 12.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; color: var(--text); }
 
 /* ---------- boot ---------- */
 #boot {

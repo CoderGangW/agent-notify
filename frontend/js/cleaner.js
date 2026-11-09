@@ -216,11 +216,17 @@ function detailOf(s) {
   const c = details.get(s.id);
   return c && c.mtime === s.mtime ? c.d : null;
 }
-async function fetchDetail(s) {
-  const r = await api("/api/cleaner/detail", { id: s.id });
+async function fetchDetail(s, all) {
+  const r = await api("/api/cleaner/detail", { id: s.id, all: !!all });
   const d = r ? await r.json().catch(() => null) : null;
-  if (d) details.set(s.id, { mtime: s.mtime, d });
+  if (d && !all) details.set(s.id, { mtime: s.mtime, d });
   return d;
+}
+const canConvo = (s) => !touring && !s.orphan && !!(st.can && st.can.detail);
+
+// a project or working folder, opened by the OS's file manager
+async function openDir(path) {
+  if (!(await api("/api/cleaner/reveal", { path }))) flash(t("cl.err.noFolder"));
 }
 
 async function doRename(s, title) {
@@ -261,6 +267,10 @@ function render() {
 // selection changes skip the list rebuild: row classes + side panels only
 function renderSel() {
   for (const r of $("rows-in").children) r.classList.toggle("on", selection.has(r.dataset.key));
+  // render() keeps the selection within the visible rows
+  const all = $("thead").querySelector(".ck-all");
+  all.classList.toggle("on", !!visible.length && selection.size === visible.length);
+  all.classList.toggle("mixed", selection.size > 0 && selection.size < visible.length);
   renderInsp();
   renderStatus();
   renderToolbar();
@@ -334,14 +344,15 @@ const SORTS = {
 };
 
 function buildHead() {
-  $("thead").innerHTML = COLS.map(
-    ([k, label]) =>
-      '<button data-sort="' + k + '"' + (k === "size" ? ' class="num"' : "") + "><span>" + esc(t(label)) +
-      '</span><span class="arr">' + ICONS.chevron + "</span></button>"
-  ).join("");
+  $("thead").innerHTML = COLS.map(([k, label]) => {
+    const b = '<button data-sort="' + k + '"' + (k === "size" ? ' class="num"' : "") + "><span>" + esc(t(label)) +
+      '</span><span class="arr">' + ICONS.chevron + "</span></button>";
+    // the select-all check sits over the rows' checks
+    return k === "title" ? '<div class="h-first"><span class="ck ck-all" data-tip="' + esc(t("cl.selectAll")) + '"></span>' + b + "</div>" : b;
+  }).join("");
 }
 function renderHead() {
-  for (const b of $("thead").children) {
+  for (const b of $("thead").querySelectorAll("[data-sort]")) {
     b.classList.toggle("on", b.dataset.sort === sortKey);
     b.classList.toggle("asc", b.dataset.sort === sortKey && sortDir > 0);
   }
@@ -351,9 +362,10 @@ function createRow() {
   const r = document.createElement("div");
   r.className = "row";
   r.innerHTML =
-    '<div class="c-title"><span class="src-ic"></span><div class="tt"><div class="t1"><span class="name"></span>' +
+    '<div class="c-title"><span class="ck"></span><span class="src-ic"></span><div class="tt"><div class="t1"><span class="name"></span>' +
     '<span class="bd"></span></div><div class="t2"></div></div></div>' +
-    '<div class="c-proj"></div><div class="c-src"></div><div class="c-time"></div><div class="c-size"></div>';
+    '<div class="c-proj"><span class="pchip"><span class="pi"></span><span class="pn"></span></span></div>' +
+    '<div class="c-src"></div><div class="c-time"></div><div class="c-size"></div>';
   r.addEventListener("transitionend", () => r.classList.contains("leave") && r.remove());
   return r;
 }
@@ -379,9 +391,17 @@ function updateRow(r, s) {
       (isProtected(s) ? '<span class="lock" data-tip="' + esc(t("cl.tip.protected")) + '">' + ICONS.lock + "</span>" : "");
   }
   setText(r.querySelector(".t2"), subOf(s));
+  // the project as a chip: its folder name, the path in the tooltip
   const pj = r.querySelector(".c-proj");
-  setText(pj, s.orphan ? "–" : ltr(short(s.project)));
-  pj.dataset.tip = s.orphan ? "" : s.project;
+  pj.classList.toggle("none", s.orphan);
+  const pi = pj.querySelector(".pi");
+  const picon = s.excluded ? "folderMinus" : "folder";
+  if (pi.dataset.icon !== picon) {
+    pi.dataset.icon = picon;
+    pi.innerHTML = ICONS[picon];
+  }
+  setText(pj.querySelector(".pn"), s.orphan ? "–" : baseName(s.project));
+  pj.dataset.tip = s.orphan ? "" : short(s.project);
   const sc = r.querySelector(".c-src");
   setText(sc, srcLabel(id));
   sc.style.setProperty("--c", sty.color);
@@ -465,7 +485,11 @@ const irow = (key, val, cls) => "<dt>" + esc(t(key)) + '</dt><dd class="' + (cls
 const stat = (val, label, tip) =>
   '<div class="stat"' + (tip ? ' data-tip="' + esc(tip) + '"' : "") + "><b>" + esc(val) + "</b><span>" + esc(label) + "</span></div>";
 const tmsg = (cls, text) => '<div class="t-msg ' + cls + ' sel" data-act="msg">' + esc(text) + "</div>";
-const turnsBox = (body) => '<div class="i-box"><h4>' + esc(t("cl.turns")) + "</h4>" + body + "</div>";
+// the latest turn, with the way into the whole conversation
+const turnsBox = (body, all) =>
+  '<div class="i-box"><h4>' + esc(t("cl.turns")) +
+  (all ? '<button class="h4-act" data-act="convo">' + esc(t("cl.convo.all")) + ICONS.chevron + "</button>" : "") +
+  "</h4>" + body + "</div>";
 
 function detailHTML(d) {
   const meta = (d.model ? irow("cl.k.model", d.model, "mono sel") : "") + (d.branch ? irow("cl.k.branch", d.branch, "mono sel") : "");
@@ -474,7 +498,8 @@ function detailHTML(d) {
     turnsBox(
       d.turns.length
         ? d.turns.map((x) => '<div class="turn">' + tmsg("t-user", x.user) + (x.assistant ? tmsg("t-bot", x.assistant) : "") + "</div>").join("")
-        : '<p class="t-none">' + esc(t("cl.turns.none")) + "</p>"
+        : '<p class="t-none">' + esc(t("cl.turns.none")) + "</p>",
+      d.turns.length > 0
     )
   );
 }
@@ -484,7 +509,8 @@ function projChip(s) {
   if (s.orphan || !s.project) return "";
   const inner = (s.excluded ? ICONS.folderMinus : ICONS.folder) + "<span>" + esc(baseName(s.project)) + "</span>";
   return s.cwd
-    ? '<button class="chip" data-act="open-proj" data-tip="' + esc(short(s.project) + " · " + t("cl.openFolder")) + '">' + inner + "</button>"
+    ? '<button class="chip" data-act="open-dir" data-p="' + esc(s.project) + '" data-tip="' +
+        esc(short(s.project) + " · " + t("cl.openFolder")) + '">' + inner + "</button>"
     : '<span class="chip" data-tip="' + esc(short(s.project)) + '">' + inner + "</span>";
 }
 
@@ -524,13 +550,16 @@ function inspOne(s) {
     "</div>" +
     '<dl class="i-grid">' +
     irow("cl.k.id", s.sid, "mono sel") +
-    (loc ? irow("cl.k.loc", short(loc), "sel") : "") +
+    // a real folder (cwd) opens in the file manager; a slug only names it
+    (s.cwd ? "<dt>" + esc(t("cl.k.loc")) + '</dt><dd><button class="link" data-act="open-dir" data-p="' + esc(s.cwd) +
+      '" data-tip="' + esc(t("cl.openFolder")) + '">' + esc(short(s.cwd)) + "</button></dd>"
+      : loc ? irow("cl.k.loc", short(loc), "sel") : "") +
     (s.started ? irow("cl.k.started", fullTime(s.started)) : "") +
     irow("cl.k.mtime", fullTime(s.mtime)) +
     (s.excluded ? irow("cl.k.excluded", short(s.excluded)) : "") +
     "</dl>" +
     // the tour's mock sessions have nothing on disk to read
-    (!touring && !s.orphan && st.can && st.can.detail
+    (canConvo(s)
       ? '<div class="i-detail">' + (d ? detailHTML(d) : turnsBox('<div class="t-skel"><i></i><i></i><i></i></div>')) + "</div>"
       : "") +
     (s.prompt ?'<div class="i-box"><h4>' + esc(t("cl.prompt")) + '</h4><p class="sel">' + esc(s.prompt) + "</p></div>" : "") +
@@ -687,6 +716,7 @@ function rowMenu(sel) {
       "sep"
     );
   }
+  if (one && canConvo(one)) items.push({ icon: "list", label: t("cl.convo.open"), act: () => openConvo(one) });
   if (one && canRename(one)) items.push({ icon: "pencil", label: t("cl.ctx.rename"), act: () => askRename(one) });
   const allPinned = sel.every((s) => s.pinned);
   items.push({ icon: allPinned ? "lockOpen" : "lock", label: t(allPinned ? "cl.unpin" : "cl.pinLong"), act: () => setPinned(sel, !allPinned) });
@@ -738,7 +768,8 @@ function closeModal() {
 }
 const okButton = () => [{ label: t("cl.ok"), kind: "primary" }];
 
-function askDelete(targets) {
+// note: one more line for the confirm, e.g. what a project-wide delete leaves alone
+function askDelete(targets, note) {
   if (!targets.length || busy === "cl.deleting") return;
   const ok = targets.filter(deletable);
   const running = targets.filter((s) => s.running).length;
@@ -752,7 +783,8 @@ function askDelete(targets) {
     ).join("") + (ok.length > 8 ? "<li><small>" + esc(tv("cl.more", { n: ok.length - 8 })) + "</small></li>" : "");
   showModal(
     tv("cl.confirm.title", { n: ok.length }),
-    '<ul class="names">' + names + "</ul><p>" + esc(tv("cl.confirm.body", { size: fmtBytes(total(ok)) }) + (skipped ? "\n\n" + skipped : "")) + "</p>",
+    '<ul class="names">' + names + "</ul><p>" +
+      esc(tv("cl.confirm.body", { size: fmtBytes(total(ok)) }) + (note ? "\n" + note : "") + (skipped ? "\n\n" + skipped : "")) + "</p>",
     [
       { label: t("cl.cancel") },
       { label: t("cl.trash"), kind: "primary", act: () => doDelete(ok, false) },
@@ -772,6 +804,52 @@ function askRename(s) {
   inp.focus();
   inp.select();
 }
+
+// ---------- conversation viewer ----------
+let convoOpen = false;
+let convoFor = ""; // the session being read: a later open wins the race
+
+const cvTurn = (x) =>
+  '<div class="cv-turn"><div class="cv-q"><div class="cv-who">' + esc(t("cl.convo.you")) +
+  (x.time ? "<time>" + esc(fullTime(x.time)) + "</time>" : "") + '</div><div class="cv-bubble sel">' + esc(x.user) + "</div></div>" +
+  (x.assistant ? '<div class="cv-a"><div class="cv-who">' + esc(st.name) + '</div><div class="cv-text sel">' + esc(x.assistant) + "</div></div>" : "") +
+  "</div>";
+
+// the whole conversation over the window; opens on a placeholder, the read
+// fills it in scrolled to the latest turn
+async function openConvo(s) {
+  if (!canConvo(s)) return;
+  closeMenus();
+  convoFor = s.id;
+  const box = $("convo");
+  const body = box.querySelector(".cv-body");
+  const meta = [srcLabel(srcId(s)), s.project && baseName(s.project)].filter(Boolean).join(" · ");
+  box.querySelector("h3").textContent = titleOf(s);
+  setText(box.querySelector(".cv-meta"), meta);
+  body.innerHTML = '<div class="t-skel"><i></i><i></i><i></i><i></i><i></i></div>';
+  convoOpen = true;
+  box.classList.add("show");
+  body.focus({ preventScroll: true });
+  const d = await fetchDetail(s, true);
+  if (!convoOpen || convoFor !== s.id) return;
+  if (d) setText(box.querySelector(".cv-meta"), meta + " · " + tv("cl.convo.count", { n: d.turns.length }));
+  body.innerHTML =
+    '<div class="i-in">' +
+    (!d ? '<p class="t-none">' + esc(t("cl.err.generic")) + "</p>"
+      : (d.more ? '<div class="cv-more">' + esc(tv("cl.convo.more", { n: d.turns.length })) + "</div>" : "") +
+        (d.turns.length ? d.turns.map(cvTurn).join("") : '<p class="t-none">' + esc(t("cl.turns.none")) + "</p>")) +
+    "</div>";
+  body.scrollTop = body.scrollHeight;
+}
+function closeConvo() {
+  if (!convoOpen) return;
+  convoOpen = false;
+  convoFor = "";
+  $("convo").classList.remove("show");
+  $("rows").focus({ preventScroll: true });
+}
+$("cv-x").addEventListener("click", closeConvo);
+$("convo").addEventListener("mousedown", (e) => e.target === $("convo") && closeConvo());
 
 async function doDelete(list, permanent) {
   setBusy("cl.deleting");
@@ -814,6 +892,7 @@ function applyLang() {
   $("gear").dataset.tip = t("cl.settings");
   $("help-btn").dataset.tip = t("tip.help");
   $("insp-btn").dataset.tip = t("cl.inspector");
+  $("cv-x").dataset.tip = t("cl.convo.close");
   buildHead();
   inspSig = prefsSig = "";
 }
@@ -846,6 +925,11 @@ try {
 } catch (_) {}
 
 $("thead").addEventListener("click", (e) => {
+  if (e.target.closest(".ck-all")) {
+    if (visible.length && selection.size === visible.length) selection.clear();
+    else for (const s of visible) selection.add(s.id);
+    return renderSel();
+  }
   const b = e.target.closest("button");
   if (!b) return;
   const k = b.dataset.sort;
@@ -872,17 +956,24 @@ $("side").addEventListener("contextmenu", (e) => {
   const p = b.dataset.key.slice(5);
   const hit = st.sessions.find((s) => s.project === p && s.excluded);
   const ex = hit && hit.excluded;
+  const list = baseList().filter((s) => matches(b.dataset.key, s));
+  const ok = list.filter(deletable);
   openCtx(e, [
     ex
       ? { icon: "folder", label: tv("cl.ctx.unexclude", { p: short(ex) }), act: () => setExcluded([ex], false) }
       : { icon: "folderMinus", label: t("cl.ctx.exclude"), act: () => setExcluded([p], true) },
-    { icon: "folder", label: t("cl.openFolder"), act: () => api("/api/cleaner/reveal", { path: p }) },
+    { icon: "folder", label: t("cl.openFolder"), act: () => openDir(p) },
+    "sep",
+    // the sessions only: the project's own files are never touched
+    { icon: "trash", label: t("cl.ctx.deleteProject"), note: countSize(ok), danger: true, disabled: !ok.length,
+      act: () => askDelete(list, t("cl.confirm.projNote")) },
   ]);
 });
 
 $("rows").addEventListener("mousedown", (e) => {
   if (e.button !== 0) return;
-  const mod = e.metaKey || e.ctrlKey;
+  // a row's check adds or drops that row, like a ⌘-click
+  const mod = e.metaKey || e.ctrlKey || !!e.target.closest(".ck");
   const r = e.target.closest(".row");
   if (!r) {
     if (!mod && !e.shiftKey && selection.size) {
@@ -909,6 +1000,7 @@ $("rows").addEventListener("mousedown", (e) => {
   renderSel();
 });
 $("rows").addEventListener("dblclick", (e) => {
+  if (e.target.closest(".ck")) return; // two quick checks aren't an open
   const r = e.target.closest(".row");
   const s = r && visible.find((x) => x.id === r.dataset.key);
   if (s) reveal(s);
@@ -939,7 +1031,8 @@ $("insp").addEventListener("click", (e) => {
     case "copy-resume": return copy(resumeCmd(s));
     case "delete": return askDelete(sel);
     case "rename": return askRename(s);
-    case "open-proj": return api("/api/cleaner/reveal", { path: s.project });
+    case "open-dir": return openDir(b.dataset.p);
+    case "convo": return openConvo(s);
     case "msg":
       // a drag that selected text isn't a click to unfold
       if ((b.classList.contains("more") || b.classList.contains("open")) && !String(getSelection())) {
@@ -1001,6 +1094,13 @@ document.addEventListener("keydown", (e) => {
     }
     return;
   }
+  if (convoOpen) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeConvo();
+    }
+    return; // the rest scrolls and selects text in the conversation
+  }
   const mod = e.metaKey || e.ctrlKey;
   const k = e.key.toLowerCase();
   const typing = e.target.tagName === "INPUT";
@@ -1033,6 +1133,12 @@ document.addEventListener("keydown", (e) => {
       e.preventDefault();
       askRename(sel[0]);
     }
+  } else if (e.key === " " && e.target.tagName !== "BUTTON") { // Quick Look's key
+    const sel = selectedList();
+    if (sel.length === 1 && canConvo(sel[0])) {
+      e.preventDefault();
+      openConvo(sel[0]);
+    }
   } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && visible.length) {
     e.preventDefault();
     let i = visible.findIndex((s) => s.id === anchor);
@@ -1052,6 +1158,7 @@ document.addEventListener("keydown", (e) => {
 // the daemon reuses one window: another tab's button switches it over
 window.switchAgent = (agent) => {
   if (agent === currentTab || touring) return;
+  closeConvo();
   $("app").classList.add("switching");
   setTimeout(async () => {
     currentTab = agent;
@@ -1082,4 +1189,5 @@ $("del").querySelector(".ic").innerHTML = ICONS.trash;
 $("gear").innerHTML = ICONS.gear;
 $("help-btn").innerHTML = ICONS.help;
 $("insp-btn").innerHTML = ICONS.panelRight;
+$("cv-x").innerHTML = ICONS.x;
 load();

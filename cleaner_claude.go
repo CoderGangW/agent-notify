@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Claude Code sessions (CLI, VS Code, SDK, Desktop) under ~/.claude,
@@ -223,12 +224,13 @@ func renameClaude(s cleanerSession, title string) error {
 	return err
 }
 
-// claudeDetail reads the transcript's last 4MB. Turns start at real
-// prompts: not meta, subagent traffic, tool results or injected <…> text.
-func claudeDetail(s cleanerSession) cleanerDetail {
+// claudeDetail reads the transcript's tail. Turns start at real prompts:
+// not meta, subagent traffic, tool results or injected <…> text.
+func claudeDetail(s cleanerSession, all bool) cleanerDetail {
 	var d cleanerDetail
 	var l turnLog
-	_, tail := headTail(s.ID, 4<<20)
+	tail, cut := logTail(s.ID, all)
+	d.More = cut
 	for _, line := range bytes.Split(tail, []byte("\n")) {
 		var e rawEntry
 		if json.Unmarshal(line, &e) != nil || e.IsMeta || e.IsSidechain || e.IsCompact {
@@ -240,7 +242,11 @@ func claudeDetail(s cleanerSession) cleanerDetail {
 		t := strings.TrimSpace(contentText(e.Message.Content))
 		switch {
 		case e.Type == "user" && !strings.HasPrefix(t, "<") && !strings.HasPrefix(t, "[Request interrupted"):
-			l.user(t)
+			at := ""
+			if !e.Timestamp.IsZero() {
+				at = e.Timestamp.Format(time.RFC3339)
+			}
+			l.user(t, at)
 		case e.Type == "assistant" && e.Message.Model != "<synthetic>":
 			if e.Message.Model != "" {
 				d.Model = e.Message.Model
@@ -248,7 +254,7 @@ func claudeDetail(s cleanerSession) cleanerDetail {
 			l.reply(t)
 		}
 	}
-	d.Turns = l.last()
+	l.fill(&d, all)
 	return d
 }
 

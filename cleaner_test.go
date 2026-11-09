@@ -412,6 +412,15 @@ func renameCheck(t *testing.T, agent, home, sid string) cleanerSession {
 	return got
 }
 
+// ua drops the turns' times: most fixtures don't set them.
+func ua(turns []cleanerTurn) []cleanerTurn {
+	out := []cleanerTurn{}
+	for _, x := range turns {
+		out = append(out, cleanerTurn{User: x.User, Assistant: x.Assistant})
+	}
+	return out
+}
+
 func TestCleanerRenameDetail(t *testing.T) {
 	fixed := []cleanerTurn{{User: "고쳐줘", Assistant: "고쳤어요"}}
 	t.Run("claude", func(t *testing.T) {
@@ -421,7 +430,7 @@ func TestCleanerRenameDetail(t *testing.T) {
 			`{"type":"assistant","message":{"model":"claude-a","content":[{"type":"text","text":"하나 답"}]}}`}
 		for _, q := range []string{"둘", "셋", "넷"} {
 			lines = append(lines,
-				`{"type":"user","message":{"content":"`+q+`"}}`,
+				`{"type":"user","timestamp":"2026-10-23T01:00:00Z","message":{"content":"`+q+`"}}`,
 				`{"type":"assistant","message":{"model":"claude-b","content":[{"type":"text","text":"보는 중"},{"type":"tool_use","id":"x"}]}}`,
 				`{"type":"user","message":{"content":[{"type":"tool_result","content":"out"}]}}`,
 				`{"type":"user","isSidechain":true,"message":{"content":"sub"}}`,
@@ -437,10 +446,15 @@ func TestCleanerRenameDetail(t *testing.T) {
 		if d, _ := os.ReadFile(filepath.Join(home, ".claude/projects/-w", sid, "custom-title.json")); !strings.Contains(string(d), "이름") {
 			t.Errorf("custom-title.json: %s", d)
 		}
-		d := claudeDetail(s)
-		want := []cleanerTurn{{User: "둘", Assistant: "둘 답"}, {User: "셋", Assistant: "셋 답"}, {User: "넷", Assistant: "넷 답"}}
-		if !reflect.DeepEqual(d.Turns, want) || d.Model != "claude-b" || d.Branch != "dev" {
+		d := claudeDetail(s, false)
+		last := []cleanerTurn{{User: "넷", Assistant: "넷 답", Time: "2026-10-23T01:00:00Z"}}
+		if !reflect.DeepEqual(d.Turns, last) || !d.More || d.Model != "claude-b" || d.Branch != "dev" {
 			t.Fatalf("detail: %+v", d)
+		}
+		d = claudeDetail(s, true)
+		want := []cleanerTurn{{User: "하나", Assistant: "하나 답"}, {User: "둘", Assistant: "둘 답"}, {User: "셋", Assistant: "셋 답"}, {User: "넷", Assistant: "넷 답"}}
+		if !reflect.DeepEqual(ua(d.Turns), want) || d.More {
+			t.Fatalf("full detail: %+v", d)
 		}
 	})
 	t.Run("codex", func(t *testing.T) {
@@ -455,8 +469,8 @@ func TestCleanerRenameDetail(t *testing.T) {
 `,
 			".codex/session_index.jsonl": `{"id":"` + id + `","thread_name":"옛","updated_at":"x"}`, // no final newline
 		})
-		d := codexDetail(renameCheck(t, "codex", home, id))
-		if !reflect.DeepEqual(d.Turns, fixed) || d.Model != "gpt-x" || d.Branch != "feat" {
+		d := codexDetail(renameCheck(t, "codex", home, id), false)
+		if !reflect.DeepEqual(ua(d.Turns), fixed) || d.Model != "gpt-x" || d.Branch != "feat" {
 			t.Fatalf("detail: %+v", d)
 		}
 	})
@@ -472,8 +486,8 @@ func TestCleanerRenameDetail(t *testing.T) {
 {"$set":{"summary":"옛"}}
 `,
 		})
-		d := geminiDetail(renameCheck(t, "gemini", home, id))
-		if !reflect.DeepEqual(d.Turns, fixed) || d.Model != "gemini-x" {
+		d := geminiDetail(renameCheck(t, "gemini", home, id), true)
+		if !reflect.DeepEqual(ua(d.Turns), fixed) || d.Model != "gemini-x" {
 			t.Fatalf("detail: %+v", d)
 		}
 	})
@@ -496,7 +510,7 @@ func TestCleanerRenameDetail(t *testing.T) {
 		if d, _ := os.ReadFile(filepath.Join(home, cli, "annotations", id+".pbtxt")); !strings.Contains(string(d), "last_user_view_time") {
 			t.Errorf("annotation lost its other fields: %s", d)
 		}
-		if d := agyDetail(s); !reflect.DeepEqual(d.Turns, fixed) {
+		if d := agyDetail(s, false); !reflect.DeepEqual(d.Turns, fixed) {
 			t.Fatalf("detail: %+v", d)
 		}
 	})
@@ -521,9 +535,22 @@ func TestCleanerRenameDetail(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		d := opencodeDetail(renameCheck(t, "opencode", home, "ses_a0000001"))
-		if !reflect.DeepEqual(d.Turns, fixed) || d.Model != "big" {
+		d := opencodeDetail(renameCheck(t, "opencode", home, "ses_a0000001"), true)
+		if !reflect.DeepEqual(ua(d.Turns), fixed) || d.Turns[0].Time == "" || d.Model != "big" {
 			t.Fatalf("detail: %+v", d)
 		}
 	})
+}
+
+func TestLogTail(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "log.jsonl")
+	if err := os.WriteFile(p, make([]byte, 5<<20), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if d, cut := logTail(p, false); len(d) != 4<<20 || !cut {
+		t.Errorf("latest-turn read: %d %v", len(d), cut)
+	}
+	if d, cut := logTail(p, true); len(d) != 5<<20 || cut {
+		t.Errorf("full read: %d %v", len(d), cut)
+	}
 }

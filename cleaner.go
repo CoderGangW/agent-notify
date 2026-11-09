@@ -73,9 +73,9 @@ type cleanerAgent struct {
 	// rename stores a title where the agent itself keeps it, so its own
 	// session picker shows it too; nil when it can't
 	rename func(s cleanerSession, title string) error
-	// detail reads what the inspector shows on demand: the last few
-	// exchanges, model, branch; nil when it can't
-	detail func(s cleanerSession) cleanerDetail
+	// detail reads what the inspector shows on demand: the latest turn
+	// (all: the whole conversation), model, branch; nil when it can't
+	detail func(s cleanerSession, all bool) cleanerDetail
 	// unavailable explains (i18n key) why the agent can't be listed here
 	unavailable func() string
 }
@@ -360,6 +360,7 @@ func stripJSONLines(path, key string, ids map[string]bool) ([]byte, error) {
 // cleanerDetail is what one session's files say beyond the list row.
 type cleanerDetail struct {
 	Turns  []cleanerTurn `json:"turns"`
+	More   bool          `json:"more,omitempty"`   // earlier turns weren't read
 	Model  string        `json:"model,omitempty"`  // the latest one
 	Branch string        `json:"branch,omitempty"` // git branch it ran on
 }
@@ -368,14 +369,15 @@ type cleanerDetail struct {
 type cleanerTurn struct {
 	User      string `json:"user"`
 	Assistant string `json:"assistant"`
+	Time      string `json:"time,omitempty"` // when the prompt was sent, if the log says
 }
 
 // turnLog folds a session's messages, oldest first, into turns.
 type turnLog []cleanerTurn
 
-func (l *turnLog) user(t string) {
+func (l *turnLog) user(t, at string) {
 	if t = strings.TrimSpace(t); t != "" {
-		*l = append(*l, cleanerTurn{User: clip(t, 2000)})
+		*l = append(*l, cleanerTurn{User: clip(t, 8000), Time: at})
 	}
 }
 
@@ -384,11 +386,44 @@ func (l *turnLog) user(t string) {
 // that starts mid-turn) is dropped.
 func (l *turnLog) reply(t string) {
 	if t = strings.TrimSpace(t); t != "" && len(*l) > 0 {
-		(*l)[len(*l)-1].Assistant = clip(t, 4000)
+		(*l)[len(*l)-1].Assistant = clip(t, 20000)
 	}
 }
 
-func (l turnLog) last() []cleanerTurn { return l[max(0, len(l)-3):] }
+// fill puts the turns to show in d: the latest one, or for the full view
+// the last 300.
+func (l turnLog) fill(d *cleanerDetail, all bool) {
+	n := 1
+	if all {
+		n = 300
+	}
+	d.Turns = l[max(0, len(l)-n):]
+	d.More = d.More || len(l) > n
+}
+
+// logTail reads the end of a session log: 4MB holds the latest turn, 32MB
+// the full view of all but the longest sessions. cut: it began past the
+// file's start, so earlier turns are missing (its first line is partial
+// and fails to parse, which every reader skips).
+func logTail(path string, all bool) (data []byte, cut bool) {
+	n := int64(4 << 20)
+	if all {
+		n = 32 << 20
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, false
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, false
+	}
+	off := max(0, st.Size()-n)
+	data = make([]byte, st.Size()-off)
+	k, _ := f.ReadAt(data, off)
+	return data[:k], off > 0
+}
 
 // appendJSONLine adds v to a JSONL file as one line, first ending the
 // previous line if the file doesn't.
@@ -602,7 +637,7 @@ func (s *daemonState) cleanerRoutes(mux *http.ServeMux) {
 		cleaner.mu.Lock()
 		defer cleaner.mu.Unlock()
 		for _, it := range cleaner.last {
-			if !it.Orphan && it.Project == p {
+			if !it.Orphan && (it.Project == p || it.CWD == p) {
 				return true
 			}
 		}
@@ -749,7 +784,8 @@ func (s *daemonState) cleanerRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("/api/cleaner/detail", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			ID string `json:"id"`
+			ID  string `json:"id"`
+			All bool   `json:"all"` // the whole conversation, not just its latest turn
 		}
 		if !decode(w, r, &req) {
 			return
@@ -757,7 +793,7 @@ func (s *daemonState) cleanerRoutes(mux *http.ServeMux) {
 		var d cleanerDetail
 		if it, ok := lookup(req.ID); ok && !it.Orphan {
 			if read := cleanerAgents[it.Agent].detail; read != nil {
-				d = read(it)
+				d = read(it, req.All)
 			}
 		}
 		if d.Turns == nil {
@@ -795,6 +831,9 @@ func (s *daemonState) cleanerRoutes(mux *http.ServeMux) {
 			revealPath(it.Files[0].Path)
 		} else if st, err := os.Stat(req.Path); knownProject(req.Path) && err == nil && st.IsDir() {
 			openFolder(req.Path)
+		} else {
+			http.NotFound(w, r) // the folder is gone (or never was one): the page says so
+			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
