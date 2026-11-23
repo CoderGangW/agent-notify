@@ -92,7 +92,7 @@ func TestCleanerScanDelete(t *testing.T) {
 	if !exists(filepath.Join(root, "projects/-tmp-demo", sid+".jsonl")) || !exists(filepath.Join(root, "history-removed.jsonl")) {
 		t.Error("trash layout")
 	}
-	if exists(".claude-notify/cleaner-staging") {
+	if exists(".agent-notify/cleaner-staging") {
 		t.Error("staging left behind")
 	}
 

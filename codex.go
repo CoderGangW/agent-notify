@@ -34,7 +34,7 @@ import (
 func codexConfigPath() string {
 	return filepath.Join(codexHome(homePath(), os.Getenv), "config.toml") // honors CODEX_HOME
 }
-func codexChainPath() string { return homePath(".claude-notify", "codex-chain.json") }
+func codexChainPath() string { return dataPath("codex-chain.json") }
 
 // codexRelayEnv marks a helper process we spawned; the helper's own
 // --previous-notify callback inherits it, and that callback must not

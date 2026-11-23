@@ -268,7 +268,7 @@ func (s cleanerSession) deletable() bool { return !s.Running && !s.Pinned && s.E
 // staging folder that mirrors the original layout, and that folder goes to
 // the trash as a single restorable item.
 func cleanerDelete(items []cleanerSession, permanent bool, home string, trash func(string) error) []string {
-	staging := filepath.Join(home, ".claude-notify", "cleaner-staging",
+	staging := filepath.Join(dataDirFor(home), "cleaner-staging",
 		"sessions-"+time.Now().Format("20060102-150405"))
 	var errs []string
 	fail := func(p string, err error) { errs = append(errs, p+": "+err.Error()) }
@@ -478,7 +478,7 @@ func replaceFile(path string, data []byte) error {
 	return nil
 }
 
-// cleanerLog appends what was deleted to ~/.claude-notify/cleaner.log, for
+// cleanerLog appends what was deleted to ~/.agent-notify/cleaner.log, for
 // tracing and recovery after an accident.
 func cleanerLog(home string, items []cleanerSession, permanent bool) {
 	mode := "trash"
@@ -494,7 +494,7 @@ func cleanerLog(home string, items []cleanerSession, permanent bool) {
 	for _, it := range items {
 		fmt.Fprintf(&b, "  %s  %s  %s\n", it.SID, it.Project, it.Title)
 	}
-	f, err := os.OpenFile(filepath.Join(home, ".claude-notify", "cleaner.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(filepath.Join(dataDirFor(home), "cleaner.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
 	}

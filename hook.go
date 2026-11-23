@@ -312,7 +312,7 @@ func reviveDaemon() {
 	if err != nil {
 		return
 	}
-	stamp := filepath.Join(home, ".claude-notify", "revive.stamp")
+	stamp := dataPath("revive.stamp")
 	if st, err := os.Stat(stamp); err == nil && time.Since(st.ModTime()) < 5*time.Minute {
 		return
 	}

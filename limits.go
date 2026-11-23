@@ -61,8 +61,12 @@ func (l *limitsFetcher) report() limitsReport {
 func fetchLimits() limitsReport {
 	r := limitsReport{FetchedAt: time.Now()}
 	token, plan := oauthCredentials()
+	var acctPlan string
+	r.Account, r.AccountName, acctPlan = claudeAccount()
+	if acctPlan != "" {
+		plan = acctPlan
+	}
 	r.Plan = plan
-	r.Account, r.AccountName = claudeAccount()
 	if token == "" {
 		r.Error = T("limits.nocreds")
 		return r
@@ -244,24 +248,28 @@ func claudeCLIVersion() string {
 }
 
 // claudeAccount reads the signed-in account from ~/.claude.json
-// (read-only; written by Claude Code at login).
-func claudeAccount() (email, name string) {
+// (read-only; written by Claude Code at login). planDisplayName is the
+// plan as Claude shows it ("Ultra"); the keychain's subscriptionType is
+// coarser ("max" for both Max and Ultra), so this one wins when present.
+func claudeAccount() (email, name, plan string) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", ""
+		return "", "", ""
 	}
 	data, err := os.ReadFile(filepath.Join(home, ".claude.json"))
 	if err != nil {
-		return "", ""
+		return "", "", ""
 	}
 	var d struct {
 		OauthAccount struct {
-			EmailAddress string `json:"emailAddress"`
-			DisplayName  string `json:"displayName"`
+			EmailAddress    string `json:"emailAddress"`
+			DisplayName     string `json:"displayName"`
+			PlanDisplayName string `json:"planDisplayName"`
 		} `json:"oauthAccount"`
 	}
 	if json.Unmarshal(data, &d) != nil {
-		return "", ""
+		return "", "", ""
 	}
-	return d.OauthAccount.EmailAddress, d.OauthAccount.DisplayName
+	a := d.OauthAccount
+	return a.EmailAddress, a.DisplayName, a.PlanDisplayName
 }

@@ -97,11 +97,7 @@ func (c config) enabledAgents() []string {
 }
 
 func configPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".claude-notify", "config.json")
+	return dataPath("config.json")
 }
 
 func loadConfig() config {

@@ -35,7 +35,7 @@ func installAutostart(exe string, start bool) error {
 			return err
 		}
 		plist := filepath.Join(dir, launchdLabel+".plist")
-		logPath := filepath.Join(home, ".claude-notify", "daemon.log")
+		logPath := dataPath("daemon.log")
 		_ = os.MkdirAll(filepath.Dir(logPath), 0o755)
 		// Ties the agent to the app bundle so Login Items → Allow in the
 		// Background shows the app's name and icon (macOS 13+), not a
@@ -237,7 +237,11 @@ func autostartHealthy() bool {
 		if _, err := os.Stat(prog); err != nil {
 			return false
 		}
-		// pre-AssociatedBundleIdentifiers plists get rewritten once
+		// plists from before AssociatedBundleIdentifiers / the
+		// ~/.agent-notify log path get rewritten once
+		if !strings.Contains(s, dataPath("daemon.log")) {
+			return false
+		}
 		return prog != appBundleBin || strings.Contains(s, "AssociatedBundleIdentifiers")
 	case "windows":
 		// Always rewrite: `reg add /f` is idempotent and cheap, and a

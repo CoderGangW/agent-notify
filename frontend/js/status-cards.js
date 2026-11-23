@@ -3,7 +3,14 @@
 function renderLimits(lim) {
   const body = $("limits-body");
   const note = $("limits-note");
-  note.textContent = lim.error ? lim.error : lim.account || "";
+  // Account comes from ~/.claude.json, the error from the usage API — an
+  // API failure must not hide a perfectly good email. The error is only
+  // appended here when gauges exist, since the no-bucket branch below
+  // already prints it in the card body.
+  const hasBuckets = lim.buckets && lim.buckets.length > 0;
+  note.textContent = [lim.account, hasBuckets ? lim.error : ""]
+    .filter(Boolean)
+    .join(" · ");
   if (!lim.buckets || lim.buckets.length === 0) {
     body.innerHTML =
       '<div class="limits-err">' +

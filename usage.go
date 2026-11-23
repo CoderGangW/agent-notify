@@ -78,11 +78,7 @@ type usageScanner struct {
 var usage = &usageScanner{files: map[string]*fileCache{}}
 
 func statsPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".claude-notify", "stats.json")
+	return dataPath("stats.json")
 }
 
 type dailyTotals map[string]*statPoint // "2006-01-02" → totals

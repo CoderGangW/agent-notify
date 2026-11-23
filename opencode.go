@@ -337,7 +337,7 @@ type ocUsageStore struct {
 
 var ocUsage = &ocUsageStore{}
 
-func ocUsagePath() string { return homePath(".claude-notify", "opencode-usage.json") }
+func ocUsagePath() string { return dataPath("opencode-usage.json") }
 
 type ocUsageDisk struct {
 	ocUsagePayload

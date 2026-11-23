@@ -202,8 +202,7 @@ func runDaemon() {
 	go upgradeOpencodePlugin()
 	go s.autoUpdateLoop()
 	// after an in-window update the daemon respawns: bring the window back
-	if home, err := os.UserHomeDir(); err == nil {
-		stamp := filepath.Join(home, ".claude-notify", "reopen")
+	if stamp := dataPath("reopen"); stamp != "" {
 		if _, err := os.Stat(stamp); err == nil {
 			_ = os.Remove(stamp)
 			go func() {
@@ -1038,8 +1037,8 @@ func (s *daemonState) assetHandler() http.Handler {
 		}
 		// the window is open (the user clicked the button) — reopen it
 		// after the post-update respawn, ulio-style
-		if home, err := os.UserHomeDir(); err == nil {
-			_ = os.WriteFile(filepath.Join(home, ".claude-notify", "reopen"), nil, 0o644)
+		if stamp := dataPath("reopen"); stamp != "" {
+			_ = os.WriteFile(stamp, nil, 0o644)
 		}
 		restarted, err := applyUpdate(info, true)
 		resp := map[string]any{"ok": err == nil, "restarted": restarted, "version": info.Latest}
