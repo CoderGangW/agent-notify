@@ -151,13 +151,66 @@ func runningSessions(root string) map[string]bool {
 	return out
 }
 
+// claudeRootGroups groups config dirs by the real projects/ they use. A
+// second account's dir often symlinks projects/ back to ~/.claude (the
+// multi-account VSCode setup): scanning each root separately listed every
+// session twice. The owner — the root whose projects/ is a real folder —
+// comes first.
+func claudeRootGroups(roots []string) [][]string {
+	idx := map[string]int{}
+	var groups [][]string
+	for _, root := range roots {
+		key := filepath.Join(root, "projects")
+		if r, err := filepath.EvalSymlinks(key); err == nil {
+			key = r
+		}
+		i, ok := idx[key]
+		if !ok {
+			idx[key] = len(groups)
+			groups = append(groups, nil)
+			i = len(groups) - 1
+		}
+		if isRealDir(filepath.Join(root, "projects")) {
+			groups[i] = append([]string{root}, groups[i]...)
+		} else {
+			groups[i] = append(groups[i], root)
+		}
+	}
+	return groups
+}
+
 func scanClaude(home string, env func(string) string) []cleanerSession {
 	items := []cleanerSession{}
-	for _, root := range cleanerRoots(home, env) {
-		running := runningSessions(root)
-		_, err := os.Stat(filepath.Join(root, "sessions"))
-		pidFiles := err == nil
-		side := sideIndex(root, "file-history", "session-env", "debug", "todos")
+	for _, roots := range claudeRootGroups(cleanerRoots(home, env)) {
+		root := roots[0]
+		// Each root keeps its own sessions/ pid files and may keep its own
+		// side folders, so a shared transcript is running (and owns side
+		// data) if ANY root says so — dropping one would let the cleaner
+		// delete a session that's live under the other account.
+		running := map[string]bool{}
+		pidFiles := false
+		side := map[string][]string{}
+		seen := map[string]bool{} // side dirs symlinked between roots
+		for _, r := range roots {
+			for sid := range runningSessions(r) {
+				running[sid] = true
+			}
+			if _, err := os.Stat(filepath.Join(r, "sessions")); err == nil {
+				pidFiles = true
+			}
+			for sid, paths := range sideIndex(r, "file-history", "session-env", "debug", "todos") {
+				for _, p := range paths {
+					key := p
+					if d, err := filepath.EvalSymlinks(filepath.Dir(p)); err == nil {
+						key = filepath.Join(d, filepath.Base(p))
+					}
+					if !seen[key] {
+						seen[key] = true
+						side[sid] = append(side[sid], p)
+					}
+				}
+			}
+		}
 		projects, _ := os.ReadDir(filepath.Join(root, "projects"))
 		for _, p := range projects {
 			if !p.IsDir() {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -552,5 +553,52 @@ func TestLogTail(t *testing.T) {
 	}
 	if d, cut := logTail(p, true); len(d) != 5<<20 || cut {
 		t.Errorf("full read: %d %v", len(d), cut)
+	}
+}
+
+// A second account's config dir that symlinks projects/ back to ~/.claude
+// listed every session twice; its own sessions/ must still mark them live.
+func TestCleanerSharedProjectsRoot(t *testing.T) {
+	home := t.TempDir()
+	mk := func(p, text string) {
+		t.Helper()
+		p = filepath.Join(home, p)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	link := func(target, name string) {
+		t.Helper()
+		if err := os.Symlink(filepath.Join(home, target), filepath.Join(home, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sid := "44444444-4444-4444-4444-444444444444"
+	mk(".claude/projects/-tmp-x/"+sid+".jsonl", `{"type":"user","message":{"content":"공유 세션"}}`)
+	mk(".claude/file-history/"+sid+"/x", "x")
+	os.MkdirAll(filepath.Join(home, ".claude-r2"), 0o755)
+	link(".claude/projects", ".claude-r2/projects")
+	link(".claude/file-history", ".claude-r2/file-history")
+	mk(".claude-r2/session-env/"+sid+"/x", "x") // r2's own, not shared
+	mk(".claude-r2/sessions/1.json", `{"pid":`+strconv.Itoa(os.Getpid())+`,"sessionId":"`+sid+`"}`)
+
+	var got []cleanerSession
+	for _, s := range cleanerScan("claude", home, func(string) string { return "" }, config{}, nil) {
+		if s.SID == sid {
+			got = append(got, s)
+		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 session, got %d", len(got))
+	}
+	s := got[0]
+	if s.Root != filepath.Join(home, ".claude") || !s.Running || s.deletable() {
+		t.Fatalf("root/running: %+v", s)
+	}
+	if len(s.Files) != 3 { // transcript, file-history once, r2 session-env
+		t.Fatalf("files: %+v", s.Files)
 	}
 }
